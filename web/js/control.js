@@ -15,6 +15,7 @@ const TYPE_INJECT_TEXT = 1;
 const TYPE_INJECT_TOUCH_EVENT = 2;
 const TYPE_INJECT_SCROLL_EVENT = 3;
 const TYPE_BACK_OR_SCREEN_ON = 4;
+const TYPE_ROTATE_DEVICE = 11;
 
 const ACTION_DOWN = 0;
 const ACTION_UP = 1;
@@ -109,6 +110,11 @@ class ControlPacker {
   // 返回键 / 点亮屏幕: 2 字节
   back(action = KEY_UP) {
     return new Uint8Array([TYPE_BACK_OR_SCREEN_ON, action]);
+  }
+
+  // 旋转设备: 1 字节 (scrcpy 协议会自动切换到下一个方向)
+  rotate() {
+    return new Uint8Array([TYPE_ROTATE_DEVICE]);
   }
 
   // 文本注入: 变长

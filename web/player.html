@@ -371,23 +371,15 @@
       send(packer.keyCode(KEY_UP, AKEYCODE.APP_SWITCH, 0));
     });
     document.getElementById('btn-power').addEventListener('click', () => {
-      // BACK_OR_SCREEN_ON: action=DOWN 点亮屏幕, UP 释放
-      send(new Uint8Array([4, 0]));
-      send(new Uint8Array([4, 1]));
+      // AKEYCODE_POWER (26): 模拟电源键，亮屏/熄屏切换
+      send(packer.keyCode(KEY_DOWN, AKEYCODE.POWER, 0));
+      send(packer.keyCode(KEY_UP, AKEYCODE.POWER, 0));
     });
     document.getElementById('btn-rotate').addEventListener('click', () => {
-      // 通过 adb settings 强制旋转 (比 scrcpy 协议旋转更可靠)，
-      // 然后重连获取新方向的视频流
-      fetch('/api/rotate?serial=' + encodeURIComponent(serial))
-        .then(r => r.json())
-        .then(data => {
-          console.log('[rotate] 旋转到', data.rotation);
-          // 等 1 秒让设备完成旋转，再重连
-          setTimeout(() => {
-            if (ws) ws.close();
-          }, 1000);
-        })
-        .catch(err => console.error('[rotate] 失败:', err));
+      // 使用 scrcpy 协议的 TypeRotateDevice (type=11) 消息旋转设备
+      // 设备会自动切换到下一个方向，scrcpy 会发送 session packet 更新分辨率
+      send(packer.rotate());
+      console.log('[rotate] 已发送旋转指令');
     });
 
     // ===== 全屏 =====
