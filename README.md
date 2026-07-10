@@ -69,6 +69,31 @@ go build -o mywebscrcpy .
 
 浏览器打开 `http://localhost:8080`，点击设备即可投屏。
 
+### Docker 部署
+
+```bash
+# 拉取镜像
+docker pull liuzhuogood/mywebscrcpy:latest
+
+# 运行（需要挂载 ADB 设备）
+docker run -d \
+  --name mywebscrcpy \
+  --privileged \
+  -p 8080:8080 \
+  -v /dev/bus/usb:/dev/bus/usb \
+  liuzhuogood/mywebscrcpy:latest
+
+# 或者使用 host 网络（便于发现网络 ADB 设备）
+docker run -d \
+  --name mywebscrcpy \
+  --privileged \
+  --network host \
+  -v /dev/bus/usb:/dev/bus/usb \
+  liuzhuogood/mywebscrcpy:latest
+```
+
+浏览器打开 `https://IP:8080`（默认启用 HTTPS），点击设备即可投屏。
+
 ### 命令行参数
 
 | 参数 | 说明 |
