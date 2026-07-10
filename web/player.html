@@ -211,7 +211,8 @@
     }
 
     function connect() {
-      const wsUrl = `ws://${location.host}/ws?serial=${encodeURIComponent(serial)}`;
+      const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${wsProto}//${location.host}/ws?serial=${encodeURIComponent(serial)}`;
       ws = new WebSocket(wsUrl);
       ws.binaryType = 'arraybuffer';
 

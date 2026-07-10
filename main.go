@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/tls"
 	"embed"
 	"encoding/json"
+	"flag"
 	"io/fs"
 	"log"
 	"net/http"
@@ -22,7 +24,16 @@ var serverJarFS []byte
 //go:embed all:web
 var webFS embed.FS
 
+//go:embed assets/certs/cert.pem
+var defaultCert []byte
+
+//go:embed assets/certs/key.pem
+var defaultKey []byte
+
 func main() {
+	httpsFlag := flag.Bool("https", false, "启用 HTTPS（使用内置证书）")
+	flag.Parse()
+
 	adbPath := findADB()
 	addr := "0.0.0.0:8080"
 	if p := os.Getenv("PORT"); p != "" {
@@ -87,10 +98,47 @@ func main() {
 	mux.Handle("/", http.FileServer(http.FS(webRoot)))
 
 	port := strings.TrimPrefix(addr, "0.0.0.0:")
-	log.Printf("MyWebScrcpy 启动 → http://localhost:%s (0.0.0.0:%s)", port, port)
 	log.Printf("adb 路径: %s", adbPath)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("server: %v", err)
+
+	// TLS 配置
+	tlsCertFile := os.Getenv("TLS_CERT")
+	tlsKeyFile := os.Getenv("TLS_KEY")
+
+	if *httpsFlag || (tlsCertFile != "" && tlsKeyFile != "") {
+		var cert tls.Certificate
+		var err error
+
+		if tlsCertFile != "" && tlsKeyFile != "" {
+			// 使用自定义证书
+			cert, err = tls.LoadX509KeyPair(tlsCertFile, tlsKeyFile)
+			if err != nil {
+				log.Fatalf("加载自定义证书失败: %v", err)
+			}
+			log.Printf("使用自定义证书: %s", tlsCertFile)
+		} else {
+			// 使用内置证书
+			cert, err = tls.X509KeyPair(defaultCert, defaultKey)
+			if err != nil {
+				log.Fatalf("加载内置证书失败: %v", err)
+			}
+			log.Printf("使用内置证书（自签名）")
+		}
+
+		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
+		listener, err := tls.Listen("tcp", addr, tlsConfig)
+		if err != nil {
+			log.Fatalf("TLS 监听失败: %v", err)
+		}
+		log.Printf("MyWebScrcpy 启动 → https://localhost:%s (0.0.0.0:%s)", port, port)
+		if err := http.Serve(listener, mux); err != nil {
+			log.Fatalf("server: %v", err)
+		}
+	} else {
+		log.Printf("MyWebScrcpy 启动 → http://localhost:%s (0.0.0.0:%s)", port, port)
+		log.Printf("提示: 使用 -https 参数启用 HTTPS，或设置 TLS_CERT/TLS_KEY 环境变量")
+		if err := http.ListenAndServe(addr, mux); err != nil {
+			log.Fatalf("server: %v", err)
+		}
 	}
 }
 

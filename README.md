@@ -69,12 +69,68 @@ go build -o mywebscrcpy .
 
 浏览器打开 `http://localhost:8080`，点击设备即可投屏。
 
+### 命令行参数
+
+| 参数 | 说明 |
+|------|------|
+| `-https` | 启用 HTTPS（使用内置自签名证书） |
+
 ### 环境变量
 
 | 变量 | 说明 | 默认值 |
 |------|------|--------|
 | `PORT` | HTTP 监听端口 | `8080` |
 | `ANDROID_HOME` | ADB 路径查找 | 系统 PATH |
+| `TLS_CERT` | 自定义 SSL 证书路径 | - |
+| `TLS_KEY` | 自定义 SSL 私钥路径 | - |
+
+### HTTPS 配置
+
+WebCodecs API 需要安全上下文（HTTPS 或 localhost）才能工作。如果通过 IP 地址访问，需要启用 HTTPS。
+
+**方式 1：使用内置证书（最简单）**
+
+```bash
+./mywebscrcpy -https
+```
+
+访问 `https://IP:8080`，浏览器会提示证书不受信任，点击"高级"→"继续访问"即可。
+
+**方式 2：使用自定义证书**
+
+```bash
+# 设置环境变量
+export TLS_CERT=/path/to/cert.pem
+export TLS_KEY=/path/to/key.pem
+./mywebscrcpy
+```
+
+**方式 3：Nginx 反向代理（推荐生产环境）**
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /ws {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_read_timeout 86400;
+    }
+}
+```
 
 ## 操控方式
 
