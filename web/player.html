@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+  <title>MyWebScrcpy - 播放器</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="player-page">
+  <div class="player-toolbar">
+    <a href="/" class="back">← <span class="back-text">设备列表</span></a>
+    <span class="title" id="title">设备</span>
+    <span class="status" id="status">连接中...</span>
+    <span class="status fps-badge" id="fps" style="display:none">0 fps</span>
+    <div class="tools">
+      <button id="btn-back" title="返回键">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5"/>
+          <polyline points="12 19 5 12 12 5"/>
+        </svg>
+      </button>
+      <button id="btn-home" title="Home键">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <polyline points="9 22 9 12 15 12 15 22"/>
+        </svg>
+      </button>
+      <button id="btn-recents" title="最近任务">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="18" rx="1"/>
+          <rect x="14" y="3" width="7" height="18" rx="1"/>
+        </svg>
+      </button>
+      <button id="btn-power" title="点亮/熄屏">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+          <line x1="12" y1="2" x2="12" y2="12"/>
+        </svg>
+      </button>
+      <button id="btn-rotate" title="旋转屏幕">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 2v6h-6"/>
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+          <path d="M3 22v-6h6"/>
+          <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+        </svg>
+      </button>
+      <button id="btn-fullscreen" title="全屏" class="fs-btn">
+        <svg class="fs-enter" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
+          <path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
+          <path d="M3 16v3a2 2 0 0 0 2 2h3"/>
+          <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+        </svg>
+        <svg class="fs-exit" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+          <path d="M8 3v3a2 2 0 0 1-2 2H3"/>
+          <path d="M21 8h-3a2 2 0 0 1-2-2V3"/>
+          <path d="M3 16h3a2 2 0 0 1 2 2v3"/>
+          <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- 全屏时的悬浮退出按钮 -->
+  <button class="fs-exit-floating" id="fs-exit-float" title="退出全屏">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  </button>
+
+  <div class="player-main">
+    <div class="screen-wrap">
+      <canvas id="screen"></canvas>
+      <div class="loading-overlay" id="loading">
+        <div class="spinner"></div>
+        <div>正在连接设备...</div>
+      </div>
+      <div class="screen-off-overlay" id="screen-off" style="display:none">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/>
+          <line x1="12" y1="2" x2="12" y2="12"/>
+        </svg>
+        <div>屏幕已关闭</div>
+        <div style="font-size:12px;color:#666">点击电源键唤醒</div>
+      </div>
+      <div class="error-overlay" id="error" style="display:none"></div>
+    </div>
+  </div>
+
+  <script src="/js/control.js"></script>
+  <script src="/js/decoder.js"></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const serial = params.get('serial');
+    document.getElementById('title').textContent = serial;
+
+    const canvas = document.getElementById('screen');
+    const loading = document.getElementById('loading');
+    const errorBox = document.getElementById('error');
+    const screenOffOverlay = document.getElementById('screen-off');
+    const statusEl = document.getElementById('status');
+    const fpsEl = document.getElementById('fps');
+
+    const decoder = new ScrcpyDecoder(canvas);
+    const packer = new ControlPacker();
+    const mainEl = document.querySelector('.player-main');
+
+    decoder.onFps = (fps) => { fpsEl.textContent = fps + ' fps'; };
+    decoder.onDeviceResize = (w, h) => { packer.setDeviceSize(w, h); fitCanvas(); };
+
+    // ===== Canvas 自适应缩放 =====
+    // 根据容器大小和视频宽高比，计算 canvas 的最佳显示尺寸
+    function fitCanvas() {
+      const cw = canvas.width;   // 视频内部宽度
+      const ch = canvas.height;  // 视频内部高度
+      if (!cw || !ch) return;
+
+      const padding = 24; // .player-main 的 padding*2
+      const availW = mainEl.clientWidth - padding;
+      const availH = mainEl.clientHeight - padding;
+      if (availW <= 0 || availH <= 0) return;
+
+      const ratio = cw / ch;
+      let dw = availW;
+      let dh = dw / ratio;
+      if (dh > availH) {
+        dh = availH;
+        dw = dh * ratio;
+      }
+      canvas.style.width = Math.round(dw) + 'px';
+      canvas.style.height = Math.round(dh) + 'px';
+    }
+    // 窗口大小变化时重新计算
+    window.addEventListener('resize', fitCanvas);
+    // 全屏切换后也要重新计算
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev =>
+      document.addEventListener(ev, () => setTimeout(fitCanvas, 100))
+    );
+
+    let ws = null;
+    let connected = false;
+
+    // ===== 息屏检测: 监控帧到达，持续无帧才判定息屏 =====
+    // scrcpy 息屏后完全不发帧；但网络抖动/编码器卡顿也可能造成 1~3 秒的长间隔。
+    // 用连续确认机制避免误判：要求连续 4 次(每 500ms)即 2 秒持续无帧才判定息屏。
+    let lastFrameTs = Date.now();
+    let firstFrameReceived = false;
+    let screenOffDetected = false;
+    let noFrameCount = 0;  // 连续无帧的检测次数
+
+    decoder.onFrameDecoded = () => {
+      lastFrameTs = Date.now();
+      noFrameCount = 0;
+      if (!firstFrameReceived) {
+        firstFrameReceived = true;
+      }
+      if (screenOffDetected) {
+        screenOffDetected = false;
+        screenOffOverlay.style.display = 'none';
+      }
+    };
+
+    setInterval(() => {
+      if (!firstFrameReceived || !connected) return;
+      const idle = Date.now() - lastFrameTs;
+      if (idle > 1000) {
+        noFrameCount++;
+      } else {
+        noFrameCount = 0;
+      }
+      // 连续 6 次(每 500ms = 3秒)持续无帧才判定息屏
+      if (noFrameCount >= 6 && !screenOffDetected) {
+        screenOffDetected = true;
+        screenOffOverlay.style.display = 'flex';
+      }
+    }, 500);
+
+    function showError(msg) {
+      loading.style.display = 'none';
+      errorBox.style.display = 'flex';
+      errorBox.innerHTML = `<div style="font-size:18px;font-weight:600">连接失败</div><div style="font-size:14px">${msg}</div>`;
+    }
+
+    function setStatus(text, live) {
+      statusEl.textContent = text;
+      statusEl.className = 'status' + (live ? ' live' : '');
+    }
+
+    // ===== 自动重连 =====
+    let reconnectTimer = null;
+    let reconnectAttempts = 0;
+
+    function reconnect() {
+      if (reconnectTimer) return; // 已在等待重连
+      reconnectAttempts++;
+      const delay = Math.min(1000 * reconnectAttempts, 5000); // 1s, 2s, 3s... 最多 5s
+      setStatus('重连中...(' + reconnectAttempts + ')', false);
+      console.log('[ws] ' + delay + 'ms 后重连');
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        // 重置状态
+        firstFrameReceived = false;
+        screenOffDetected = false;
+        noFrameCount = 0;
+        screenOffOverlay.style.display = 'none';
+        loading.style.display = 'flex';
+        connect();
+      }, delay);
+    }
+
+    function connect() {
+      const wsUrl = `ws://${location.host}/ws?serial=${encodeURIComponent(serial)}`;
+      ws = new WebSocket(wsUrl);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        reconnectAttempts = 0;
+        setStatus('已连接，等待画面...', true);
+        ws.onmessage = handleWSMessage;
+      };
+
+      ws.onmessage = handleWSMessage;
+
+      function handleWSMessage(event) {
+        try {
+        if (typeof event.data === 'string') {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'meta') {
+            packer.setDeviceSize(msg.width, msg.height);
+            decoder.configure(msg.codec, msg.width, msg.height);
+            loading.style.display = 'none';
+            setStatus(msg.width + 'x' + msg.height, true);
+            fpsEl.style.display = 'inline-block';
+            connected = true;
+            fitCanvas();
+          } else if (msg.type === 'error') {
+            showError(msg.message);
+          } else if (msg.type === 'disconnected') {
+            // Go 端检测到 video stream 断开（旋转卡死等），自动重连
+            console.log('[ws] server 通知断开，准备重连');
+            connected = false;
+            reconnect();
+          }
+          return;
+        }
+        // 二进制视频帧
+        const data = new Uint8Array(event.data);
+        decoder.handleFrame(data);
+        } catch(err) {
+          console.error('[ws] message error:', err);
+        }
+      }
+
+      ws.onerror = (e) => {
+        console.error('[ws] error', e);
+      };
+
+      ws.onclose = () => {
+        console.log('[ws] closed');
+        connected = false;
+        if (reconnectAttempts < 20) {
+          reconnect();
+        } else {
+          setStatus('连接失败，请刷新', false);
+        }
+      };
+    }
+
+    // ===== 坐标映射: canvas 显示坐标 → 设备像素坐标 =====
+    function toDeviceCoords(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = packer.deviceWidth / rect.width;
+      const scaleY = packer.deviceHeight / rect.height;
+      const x = Math.round((clientX - rect.left) * scaleX);
+      const y = Math.round((clientY - rect.top) * scaleY);
+      return {
+        x: Math.max(0, Math.min(packer.deviceWidth - 1, x)),
+        y: Math.max(0, Math.min(packer.deviceHeight - 1, y)),
+      };
+    }
+
+    function send(bytes) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(bytes);
+      }
+    }
+
+    // ===== 鼠标事件 → scrcpy 触摸事件 =====
+    let mouseDown = false;
+
+    canvas.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      if (e.button === 2) {
+        // 右键 = 返回
+        send(packer.back(KEY_UP));
+        return;
+      }
+      mouseDown = true;
+      const { x, y } = toDeviceCoords(e.clientX, e.clientY);
+      send(packer.touch(ACTION_DOWN, POINTER_MOUSE, x, y, 1.0, 0x1, 0x1));
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      if (!mouseDown) return;
+      e.preventDefault();
+      const { x, y } = toDeviceCoords(e.clientX, e.clientY);
+      send(packer.touch(ACTION_MOVE, POINTER_MOUSE, x, y, 1.0, 0x1, 0x1));
+    });
+
+    window.addEventListener('mouseup', (e) => {
+      if (!mouseDown) return;
+      mouseDown = false;
+      const { x, y } = toDeviceCoords(e.clientX, e.clientY);
+      send(packer.touch(ACTION_UP, POINTER_MOUSE, x, y, 0.0, 0, 0));
+    });
+
+    // 滚轮
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const { x, y } = toDeviceCoords(e.clientX, e.clientY);
+      const vscroll = e.deltaY;
+      const hscroll = e.deltaX;
+      send(packer.scroll(x, y, hscroll, vscroll));
+    }, { passive: false });
+
+    // 禁用右键菜单（右键用于返回）
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // ===== 键盘事件 =====
+    // canvas 不能直接获得焦点，监听 window
+    window.addEventListener('keydown', (e) => {
+      // 忽略修饰键单独按下
+      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
+
+      const result = keyboardEventToKeyCode(e);
+      if (result) {
+        e.preventDefault();
+        send(packer.keyCode(KEY_DOWN, result.keycode, result.meta));
+        return;
+      }
+      // 可打印字符 → 文本注入
+      if (e.key.length === 1) {
+        e.preventDefault();
+        send(packer.text(e.key));
+      }
+    });
+
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
+      const result = keyboardEventToKeyCode(e);
+      if (result) {
+        e.preventDefault();
+        send(packer.keyCode(KEY_UP, result.keycode, result.meta));
+      }
+    });
+
+    // ===== 工具栏按钮 =====
+    document.getElementById('btn-home').addEventListener('click', () => {
+      send(packer.keyCode(KEY_DOWN, AKEYCODE.HOME, 0));
+      send(packer.keyCode(KEY_UP, AKEYCODE.HOME, 0));
+    });
+    document.getElementById('btn-back').addEventListener('click', () => {
+      // BACK_OR_SCREEN_ON: 需要 DOWN 再 UP 才生效
+      send(new Uint8Array([4, KEY_DOWN]));
+      send(new Uint8Array([4, KEY_UP]));
+    });
+    document.getElementById('btn-recents').addEventListener('click', () => {
+      send(packer.keyCode(KEY_DOWN, AKEYCODE.APP_SWITCH, 0));
+      send(packer.keyCode(KEY_UP, AKEYCODE.APP_SWITCH, 0));
+    });
+    document.getElementById('btn-power').addEventListener('click', () => {
+      // BACK_OR_SCREEN_ON: action=DOWN 点亮屏幕, UP 释放
+      send(new Uint8Array([4, 0]));
+      send(new Uint8Array([4, 1]));
+    });
+    document.getElementById('btn-rotate').addEventListener('click', () => {
+      // 通过 adb settings 强制旋转 (比 scrcpy 协议旋转更可靠)，
+      // 然后重连获取新方向的视频流
+      fetch('/api/rotate?serial=' + encodeURIComponent(serial))
+        .then(r => r.json())
+        .then(data => {
+          console.log('[rotate] 旋转到', data.rotation);
+          // 等 1 秒让设备完成旋转，再重连
+          setTimeout(() => {
+            if (ws) ws.close();
+          }, 1000);
+        })
+        .catch(err => console.error('[rotate] 失败:', err));
+    });
+
+    // ===== 全屏 =====
+    const fsBtn = document.getElementById('btn-fullscreen');
+    const fsEnter = fsBtn.querySelector('.fs-enter');
+    const fsExit = fsBtn.querySelector('.fs-exit');
+    const fsExitFloat = document.getElementById('fs-exit-float');
+    const playerPage = document.querySelector('.player-page');
+
+    // 伪全屏状态 (iOS 等不支持 Fullscreen API 的浏览器用 CSS 模拟)
+    let pseudoFs = false;
+
+    function isFullscreen() {
+      return !!(document.fullscreenElement || document.webkitFullscreenElement) || pseudoFs;
+    }
+    function enterFullscreen() {
+      // 优先尝试原生 Fullscreen API
+      const el = playerPage;
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (req) {
+        const p = req.call(el);
+        if (p && p.catch) {
+          p.catch(() => {
+            // 原生全屏失败 (如 iOS Safari)，回退到伪全屏
+            enablePseudoFullscreen();
+          });
+        }
+      } else {
+        // 不支持 Fullscreen API，直接用伪全屏
+        enablePseudoFullscreen();
+      }
+    }
+    function exitFullscreen() {
+      if (pseudoFs) {
+        disablePseudoFullscreen();
+      } else {
+        const ex = document.exitFullscreen || document.webkitExitFullscreen;
+        if (ex) ex.call(document);
+      }
+    }
+    function enablePseudoFullscreen() {
+      pseudoFs = true;
+      playerPage.classList.add('pseudo-fullscreen');
+      onFullscreenChange();
+    }
+    function disablePseudoFullscreen() {
+      pseudoFs = false;
+      playerPage.classList.remove('pseudo-fullscreen');
+      onFullscreenChange();
+    }
+    function onFullscreenChange() {
+      const inFs = isFullscreen();
+      fsEnter.style.display = inFs ? 'none' : '';
+      fsExit.style.display = inFs ? '' : 'none';
+      fsBtn.title = inFs ? '退出全屏' : '全屏';
+      setTimeout(fitCanvas, 100);
+    }
+    function toggleFullscreen() {
+      if (isFullscreen()) exitFullscreen(); else enterFullscreen();
+    }
+
+    fsBtn.addEventListener('click', toggleFullscreen);
+    fsExitFloat.addEventListener('click', exitFullscreen);
+
+    ['fullscreenchange', 'webkitfullscreenchange'].forEach(ev => {
+      document.addEventListener(ev, onFullscreenChange);
+    });
+
+    // ===== 触摸事件支持 (移动端) =====
+    let touchActive = false;
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      const t = e.touches[0];
+      touchActive = true;
+      const { x, y } = toDeviceCoords(t.clientX, t.clientY);
+      send(packer.touch(ACTION_DOWN, POINTER_FINGER_BASE, x, y, t.force || 1.0));
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (!touchActive) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      const { x, y } = toDeviceCoords(t.clientX, t.clientY);
+      send(packer.touch(ACTION_MOVE, POINTER_FINGER_BASE, x, y, t.force || 1.0));
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', (e) => {
+      if (!touchActive) return;
+      touchActive = false;
+      const t = e.changedTouches[0];
+      const { x, y } = toDeviceCoords(t.clientX, t.clientY);
+      send(packer.touch(ACTION_UP, POINTER_FINGER_BASE, x, y, 0));
+    });
+
+    // 启动投屏连接
+    connect();
+  </script>
+</body>
+</html>

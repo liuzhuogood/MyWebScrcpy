@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+  <title>MyWebScrcpy - 设备列表</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="header">
+    <span class="dot"></span>
+    <h1>MyWebScrcpy</h1>
+    <span class="subtitle" id="device-count">加载中...</span>
+  </div>
+  <div class="device-grid" id="device-grid"></div>
+
+  <script>
+    async function loadDevices() {
+      try {
+        const res = await fetch('/api/devices');
+        const devices = await res.json();
+        const grid = document.getElementById('device-grid');
+        document.getElementById('device-count').textContent =
+          devices.length > 0 ? `${devices.length} 台设备在线` : '无设备';
+
+        if (devices.length === 0) {
+          grid.innerHTML = `
+            <div class="empty-state" style="grid-column:1/-1">
+              <div class="big">📱</div>
+              <p>未检测到在线设备</p>
+              <p style="font-size:13px;margin-top:8px">请用 <code>adb connect IP:5555</code> 连接设备</p>
+            </div>`;
+          return;
+        }
+
+        grid.innerHTML = devices.map(d => `
+          <div class="device-card" onclick="location.href='/player.html?serial=${encodeURIComponent(d.serial)}'">
+            <div class="card-row">
+              <div class="icon">📱</div>
+              <div class="card-info">
+                <div class="model">${d.model || '未知设备'}</div>
+                <div class="card-meta">
+                  <span class="serial">${d.serial}</span>
+                  ${d.product ? `<span class="dot-sep">·</span><span>${d.product}</span>` : ''}
+                </div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        document.getElementById('device-count').textContent = '加载失败';
+      }
+    }
+
+    loadDevices();
+    setInterval(loadDevices, 3000);
+  </script>
+</body>
+</html>

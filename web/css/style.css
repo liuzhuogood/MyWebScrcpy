@@ -1,0 +1,273 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f5f6f8;
+  color: #1f2329;
+  min-height: 100vh;
+}
+
+/* ===== 设备列表页 ===== */
+.header {
+  padding: 24px 32px;
+  border-bottom: 1px solid #e5e6eb;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+}
+.header h1 { font-size: 20px; font-weight: 600; }
+.header .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #00b42a; box-shadow: 0 0 8px rgba(0,180,42,0.4);
+}
+.header .subtitle { color: #86909c; font-size: 13px; margin-left: auto; }
+
+.device-grid {
+  padding: 32px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+.device-card {
+  background: #fff;
+  border: 1px solid #e5e6eb;
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.1s, box-shadow 0.2s;
+}
+.device-card:hover {
+  border-color: #165dff;
+  box-shadow: 0 4px 16px rgba(22,93,255,0.12);
+  transform: translateY(-2px);
+}
+.device-card:active { transform: translateY(0); }
+
+.device-card .card-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.device-card .icon {
+  width: 48px; height: 48px;
+  background: #e8f3ff;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+.device-card .card-info { min-width: 0; flex: 1; }
+.device-card .model { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.device-card .card-meta {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: #86909c;
+}
+.device-card .serial { font-family: monospace; }
+.device-card .dot-sep { color: #c9cdd4; }
+
+.empty-state {
+  text-align: center; padding: 80px 32px; color: #86909c;
+}
+.empty-state .big { font-size: 40px; margin-bottom: 12px; }
+
+/* ===== 播放器页 ===== */
+.player-page {
+  display: flex; flex-direction: column; height: 100vh;
+  height: 100dvh; /* 移动端动态视口高度 */
+}
+.player-toolbar {
+  padding: 12px 24px;
+  border-bottom: 1px solid #e5e6eb;
+  display: flex; align-items: center; gap: 16px;
+  background: #fff;
+}
+.player-toolbar .back {
+  color: #4e5969; text-decoration: none; font-size: 14px;
+  padding: 6px 12px; border-radius: 6px; transition: background 0.15s;
+}
+.player-toolbar .back:hover { background: #f2f3f5; color: #1f2329; }
+.player-toolbar .title { font-weight: 600; }
+.player-toolbar .status {
+  font-size: 12px; padding: 3px 10px; border-radius: 12px;
+  background: #f2f3f5; color: #86909c;
+}
+.player-toolbar .status.live { background: #e8ffea; color: #00b42a; }
+
+.player-toolbar .tools { margin-left: auto; display: flex; gap: 4px; }
+.player-toolbar button {
+  background: transparent; color: #4e5969; border: 1px solid transparent;
+  padding: 8px; border-radius: 8px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  line-height: 0; transition: background 0.15s, color 0.15s;
+}
+.player-toolbar button:hover { background: #f2f3f5; color: #165dff; }
+.player-toolbar button:active { background: #e8f3ff; color: #165dff; }
+
+.player-main {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  overflow: hidden; background: #f0f1f3;
+  padding: 12px;
+  min-height: 0;
+  min-width: 0;
+}
+.screen-wrap {
+  position: relative;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+  line-height: 0;
+}
+#screen {
+  display: block;
+  background: #000;
+  touch-action: none;
+  cursor: pointer;
+  /* JS 会动态设置 max-width/max-height (px) 实现精确缩放 */
+}
+.loading-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.9); color: #86909c; gap: 12px;
+}
+.spinner {
+  width: 36px; height: 36px; border: 3px solid #e5e6eb;
+  border-top-color: #165dff; border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.error-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(245,80,80,0.92); color: #fff; gap: 8px; padding: 32px; text-align: center;
+}
+
+.screen-off-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  background: #1a1a1a; color: #999; gap: 10px; z-index: 5;
+}
+
+/* ===== 全屏模式 (原生 + 伪全屏共用样式) ===== */
+/* 原生全屏 */
+.player-page:fullscreen,
+.player-page:-webkit-full-screen,
+/* 伪全屏 (iOS Safari 等不支持 Fullscreen API 的浏览器) */
+.player-page.pseudo-fullscreen {
+  background: #000;
+}
+.player-page:fullscreen .player-toolbar,
+.player-page:-webkit-full-screen .player-toolbar,
+.player-page.pseudo-fullscreen .player-toolbar {
+  display: none;
+}
+.player-page:fullscreen .player-main,
+.player-page:-webkit-full-screen .player-main,
+.player-page.pseudo-fullscreen .player-main {
+  background: #000;
+  padding: 0;
+}
+.player-page:fullscreen .screen-wrap,
+.player-page:-webkit-full-screen .screen-wrap,
+.player-page.pseudo-fullscreen .screen-wrap {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* 伪全屏: 用 fixed 铺满整个视口 */
+.player-page.pseudo-fullscreen {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 9999;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* 全屏时的悬浮退出按钮 */
+.fs-exit-floating {
+  display: none;
+}
+.player-page:fullscreen .fs-exit-floating,
+.player-page:-webkit-full-screen .fs-exit-floating,
+.player-page.pseudo-fullscreen .fs-exit-floating {
+  display: flex;
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 200;
+  width: 32px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.3);
+  border: none;
+  border-radius: 4px;
+  color: rgba(255,255,255,0.6);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  opacity: 0.5;
+}
+.player-page:fullscreen .fs-exit-floating:hover,
+.player-page:-webkit-full-screen .fs-exit-floating:hover,
+.player-page.pseudo-fullscreen .fs-exit-floating:hover {
+  background: rgba(0,0,0,0.6);
+  color: rgba(255,255,255,0.9);
+  opacity: 1;
+}
+
+/* ===== 移动端适配 (≤768px) ===== */
+@media (max-width: 768px) {
+  /* 设备列表页: 卡片更紧凑 */
+  .header {
+    padding: 16px 16px;
+  }
+  .device-grid {
+    padding: 12px;
+    gap: 10px;
+  }
+  .device-card {
+    padding: 12px 14px;
+    border-radius: 10px;
+  }
+  .device-card .icon {
+    width: 36px; height: 36px;
+    font-size: 18px;
+    border-radius: 8px;
+  }
+  .device-card .model { font-size: 14px; margin-bottom: 2px; }
+  .device-card .card-meta { font-size: 11px; }
+
+  /* 播放器页 */
+  .player-toolbar {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .player-toolbar .back {
+    padding: 6px 8px;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .player-toolbar .back-text {
+    display: none;  /* 只显示箭头 */
+  }
+  .player-toolbar .title,
+  .player-toolbar .status:not(.fps-badge) {
+    display: none;  /* 隐藏设备名和连接状态 */
+  }
+  .player-toolbar .tools {
+    gap: 4px;
+  }
+  .player-toolbar button {
+    padding: 8px;
+  }
+  .player-main {
+    background: #000;
+  }
+  .screen-wrap {
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
