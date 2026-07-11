@@ -142,40 +142,34 @@
     let ws = null;
     let connected = false;
 
-    // ===== 息屏检测: 监控帧到达，持续无帧才判定息屏 =====
-    // scrcpy 息屏后完全不发帧；但网络抖动/编码器卡顿也可能造成 1~3 秒的长间隔。
-    // 用连续确认机制避免误判：要求连续 4 次(每 500ms)即 2 秒持续无帧才判定息屏。
-    let lastFrameTs = Date.now();
-    let firstFrameReceived = false;
+    // ===== 息屏检测: 通过 ADB 获取真实屏幕状态 =====
+    // 使用后端 API 检测设备屏幕电源状态，避免帧间隔推测导致的误判
     let screenOffDetected = false;
-    let noFrameCount = 0;  // 连续无帧的检测次数
 
-    decoder.onFrameDecoded = () => {
-      lastFrameTs = Date.now();
-      noFrameCount = 0;
-      if (!firstFrameReceived) {
-        firstFrameReceived = true;
+    async function checkScreenState() {
+      if (!connected || !serial) return;
+      try {
+        const res = await fetch(`/api/screen-state?serial=${encodeURIComponent(serial)}`);
+        const data = await res.json();
+        if (data.error) {
+          console.warn('[screen-state] 检测失败:', data.error);
+          return;
+        }
+        const isScreenOn = data.screenOn;
+        if (isScreenOn === false && !screenOffDetected) {
+          screenOffDetected = true;
+          screenOffOverlay.style.display = 'flex';
+        } else if (isScreenOn === true && screenOffDetected) {
+          screenOffDetected = false;
+          screenOffOverlay.style.display = 'none';
+        }
+      } catch (e) {
+        console.warn('[screen-state] 请求失败:', e);
       }
-      if (screenOffDetected) {
-        screenOffDetected = false;
-        screenOffOverlay.style.display = 'none';
-      }
-    };
+    }
 
-    setInterval(() => {
-      if (!firstFrameReceived || !connected) return;
-      const idle = Date.now() - lastFrameTs;
-      if (idle > 1000) {
-        noFrameCount++;
-      } else {
-        noFrameCount = 0;
-      }
-      // 连续 6 次(每 500ms = 3秒)持续无帧才判定息屏
-      if (noFrameCount >= 6 && !screenOffDetected) {
-        screenOffDetected = true;
-        screenOffOverlay.style.display = 'flex';
-      }
-    }, 500);
+    // 每 10 秒检测一次屏幕状态（异步，不阻塞用户操作）
+    setInterval(checkScreenState, 10000);
 
     function showError(msg) {
       loading.style.display = 'none';

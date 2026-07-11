@@ -230,8 +230,6 @@ class ScrcpyDecoder {
     this.ctx.drawImage(frame, 0, 0, this.canvas.width, this.canvas.height);
     frame.close();
     this.frameCount++;
-    // 通知外部（用于息屏检测）
-    if (this.onFrameDecoded) this.onFrameDecoded();
     const now = performance.now();
     if (now - this.lastFrameTime > 1000) {
       const fps = (this.frameCount * 1000 / (now - this.lastFrameTime)).toFixed(1);

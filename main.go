@@ -90,6 +90,38 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"rotation": newRot})
 	})
 
+	// API: 屏幕状态检测 (GET /api/screen-state?serial=xxx)
+	// 通过 adb dumpsys power 获取真实的屏幕电源状态
+	mux.HandleFunc("/api/screen-state", func(w http.ResponseWriter, r *http.Request) {
+		serial := r.URL.Query().Get("serial")
+		if serial == "" {
+			http.Error(w, "missing serial", http.StatusBadRequest)
+			return
+		}
+		// 执行 adb shell dumpsys power 获取电源状态
+		out, err := exec.Command(adbPath, "-s", serial, "shell", "dumpsys", "power").Output()
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"screenOn": nil,
+				"error":    err.Error(),
+			})
+			return
+		}
+		// 解析输出，查找 "Display Power: state=ON" 或 "Display Power: state=OFF"
+		output := string(out)
+		screenOn := true // 默认认为屏幕是亮的
+		if strings.Contains(output, "Display Power: state=OFF") {
+			screenOn = false
+		} else if strings.Contains(output, "Display Power: state=ON") {
+			screenOn = true
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"screenOn": screenOn,
+		})
+	})
+
 	// WebSocket
 	mux.HandleFunc("/ws", hub.ServeWS)
 
