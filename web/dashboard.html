@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+  <title>MyWebScrcpy - 大屏监控</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="dashboard-page">
+  <div class="dashboard-header">
+    <svg class="logo-icon" width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="5" width="18" height="26" rx="3" stroke="#165dff" stroke-width="2" fill="none"/>
+      <rect x="11" y="3" width="18" height="26" rx="3" stroke="#4080ff" stroke-width="1.5" fill="#f0f5ff"/>
+      <circle cx="20" cy="25" r="1.5" fill="#4080ff"/>
+      <path d="M14 10 L24 16 L14 22Z" fill="#165dff"/>
+    </svg>
+    <h1>大屏监控</h1>
+    <span class="subtitle" id="device-count">加载中...</span>
+    <div class="dash-size-switcher" id="size-switcher">
+      <button class="size-btn" data-size="small" title="小">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="7" y="3" width="10" height="18" rx="2"/>
+        </svg>
+      </button>
+      <button class="size-btn" data-size="medium" title="中">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="5" y="2" width="14" height="20" rx="2"/>
+        </svg>
+      </button>
+      <button class="size-btn" data-size="large" title="大">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="1" width="18" height="22" rx="2"/>
+        </svg>
+      </button>
+    </div>
+    <a href="/" class="back-link">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5"/>
+        <polyline points="12 19 5 12 12 5"/>
+      </svg>
+      <span>设备列表</span>
+    </a>
+  </div>
+
+  <div class="dashboard-grid" id="dashboard-grid"></div>
+
+  <script src="/js/control.js"></script>
+  <script src="/js/decoder.js"></script>
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

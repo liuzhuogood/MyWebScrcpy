@@ -22,6 +22,16 @@ body {
   background: #00b42a; box-shadow: 0 0 8px rgba(0,180,42,0.4);
 }
 .header .subtitle { color: #86909c; font-size: 13px; margin-left: auto; }
+.header .logo-icon { flex-shrink: 0; }
+.header .dashboard-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 12px; padding: 6px 14px;
+  background: #165dff; color: #fff; border: none; border-radius: 8px;
+  font-size: 13px; font-weight: 500; text-decoration: none;
+  cursor: pointer; transition: background 0.15s, transform 0.1s;
+}
+.header .dashboard-btn:hover { background: #0e4cd4; transform: translateY(-1px); }
+.header .dashboard-btn:active { transform: translateY(0); }
 
 .device-grid {
   padding: 32px;
@@ -305,6 +315,234 @@ body {
   opacity: 1;
 }
 
+/* ===== 大屏监控页 ===== */
+.dashboard-page {
+  display: flex; flex-direction: column; height: 100vh;
+  height: 100dvh; background: #1a1a2e;
+}
+.dashboard-header {
+  padding: 14px 24px;
+  display: flex; align-items: center; gap: 12px;
+  background: #16213e; color: #fff;
+  border-bottom: 1px solid #0f3460; flex-shrink: 0;
+}
+.dashboard-header h1 { font-size: 18px; font-weight: 600; }
+.dashboard-header .subtitle { color: #8e9aaf; font-size: 13px; margin-left: auto; }
+.dashboard-header .back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-left: 12px; padding: 6px 12px;
+  color: #e0e6ed; font-size: 13px; text-decoration: none;
+  background: rgba(255,255,255,0.08); border-radius: 6px;
+  transition: background 0.15s;
+}
+.dashboard-header .back-link:hover { background: rgba(255,255,255,0.15); }
+
+/* 尺寸切换按钮组 */
+.dash-size-switcher {
+  display: flex; align-items: center; gap: 4px;
+  margin-left: 12px; padding: 3px;
+  background: rgba(255,255,255,0.08); border-radius: 8px;
+}
+.dash-size-switcher .size-btn {
+  width: 32px; height: 32px; border: none;
+  border-radius: 6px; background: transparent;
+  color: rgba(255,255,255,0.5); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 0; transition: background 0.15s, color 0.15s;
+}
+.dash-size-switcher .size-btn:hover {
+  background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8);
+}
+.dash-size-switcher .size-btn.active {
+  background: #165dff; color: #fff;
+}
+
+.dashboard-grid {
+  flex: 1; padding: 16px; overflow-y: auto;
+  display: flex; flex-wrap: wrap; min-height: 0;
+  justify-content: center; align-content: flex-start;
+  gap: 16px;
+}
+/* 三种尺寸: 小/中/大 */
+.dashboard-grid.size-small  { --phone-w: 160px; --phone-h: 347px; gap: 16px; }
+.dashboard-grid.size-medium { --phone-w: 260px; --phone-h: 563px; gap: 20px; }
+.dashboard-grid.size-large  { --phone-w: 360px; --phone-h: 780px; gap: 24px; }
+/* 空状态时占满整行 */
+.dashboard-grid.dash-grid-empty {
+  justify-content: center;
+}
+
+/* 手机外观容器: 用显式高度替代 aspect-ratio，避免 grid 行高塌陷 */
+.dash-phone {
+  position: relative;
+  width: var(--phone-w, 160px);
+  height: var(--phone-h, 347px);
+  margin: 0 auto;
+  background: #1a1a1a;
+  border: 3px solid #2a2a2a;
+  border-radius: 28px;
+  padding: 8px 6px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: width 0.3s, height 0.3s;
+}
+/* 横屏模式: 宽高互换，模拟横置手机 */
+.dash-phone.landscape {
+  width: var(--phone-h, 347px);
+  height: var(--phone-w, 160px);
+}
+/* 顶部听筒/刘海 */
+.dash-phone::before {
+  content: '';
+  position: absolute;
+  top: 6px; left: 50%; transform: translateX(-50%);
+  width: 40px; height: 5px;
+  background: #0a0a0a; border-radius: 3px;
+  z-index: 20;
+}
+/* 底部 Home 条 */
+.dash-phone::after {
+  content: '';
+  position: absolute;
+  bottom: 3px; left: 50%; transform: translateX(-50%);
+  width: 32%; height: 3px;
+  background: rgba(255,255,255,0.25); border-radius: 2px;
+  z-index: 20;
+}
+/* 屏幕区域 */
+.dash-screen-wrap {
+  position: relative; flex: 1; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: #000; border-radius: 20px;
+  overflow: hidden;
+}
+.dash-screen-wrap canvas {
+  display: block;
+  touch-action: none; cursor: pointer;
+  /* 尺寸由 JS fitCanvas() 精确计算，保证坐标映射准确 */
+}
+/* 手机卡片容器: flex-wrap 下每个卡片按自然尺寸排列 */
+.dash-card {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  padding: 4px;
+}
+
+/* 工具栏: 悬浮在屏幕右上角 */
+.dash-toolbar {
+  position: absolute; top: 6px; right: 6px;
+  display: flex; gap: 3px; z-index: 15;
+  opacity: 0; transition: opacity 0.2s;
+}
+.dash-card:hover .dash-toolbar { opacity: 1; }
+.dash-toolbar .dash-tool {
+  width: 28px; height: 28px; border: none;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.5); color: rgba(255,255,255,0.8);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; line-height: 0;
+  transition: background 0.15s, color 0.15s;
+  backdrop-filter: blur(4px);
+}
+.dash-toolbar .dash-tool:hover {
+  background: rgba(22,93,255,0.7); color: #fff;
+}
+.dash-toolbar .dash-tool:active {
+  background: rgba(22,93,255,0.9);
+}
+
+/* 全屏退出浮动按钮 */
+.dash-fs-exit {
+  display: none;
+}
+.dash-phone:fullscreen .dash-fs-exit,
+.dash-phone.pseudo-fs .dash-fs-exit {
+  display: flex;
+  position: fixed; top: 12px; right: 12px; z-index: 200;
+  width: 36px; height: 36px;
+  align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.4); border: none; border-radius: 8px;
+  color: rgba(255,255,255,0.7); cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.dash-phone:fullscreen .dash-fs-exit:hover,
+.dash-phone.pseudo-fs .dash-fs-exit:hover {
+  background: rgba(0,0,0,0.7); color: #fff;
+}
+/* 全屏时手机外壳铺满 */
+.dash-phone:fullscreen,
+.dash-phone.pseudo-fs {
+  border-radius: 0; border: none; padding: 0;
+  aspect-ratio: unset;
+  max-height: none; margin: 0;
+}
+.dash-phone:fullscreen::before,
+.dash-phone:fullscreen::after,
+.dash-phone.pseudo-fs::before,
+.dash-phone.pseudo-fs::after { display: none; }
+.dash-phone:fullscreen .dash-screen-wrap,
+.dash-phone.pseudo-fs .dash-screen-wrap { border-radius: 0; }
+.dash-phone.pseudo-fs {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 9999; width: 100vw; height: 100vh; height: 100dvh;
+}
+
+/* 底部信息栏 */
+.dash-info {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 6px 10px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.8));
+  display: flex; align-items: center; gap: 6px;
+  pointer-events: none; z-index: 5;
+}
+.dash-name {
+  color: #fff; font-size: 11px; font-weight: 500;
+  flex: 1; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.dash-status {
+  font-size: 11px; padding: 2px 8px; border-radius: 10px;
+  background: rgba(255,255,255,0.15); color: #8e9aaf;
+  white-space: nowrap;
+}
+.dash-status.live { background: rgba(0,180,42,0.25); color: #00d97e; }
+.dash-status.error { background: rgba(245,80,80,0.25); color: #ff6b6b; }
+
+/* 加载/错误遮罩 */
+.dash-overlay {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 10px; z-index: 10;
+}
+.dash-overlay.loading { background: rgba(0,0,0,0.85); color: #8e9aaf; }
+.dash-overlay.error { background: rgba(80,20,20,0.9); color: #ff6b6b; }
+.dash-overlay .spinner {
+  width: 30px; height: 30px; border: 2px solid #333;
+  border-top-color: #4080ff; border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.dash-overlay .overlay-text { font-size: 13px; }
+.dash-overlay .open-link {
+  font-size: 12px; color: #4080ff; text-decoration: underline;
+  pointer-events: auto; cursor: pointer;
+}
+
+.dash-empty {
+  width: 100%;
+  text-align: center; padding: 80px 32px; color: #8e9aaf;
+}
+.dash-empty .big { font-size: 48px; margin-bottom: 16px; }
+
+/* 单台设备时居中显示 */
+.dashboard-grid.cols-1 {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+.dashboard-grid.cols-1 .dash-card { max-height: 100%; }
+.dashboard-grid.cols-1 .dash-phone { max-height: calc(100vh - 100px); }
+
 /* ===== 移动端适配 (≤768px) ===== */
 @media (max-width: 768px) {
   /* 设备列表页: 卡片更紧凑 */
@@ -356,5 +594,15 @@ body {
   .screen-wrap {
     border-radius: 0;
     box-shadow: none;
+  }
+
+  /* 大屏监控页 */
+  .dashboard-header {
+    padding: 10px 12px; gap: 8px;
+  }
+  .dashboard-header h1 { font-size: 16px; }
+  .dashboard-header .back-link span { display: none; }
+  .dashboard-grid {
+    padding: 8px; gap: 8px;
   }
 }
