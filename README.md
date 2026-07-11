@@ -14,6 +14,10 @@
 
 ![投屏操控](screenshots/player.png)
 
+**大屏监控**
+
+![大屏监控](screenshots/dashboard.png)
+
 ## 特性
 
 - 纯浏览器端，无需安装任何客户端
@@ -26,6 +30,7 @@
 - 全屏模式（支持 iOS 伪全屏）
 - 屏幕熄灭检测
 - 自动重连
+- 大屏监控模式（多设备同屏展示，支持小/中/大三档尺寸）
 - 单二进制文件，内嵌 scrcpy-server 和前端资源
 
 ## 原理
@@ -185,10 +190,12 @@ MyWebScrcpy/
 └── web/
     ├── index.html             # 设备列表页
     ├── player.html            # 投屏播放器页
+    ├── dashboard.html         # 大屏监控页
     ├── css/style.css
     └── js/
         ├── decoder.js         # WebCodecs H.264 解码器
-        └── control.js         # 浏览器端控制消息打包
+        ├── control.js         # 浏览器端控制消息打包
+        └── dashboard.js       # 大屏监控逻辑
 ```
 
 ## 技术栈
