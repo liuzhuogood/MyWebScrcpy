@@ -59,12 +59,44 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Create Release
+      - name: Read version.md as release notes
+        id: notes
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          NOTES_FILE="docs/versions/${TAG}-feature/version.md"
+          if [ -f "$NOTES_FILE" ]; then
+            echo "Found release notes at $NOTES_FILE"
+          else
+            echo "::warning::No version.md found at $NOTES_FILE, falling back to auto-generated notes."
+            NOTES_FILE=""
+          fi
+          echo "notes_file=${NOTES_FILE}" >> $GITHUB_OUTPUT
+          echo "use_version_md=$([ -n "$NOTES_FILE" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+
+      - name: Create Release (with version.md)
+        if: steps.notes.outputs.use_version_md == 'true'
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: docs/versions/${{ github.ref_name }}-feature/version.md
+          files: |
+            artifacts/linux-amd64/mywebscrcpy-linux-amd64
+            artifacts/linux-arm64/mywebscrcpy-linux-arm64
+            artifacts/macos-amd64/mywebscrcpy-macos-amd64
+            artifacts/macos-arm64/mywebscrcpy-macos-arm64
+            artifacts/windows-amd64.exe/mywebscrcpy-windows-amd64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Release (fallback, auto-generated)
+        if: steps.notes.outputs.use_version_md != 'true'
         uses: softprops/action-gh-release@v1
         with:
           generate_release_notes: true
