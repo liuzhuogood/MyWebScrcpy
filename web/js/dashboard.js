@@ -59,6 +59,12 @@ class DeviceClient {
   }
 
   setStatus(text, cls) {
+    // 直播为正常状态，大屏上不再显示"直播中"徽章
+    if (cls === 'live') {
+      this.statusEl.style.display = 'none';
+      return;
+    }
+    this.statusEl.style.display = '';
     this.statusEl.textContent = text;
     this.statusEl.className = 'dash-status' + (cls ? ' ' + cls : '');
   }
