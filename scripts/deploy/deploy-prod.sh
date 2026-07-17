@@ -59,26 +59,25 @@ warn "⚠️ 即将在生产环境执行部署，操作会重启服务。"
 read -r -p "确认继续？输入 yes 继续，其他取消: " confirm
 [[ "$confirm" == "yes" ]] || { warn "已取消部署。"; exit 0; }
 
-# ---- 第 1 步：上传二进制 ----
-log "上传二进制文件到服务器..."
-scp -P "$SSH_PORT" "$LOCAL_BINARY" "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/${BINARY_NAME}.new"
+# ---- 第 1 步：上传二进制到用户目录（/opt/ 需要 root 权限）----
+REMOTE_TMP="/home/${DEPLOY_USER}/${BINARY_NAME}.new"
+log "上传二进制文件到服务器（${REMOTE_TMP}）..."
+scp -P "$SSH_PORT" "$LOCAL_BINARY" "${DEPLOY_USER}@${DEPLOY_HOST}:${REMOTE_TMP}"
 
 # ---- 第 2 步：远程替换并重启 ----
 log "在服务器上替换二进制并重启服务..."
 ssh -p "$SSH_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" bash -s <<REMOTE_EOF
   set -euo pipefail
 
-  cd "${DEPLOY_PATH}"
-
   echo "[远程] 备份当前二进制..."
-  if [[ -f "${BINARY_NAME}" ]]; then
-    cp "${BINARY_NAME}" "${BINARY_NAME}.bak.\$(date +%Y%m%d%H%M%S)"
+  if [[ -f "${DEPLOY_PATH}/${BINARY_NAME}" ]]; then
+    sudo cp "${DEPLOY_PATH}/${BINARY_NAME}" "${DEPLOY_PATH}/${BINARY_NAME}.bak.\$(date +%Y%m%d%H%M%S)"
     echo "[远程] 已备份到 ${BINARY_NAME}.bak.\$(date +%Y%m%d%H%M%S)"
   fi
 
   echo "[远程] 替换二进制..."
-  chmod +x "${BINARY_NAME}.new"
-  mv "${BINARY_NAME}.new" "${BINARY_NAME}"
+  sudo chmod +x "${REMOTE_TMP}"
+  sudo mv "${REMOTE_TMP}" "${DEPLOY_PATH}/${BINARY_NAME}"
 
   echo "[远程] 重启 systemd 服务..."
   sudo systemctl restart "${SERVICE_NAME}"
