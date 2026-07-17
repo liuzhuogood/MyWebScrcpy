@@ -64,7 +64,14 @@ journalctl -u mywebscrcpy.service -f
 - HTTPS 证书：使用项目内置自签证书（`-https`）。
 - 备用二进制：`/home/liuzhuo/mywebscrcpy-new`（待替换 / 升级用）。
 
+## 部署方式
+
+- 部署脚本：`scripts/deploy/deploy-prod.sh`
+- 部署流程：本地构建 Linux amd64 二进制 → `scp` 上传 → 替换二进制 → `systemctl restart`。
+- 无需编译环境（服务器上不安装 Go，二进制在本地 Mac 交叉编译）。
+
 ## 联系人 / 变更记录
 
 - 负责人：liuzhuo。
 - 最近变更：初始化生产环境资产；确认服务以二进制 + systemd 方式运行在 `10.0.0.6`。
+- 2026-07-16：创建部署脚本 `scripts/deploy/deploy-prod.sh`。
