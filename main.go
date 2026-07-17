@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"mywebscrcpy/internal/device"
+	"mywebscrcpy/internal/scripts"
 	"mywebscrcpy/internal/ws"
 )
 
@@ -53,7 +54,15 @@ func main() {
 
 	hub := ws.NewHub(adbPath, jarPath)
 
+	// 初始化脚本管理目录
+	if err := scripts.EnsureRoot(); err != nil {
+		log.Printf("警告: 初始化脚本目录失败: %v", err)
+	}
+
 	mux := http.NewServeMux()
+
+	// 脚本管理 API
+	scripts.RegisterRoutes(mux)
 
 	// API: 设备列表
 	mux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) {
