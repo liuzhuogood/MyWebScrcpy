@@ -142,6 +142,26 @@
     let ws = null;
     let connected = false;
 
+    // ===== 连接超时: 3 秒未收到 meta 则显示连接失败 =====
+    let connectTimeout = null;
+
+    function clearConnectTimeout() {
+      if (connectTimeout) {
+        clearTimeout(connectTimeout);
+        connectTimeout = null;
+      }
+    }
+
+    function startConnectTimeout() {
+      clearConnectTimeout();
+      connectTimeout = setTimeout(() => {
+        // 3 秒未收到 meta，显示连接失败
+        loading.style.display = 'none';
+        errorBox.style.display = 'flex';
+        errorBox.innerHTML = `<div style="font-size:18px;font-weight:600">连接失败</div><div style="font-size:14px">连接超时，请检查设备连接</div>`;
+      }, 3000);
+    }
+
     // ===== 息屏检测: 通过 ADB 获取真实屏幕状态 =====
     // 使用后端 API 检测设备屏幕电源状态，避免帧间隔推测导致的误判
     let screenOffDetected = false;
@@ -172,6 +192,7 @@
     setInterval(checkScreenState, 10000);
 
     function showError(msg) {
+      clearConnectTimeout();
       loading.style.display = 'none';
       errorBox.style.display = 'flex';
       errorBox.innerHTML = `<div style="font-size:18px;font-weight:600">连接失败</div><div style="font-size:14px">${msg}</div>`;
@@ -199,12 +220,17 @@
         screenOffDetected = false;
         noFrameCount = 0;
         screenOffOverlay.style.display = 'none';
+        errorBox.style.display = 'none';
         loading.style.display = 'flex';
         connect();
       }, delay);
     }
 
     function connect() {
+      // 重置连接状态
+      errorBox.style.display = 'none';
+      startConnectTimeout();
+
       const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${wsProto}//${location.host}/ws?serial=${encodeURIComponent(serial)}`;
       ws = new WebSocket(wsUrl);
@@ -223,6 +249,8 @@
         if (typeof event.data === 'string') {
           const msg = JSON.parse(event.data);
           if (msg.type === 'meta') {
+            clearConnectTimeout();
+            errorBox.style.display = 'none';
             packer.setDeviceSize(msg.width, msg.height);
             decoder.configure(msg.codec, msg.width, msg.height);
             loading.style.display = 'none';
@@ -254,6 +282,7 @@
 
       ws.onclose = () => {
         console.log('[ws] closed');
+        clearConnectTimeout();
         connected = false;
         if (reconnectAttempts < 20) {
           reconnect();
