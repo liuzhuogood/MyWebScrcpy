@@ -18,6 +18,10 @@
 
 ![大屏监控](screenshots/dashboard.png)
 
+**文件管理**
+
+![文件管理](screenshots/file-manager.jpg)
+
 ## 特性
 
 - 纯浏览器端，无需安装任何客户端
