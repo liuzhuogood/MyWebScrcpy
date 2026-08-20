@@ -215,6 +215,10 @@ func normalizePage(page, pageSize int) (int, int) {
 
 func parseStatLine(line string) (FileItem, bool) {
 	fields := strings.SplitN(strings.TrimSpace(line), "\t", 4)
+	if len(fields) != 4 {
+		// 部分 Android toybox 版本会把 stat 的 \\t 格式原样输出为两个字符。
+		fields = strings.SplitN(strings.TrimSpace(line), `\t`, 4)
+	}
 	if len(fields) != 4 || strings.Contains(strings.ToLower(fields[0]), "symbolic link") {
 		return FileItem{}, false
 	}

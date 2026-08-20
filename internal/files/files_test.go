@@ -28,6 +28,9 @@ func TestParseStatLine(t *testing.T) {
 	if _, ok := parseStatLine("symbolic link\t10\t1710000000\t/storage/emulated/0/link"); ok {
 		t.Fatal("symbolic links must not be exposed")
 	}
+	if _, ok := parseStatLine(`regular file\t7\t1710000000\t/storage/emulated/0/literal.txt`); !ok {
+		t.Fatal("literal toybox separators must parse")
+	}
 }
 
 func TestCleanRelRejectsServerAndTrashPaths(t *testing.T) {
