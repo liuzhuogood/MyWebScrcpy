@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	androidRoot       = "/sdcard"
+	androidRoot       = "/storage/emulated/0"
 	trashDirName      = ".mywebscrcpy-trash"
 	defaultPageSize   = 50
 	maxPageSize       = 100

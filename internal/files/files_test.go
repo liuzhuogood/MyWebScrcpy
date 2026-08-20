@@ -14,18 +14,18 @@ import (
 )
 
 func TestParseStatLine(t *testing.T) {
-	item, ok := parseStatLine("regular file\t42\t1710000000\t/sdcard/照片/a b.txt")
+	item, ok := parseStatLine("regular file\t42\t1710000000\t/storage/emulated/0/照片/a b.txt")
 	if !ok {
 		t.Fatal("expected stat line to parse")
 	}
 	if item.Path != "照片/a b.txt" || item.Kind != "document" || item.Size != 42 {
 		t.Fatalf("unexpected item: %#v", item)
 	}
-	item, ok = parseStatLine("directory\t4096\t1710000000\t/sdcard/照片")
+	item, ok = parseStatLine("directory\t4096\t1710000000\t/storage/emulated/0/照片")
 	if !ok || item.Kind != "folder" || item.Size != 0 {
 		t.Fatalf("unexpected directory: %#v", item)
 	}
-	if _, ok := parseStatLine("symbolic link\t10\t1710000000\t/sdcard/link"); ok {
+	if _, ok := parseStatLine("symbolic link\t10\t1710000000\t/storage/emulated/0/link"); ok {
 		t.Fatal("symbolic links must not be exposed")
 	}
 }
@@ -76,11 +76,11 @@ func TestListUsesSelectedPhoneStorage(t *testing.T) {
 		script := args[1]
 		switch {
 		case strings.HasPrefix(script, "stat -c"):
-			return []byte("directory\t0\t1710000000\t/sdcard\n"), nil
+			return []byte("directory\t0\t1710000000\t/storage/emulated/0\n"), nil
 		case strings.HasPrefix(script, "find"):
-			return []byte("directory\t0\t1710000000\t/sdcard/照片\nregular file\t4\t1710000001\t/sdcard/readme.txt\n"), nil
+			return []byte("directory\t0\t1710000000\t/storage/emulated/0/照片\nregular file\t4\t1710000001\t/storage/emulated/0/readme.txt\n"), nil
 		case strings.HasPrefix(script, "df"):
-			return []byte("Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block 100 40 60 40% /sdcard\n"), nil
+			return []byte("Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block 100 40 60 40% /storage/emulated\n"), nil
 		default:
 			t.Fatalf("unexpected shell script: %s", script)
 			return nil, nil
@@ -111,7 +111,7 @@ type fakeADB struct{ phones map[string]*fakePhone }
 func newFakeADB(serials ...string) *fakeADB {
 	adb := &fakeADB{phones: make(map[string]*fakePhone)}
 	for _, serial := range serials {
-		adb.phones[serial] = &fakePhone{dirs: map[string]bool{"/sdcard": true}, files: make(map[string][]byte)}
+		adb.phones[serial] = &fakePhone{dirs: map[string]bool{"/storage/emulated/0": true}, files: make(map[string][]byte)}
 	}
 	return adb
 }
@@ -204,7 +204,7 @@ func (p *fakePhone) shell(script string) ([]byte, error) {
 	case strings.HasPrefix(script, "find"):
 		return p.find(remotePaths[0], strings.Contains(script, "-maxdepth"))
 	case strings.HasPrefix(script, "df"):
-		return []byte("Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block 100 40 60 40% /sdcard\n"), nil
+		return []byte("Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block 100 40 60 40% /storage/emulated\n"), nil
 	case strings.HasPrefix(script, "mkdir"):
 		p.dirs[remotePaths[len(remotePaths)-1]] = true
 		return nil, nil
@@ -286,7 +286,7 @@ func (p *fakePhone) remove(remote string) {
 
 func TestManagerOperationsStayOnSelectedPhone(t *testing.T) {
 	fake := newFakeADB("phone-a", "phone-b")
-	fake.phones["phone-a"].files["/sdcard/readme.txt"] = []byte("hello")
+	fake.phones["phone-a"].files["/storage/emulated/0/readme.txt"] = []byte("hello")
 	m := NewManager("adb")
 	m.maxUploadBytes = 1024
 	m.run = fake.run

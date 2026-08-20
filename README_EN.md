@@ -70,7 +70,7 @@ go build -o mywebscrcpy .
 
 Open `http://localhost:8080` in your browser, click a device to start mirroring.
 
-Open the file manager from the player's “More” menu. It operates on the selected phone's shared `/sdcard` storage, so each player page remains bound to its own device in multi-device use.
+Open the file manager from the player's “More” menu. It operates on the selected phone's shared `/storage/emulated/0` storage, so each player page remains bound to its own device in multi-device use.
 
 ### Environment Variables
 
