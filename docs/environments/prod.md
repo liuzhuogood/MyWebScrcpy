@@ -60,7 +60,10 @@ journalctl -u mywebscrcpy.service -f
 
 - ADB：已安装 `Android Debug Bridge version 1.0.41`。
 - Docker：未安装（当前为二进制直跑部署）。
-- 环境变量：暂无（参数通过 systemd / 命令行 `-https` 传入）。
+- 环境变量：通过 systemd drop-in `/etc/systemd/system/mywebscrcpy.service.d/run-as-liuzhuo.conf` 注入。
+- 文件管理根目录：`/home/liuzhuo/files`，目录归属 `liuzhuo:liuzhuo`。
+- 文件管理访问令牌：未设置，当前沿用单用户可信内网模式；远程或多用户访问前应设置 `FILES_TOKEN`。
+- 单文件上传上限：未显式设置，使用程序默认值 `268435456` 字节。
 - HTTPS 证书：使用项目内置自签证书（`-https`）。
 - 备用二进制：`/home/liuzhuo/mywebscrcpy-new`（待替换 / 升级用）。
 
@@ -75,3 +78,4 @@ journalctl -u mywebscrcpy.service -f
 - 负责人：liuzhuo。
 - 最近变更：初始化生产环境资产；确认服务以二进制 + systemd 方式运行在 `10.0.0.6`。
 - 2026-07-16：创建部署脚本 `scripts/deploy/deploy-prod.sh`。
+- 2026-08-20：部署 `v1.3.0`；服务因 systemd 未设置相对路径根目录首次重启失败，随后配置 `FILES_DIR=/home/liuzhuo/files` 并恢复 `active`。HTTPS 首页、`/files.html` 和 `/api/files` 健康检查通过。
