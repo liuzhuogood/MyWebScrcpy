@@ -78,3 +78,4 @@ journalctl -u mywebscrcpy.service -f
 - 最近变更：初始化生产环境资产；确认服务以二进制 + systemd 方式运行在 `10.0.0.6`。
 - 2026-07-16：创建部署脚本 `scripts/deploy/deploy-prod.sh`。
 - 2026-08-20：部署 `v1.3.0`；服务因 systemd 未设置相对路径根目录首次重启失败，随后修正运行配置并恢复 `active`。HTTPS 首页和投屏链路健康检查通过。
+- 2026-08-20：部署 `v1.3.1`；修正手机共享存储路径和 Android toybox 元数据解析，服务恢复 `active`，生产文件管理冒烟验证通过。

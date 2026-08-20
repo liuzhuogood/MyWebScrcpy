@@ -719,7 +719,7 @@ body {
 .files-toast button { margin-left: 10px; border: 0; color: #fff; background: transparent; text-decoration: underline; cursor: pointer; }
 
 /* 投屏页中的手机文件管理弹窗 */
-.files-modal { width: min(1120px, calc(100vw - 32px)); height: min(820px, calc(100vh - 64px)); padding: 0; border: 0; border-radius: 14px; overflow: hidden; background: #f5f6f8; box-shadow: 0 20px 70px rgba(0,0,0,.32); }
+.files-modal { width: min(1120px, calc(100vw - 32px)); height: min(820px, calc(100vh - 64px)); margin: auto; padding: 0; border: 0; border-radius: 14px; overflow: hidden; background: #f5f6f8; box-shadow: 0 20px 70px rgba(0,0,0,.32); }
 .files-modal::backdrop { background: rgba(12, 18, 28, .58); }
 .files-modal-header { height: 48px; padding: 0 14px 0 18px; display: flex; align-items: center; justify-content: space-between; background: #fff; border-bottom: 1px solid #e5e6eb; color: #1f2329; }
 .files-modal-header button { width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: #86909c; font-size: 24px; line-height: 1; cursor: pointer; }
