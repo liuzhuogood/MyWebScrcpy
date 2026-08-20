@@ -36,6 +36,11 @@ class DeviceClient {
     this.reconnectAttempts = 0;
     this.reconnectTimer = null;
     this.destroyed = false;
+    // 服务端错误静默重试：连续多次失败才亮红屏
+    this.lastErrorMsg = '';
+    this.serverErrorAttempts = 0;
+    // 红屏是否已展示：展示期间后台重试不再切回"连接中"，避免闪烁
+    this.errorShown = false;
 
     this.decoder.onFps = () => {}; // 大屏不显示 fps
     this.decoder.onDeviceResize = (w, h) => {
@@ -70,11 +75,14 @@ class DeviceClient {
   }
 
   showLoading(text = '连接中...') {
+    this.overlay.style.display = '';
     this.overlay.className = 'dash-overlay loading';
     this.overlay.innerHTML = `<div class="spinner"></div><div class="overlay-text">${text}</div>`;
   }
 
   showError(msg) {
+    this.errorShown = true;
+    this.overlay.style.display = '';
     this.overlay.className = 'dash-overlay error';
     this.overlay.innerHTML = `
       <div class="overlay-text">${msg}</div>
@@ -83,6 +91,7 @@ class DeviceClient {
   }
 
   hideOverlay() {
+    this.errorShown = false;
     this.overlay.style.display = 'none';
   }
 
@@ -92,7 +101,10 @@ class DeviceClient {
     const wsUrl = `${wsProto}//${location.host}/ws?serial=${encodeURIComponent(this.serial)}`;
     this.ws = new WebSocket(wsUrl);
     this.ws.binaryType = 'arraybuffer';
-    this.showLoading();
+    // 已亮红屏则保持，后台静默重试；否则回到"连接中"
+    if (!this.errorShown) {
+      this.showLoading();
+    }
 
     this.ws.onopen = () => {
       this.reconnectAttempts = 0;
@@ -112,7 +124,7 @@ class DeviceClient {
         this.reconnect();
       } else {
         this.setStatus('连接失败', 'error');
-        this.showError('连接失败');
+        this.showError(this.lastErrorMsg || '连接失败');
       }
     };
   }
@@ -125,13 +137,21 @@ class DeviceClient {
           this.packer.setDeviceSize(msg.width, msg.height);
           this.decoder.configure(msg.codec, msg.width, msg.height);
           this.connected = true;
+          this.serverErrorAttempts = 0;
+          this.lastErrorMsg = '';
           this.setStatus('直播中', 'live');
           this.hideOverlay();
           this.updateOrientation(msg.width, msg.height);
           this.fitCanvas();
         } else if (msg.type === 'error') {
-          this.setStatus('错误', 'error');
-          this.showError(msg.message || '设备连接错误');
+          // 服务端启动失败很常见，静默重试保持"连接中"；连续 3 次失败才亮红屏
+          this.lastErrorMsg = msg.message || '设备连接错误';
+          this.serverErrorAttempts++;
+          console.warn('[dash] 服务端错误（第 ' + this.serverErrorAttempts + ' 次），静默重试:', this.lastErrorMsg);
+          if (this.serverErrorAttempts >= 3) {
+            this.setStatus('错误', 'error');
+            this.showError(this.lastErrorMsg);
+          }
         } else if (msg.type === 'disconnected') {
           this.connected = false;
           this.reconnect();
