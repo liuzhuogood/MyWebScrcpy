@@ -192,7 +192,7 @@ body {
 }
 .player-toolbar .status.live { background: #e8ffea; color: #00b42a; }
 
-.player-toolbar .tools { margin-left: auto; display: flex; gap: 4px; }
+.player-toolbar .tools { margin-left: auto; display: flex; gap: 4px; position: relative; }
 .player-toolbar button {
   background: transparent; color: #4e5969; border: 1px solid transparent;
   padding: 8px; border-radius: 8px; cursor: pointer;
@@ -201,6 +201,17 @@ body {
 }
 .player-toolbar button:hover { background: #f2f3f5; color: #165dff; }
 .player-toolbar button:active { background: #e8f3ff; color: #165dff; }
+.more-menu[hidden] { display: none; }
+.more-menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 30;
+  min-width: 148px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: #fff; border: 1px solid #e5e6eb; border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.14);
+}
+.more-menu button { width: 100%; justify-content: flex-start; gap: 10px; padding: 9px 10px; font-size: 13px; }
+.more-menu button span { white-space: nowrap; }
+.more-menu .danger-action { color: #d03050; }
+.more-menu .danger-action:hover { color: #c21d3b; background: #fff0f0; }
 
 .player-main {
   flex: 1; display: flex; align-items: center; justify-content: center;

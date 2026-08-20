@@ -131,6 +131,28 @@ func main() {
 		})
 	})
 
+	// API: 重启设备 (POST /api/reboot?serial=xxx)
+	mux.HandleFunc("/api/reboot", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		serial := r.URL.Query().Get("serial")
+		if serial == "" {
+			http.Error(w, "missing serial", http.StatusBadRequest)
+			return
+		}
+		if err := exec.Command(adbPath, "-s", serial, "reboot").Run(); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": err.Error()})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	})
+
 	// WebSocket
 	mux.HandleFunc("/ws", hub.ServeWS)
 
