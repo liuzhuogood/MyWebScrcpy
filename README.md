@@ -1,8 +1,8 @@
 # MyWebScrcpy
 
-基于 Go + WebCodecs 的浏览器端 Android 投屏工具。无需安装客户端，打开浏览器即可投屏和操控 Android 设备。
+一个基于 Go 和 WebCodecs 的开源 Android 设备投屏与控制工具。通过浏览器即可实时查看设备画面、执行触控和键盘操作，并管理设备的共享存储。访问端无需安装专用应用，Android 设备通过 ADB 连接到运行 MyWebScrcpy 的主机后即可使用。
 
-[English Version](README_EN.md)
+[English](README_EN.md)
 
 ## 截图
 
