@@ -14,6 +14,8 @@ class ScrcpyDecoder {
     this.configured = false;
     this.frameCount = 0;
     this.lastFrameTime = 0;
+    this.decodeErrorCount = 0;
+    this.decodeErrorNotified = false;
   }
 
   // 根据 codec 名字构造 WebCodecs codec 字符串
@@ -40,9 +42,14 @@ class ScrcpyDecoder {
 
     this.decoder = new VideoDecoder({
       output: (frame) => this.onFrame(frame),
-      error: (e) => console.error('[decoder] error', e),
+      error: (e) => {
+        console.error('[decoder] error', e);
+        this.notifyDecodeError(e, true);
+      },
     });
     this.configured = false;
+    this.decodeErrorCount = 0;
+    this.decodeErrorNotified = false;
     console.log(`[decoder] canvas ${width}x${height}, codec ${codec}, 等待 config 包...`);
   }
 
@@ -187,13 +194,29 @@ class ScrcpyDecoder {
       timestamp: pts,        // 微秒
       data: chunkData,
     });
-    // decode() 返回 Promise，必须 catch 否则 unhandled rejection 可能停止 WS dispatch
+    // decode() 的错误通过 WebCodecs error 回调报告，部分实现也会同步抛出异常。
     try {
-      this.decoder.decode(chunk).catch(e => {
-        // 解码错误通常是帧损坏或缺少关键帧，静默忽略
-      });
+      // VideoDecoder.decode() 通常没有返回值，错误通过 error 回调报告；
+      // 某些浏览器实现也可能同步抛出异常，这里统一计入连续失败。
+      this.decoder.decode(chunk);
     } catch(e) {
-      // 同步异常（如 decoder 状态错误），忽略
+      this.notifyDecodeError(e, false);
+    }
+  }
+
+  notifyDecodeError(error, fatal) {
+    this.decodeErrorCount++;
+    // 单个损坏帧不应打断正常播放；连续失败或 WebCodecs 致命错误才通知播放器。
+    if (!fatal && this.decodeErrorCount < 3) return;
+    if (this.decodeErrorNotified) return;
+    this.decodeErrorNotified = true;
+    if (this.onError) {
+      this.onError({
+        error,
+        fatal,
+        count: this.decodeErrorCount,
+        message: fatal ? '视频解码失败' : '视频连续解码失败',
+      });
     }
   }
 
@@ -230,6 +253,9 @@ class ScrcpyDecoder {
     this.ctx.drawImage(frame, 0, 0, this.canvas.width, this.canvas.height);
     frame.close();
     this.frameCount++;
+    this.decodeErrorCount = 0;
+    this.decodeErrorNotified = false;
+    this.onDecodedFrame && this.onDecodedFrame();
     const now = performance.now();
     if (now - this.lastFrameTime > 1000) {
       const fps = (this.frameCount * 1000 / (now - this.lastFrameTime)).toFixed(1);
@@ -241,8 +267,9 @@ class ScrcpyDecoder {
 
   close() {
     if (this.decoder) {
-      this.decoder.close();
+      if (this.decoder.state !== 'closed') this.decoder.close();
       this.decoder = null;
     }
+    this.configured = false;
   }
 }

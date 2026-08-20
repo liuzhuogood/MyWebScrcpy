@@ -158,6 +158,11 @@
     const mainEl = document.querySelector('.player-main');
 
     decoder.onFps = (fps) => { fpsEl.textContent = fps + ' fps'; };
+    decoder.onError = ({ message }) => {
+      console.error('[decoder] 通知播放器:', message);
+      handleStreamLoss(message);
+    };
+    decoder.onDecodedFrame = () => { lastDecodedFrameAt = Date.now(); };
     decoder.onDeviceResize = (w, h) => { packer.setDeviceSize(w, h); fitCanvas(); };
 
     // ===== Canvas 自适应缩放 =====
@@ -191,6 +196,10 @@
 
     let ws = null;
     let connected = false;
+    let connectionId = 0;
+    let lastDecodedFrameAt = 0;
+    const NO_FRAME_TIMEOUT = 5000;
+    let frameWatchdog = null;
 
     // ===== 连接超时: 3 秒未收到 meta 则显示连接失败 =====
     let connectTimeout = null;
@@ -205,6 +214,48 @@
         clearTimeout(connectTimeout);
         connectTimeout = null;
       }
+    }
+
+    function clearFrameWatchdog() {
+      if (frameWatchdog) {
+        clearInterval(frameWatchdog);
+        frameWatchdog = null;
+      }
+    }
+
+    function startFrameWatchdog() {
+      clearFrameWatchdog();
+      // 从收到 meta 开始计时，既能发现“连上但始终没有画面”，
+      // 也能发现已经播放后持续无新帧。
+      lastDecodedFrameAt = Date.now();
+      frameWatchdog = setInterval(() => {
+        if (!connected || !lastDecodedFrameAt) return;
+        if (Date.now() - lastDecodedFrameAt > NO_FRAME_TIMEOUT) {
+          handleStreamLoss('视频流已中断，正在重连');
+        }
+      }, 1000);
+    }
+
+    function closeWebSocket() {
+      if (!ws) return;
+      const oldWs = ws;
+      ws = null;
+      oldWs.onopen = null;
+      oldWs.onmessage = null;
+      oldWs.onerror = null;
+      oldWs.onclose = null;
+      if (oldWs.readyState === WebSocket.OPEN || oldWs.readyState === WebSocket.CONNECTING) {
+        oldWs.close();
+      }
+    }
+
+    function handleStreamLoss(message) {
+      if (!connected && reconnectTimer) return;
+      connected = false;
+      clearFrameWatchdog();
+      closeWebSocket();
+      setStatus(message || '视频流已中断，正在重连', false);
+      reconnect();
     }
 
     function startConnectTimeout() {
@@ -270,9 +321,7 @@
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         // 重置状态
-        firstFrameReceived = false;
         screenOffDetected = false;
-        noFrameCount = 0;
         screenOffOverlay.style.display = 'none';
         // 已亮红屏则保持，后台静默重试；否则回到"连接中"
         if (!errorShown) {
@@ -284,6 +333,9 @@
     }
 
     function connect() {
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        closeWebSocket();
+      }
       // 重置连接状态（已亮红屏则保持，由 meta 到达时统一清除）
       if (!errorShown) {
         errorBox.style.display = 'none';
@@ -292,18 +344,21 @@
 
       const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${wsProto}//${location.host}/ws?serial=${encodeURIComponent(serial)}`;
-      ws = new WebSocket(wsUrl);
-      ws.binaryType = 'arraybuffer';
+      const socket = new WebSocket(wsUrl);
+      ws = socket;
+      const currentConnectionId = ++connectionId;
+      socket.binaryType = 'arraybuffer';
 
-      ws.onopen = () => {
+      socket.onopen = () => {
+        if (ws !== socket || currentConnectionId !== connectionId) return;
         reconnectAttempts = 0;
         setStatus('已连接，等待画面...', true);
-        ws.onmessage = handleWSMessage;
       };
 
-      ws.onmessage = handleWSMessage;
+      socket.onmessage = handleWSMessage;
 
       function handleWSMessage(event) {
+        if (ws !== socket || currentConnectionId !== connectionId) return;
         try {
         if (typeof event.data === 'string') {
           const msg = JSON.parse(event.data);
@@ -314,11 +369,18 @@
             errorShown = false;
             errorBox.style.display = 'none';
             packer.setDeviceSize(msg.width, msg.height);
-            decoder.configure(msg.codec, msg.width, msg.height);
+            try {
+              decoder.configure(msg.codec, msg.width, msg.height);
+            } catch (error) {
+              console.error('[decoder] 初始化失败:', error);
+              handleStreamLoss('视频解码初始化失败，正在重连');
+              return;
+            }
             loading.style.display = 'none';
             setStatus(msg.width + 'x' + msg.height, true);
             fpsEl.style.display = 'inline-block';
             connected = true;
+            startFrameWatchdog();
             fitCanvas();
           } else if (msg.type === 'error') {
             // 服务端启动失败（如端口冲突、进程残留）很常见，静默重试：
@@ -333,8 +395,7 @@
           } else if (msg.type === 'disconnected') {
             // Go 端检测到 video stream 断开（旋转卡死等），自动重连
             console.log('[ws] server 通知断开，准备重连');
-            connected = false;
-            reconnect();
+            handleStreamLoss('视频流已中断，正在重连');
           }
           return;
         }
@@ -346,14 +407,18 @@
         }
       }
 
-      ws.onerror = (e) => {
+      socket.onerror = (e) => {
+        if (ws !== socket || currentConnectionId !== connectionId) return;
         console.error('[ws] error', e);
       };
 
-      ws.onclose = () => {
+      socket.onclose = () => {
+        if (ws !== socket || currentConnectionId !== connectionId) return;
         console.log('[ws] closed');
+        ws = null;
         clearConnectTimeout();
         connected = false;
+        clearFrameWatchdog();
         if (reconnectAttempts < 20) {
           reconnect();
         } else {
