@@ -75,7 +75,7 @@ go build -o mywebscrcpy .
 
 浏览器打开 `http://localhost:8080`，点击设备即可投屏。
 
-文件管理页面位于 `/files.html`，也可从设备列表页进入。文件根目录默认为运行目录下的 `files/`，可通过 `FILES_DIR` 指定；生产或远程访问场景建议设置 `FILES_TOKEN` 并使用 HTTPS。
+文件管理从投屏页面“更多”菜单打开，操作对象是当前选定手机的 `/sdcard` 共享存储。多手机场景下，每个投屏页面都会绑定自己的设备。
 
 ### Docker 部署
 
@@ -116,8 +116,6 @@ docker run -d \
 | `ANDROID_HOME` | ADB 路径查找 | 系统 PATH |
 | `TLS_CERT` | 自定义 SSL 证书路径 | - |
 | `TLS_KEY` | 自定义 SSL 私钥路径 | - |
-| `FILES_DIR` | 文件管理根目录 | `files` |
-| `FILES_TOKEN` | 文件 API Bearer 访问令牌；未设置时为单用户可信网络模式 | - |
 | `FILES_MAX_UPLOAD_BYTES` | 单文件上传上限（字节） | `268435456` |
 
 ### HTTPS 配置

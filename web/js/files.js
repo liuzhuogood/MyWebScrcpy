@@ -7,9 +7,9 @@
     uploadQueue: [], toastTimer: null, page: 1, hasMore: false,
   };
   const $ = (id) => document.getElementById(id);
-  const tokenKey = 'mywebscrcpy.files.token';
-
-  function token() { return sessionStorage.getItem(tokenKey) || ''; }
+  const pageParams = new URLSearchParams(location.search);
+  state.serial = pageParams.get('serial') || '';
+  function withSerial(endpoint) { const separator = endpoint.includes('?') ? '&' : '?'; return `${endpoint}${separator}serial=${encodeURIComponent(state.serial)}`; }
   function escapeHTML(value) { return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char])); }
   function formatBytes(value) {
     if (!value) return '—';
@@ -30,11 +30,9 @@
 
   async function api(endpoint, options = {}) {
     const headers = new Headers(options.headers || {});
-    if (token()) headers.set('Authorization', `Bearer ${token()}`);
     if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
-    const response = await fetch(endpoint, { ...options, headers });
+    const response = await fetch(withSerial(endpoint), { ...options, headers });
     let data = null; try { data = await response.json(); } catch (_) { /* 下载等响应没有 JSON。 */ }
-    if (response.status === 401) { showAuthDialog(); throw new Error('auth_required'); }
     if (!response.ok) { const message = data?.error?.message || '操作失败，请重试'; const error = new Error(message); error.code = data?.error?.code; error.status = response.status; throw error; }
     return data;
   }
@@ -49,7 +47,7 @@
       state.page = data.page || state.page; state.hasMore = Boolean(data.has_more); state.items = append ? [...state.items, ...(data.items || [])] : (data.items || []); if (!append) state.selected.clear(); render({ ...data, items: state.items }); showState(state.items.length ? 'table' : 'empty');
       setStatus(data.total ? `${data.total} 项` : '这个文件夹还是空的');
     } catch (error) {
-      if (error.name === 'AbortError' || error.message === 'auth_required') return;
+      if (error.name === 'AbortError') return;
       $('files-error-text').textContent = error.message; showState('error'); setStatus('加载失败');
     }
   }
@@ -88,8 +86,6 @@
     $('dialog-input').value = mode === 'rename' ? item.name : mode === 'move' ? state.path : ''; $('dialog-input').placeholder = mode === 'move' ? '例如：图片/2026（留空表示我的文件）' : '';
     $('action-dialog').showModal(); $('dialog-input').focus(); $('dialog-input').select();
   }
-  function showAuthDialog() { if (!$('auth-dialog').open) { $('auth-input').value = token(); $('auth-dialog').showModal(); $('auth-input').focus(); } }
-
   async function performAction(value) {
     const mode = state.dialogMode; const item = state.dialogItem;
     try {
@@ -112,12 +108,11 @@
   }
   async function downloadItem(item) {
     try {
-      const response = await fetch(`/api/files/download?path=${encodeURIComponent(item.path)}`, { headers: token() ? { Authorization: `Bearer ${token()}` } : {} });
-      if (response.status === 401) { showAuthDialog(); throw new Error('请先输入访问令牌'); }
+      const response = await fetch(withSerial(`/api/files/download?path=${encodeURIComponent(item.path)}`));
       if (!response.ok) throw new Error('下载失败，请重试');
       const blob = await response.blob(); const objectURL = URL.createObjectURL(blob); const link = document.createElement('a');
       link.href = objectURL; link.download = item.name; document.body.append(link); link.click(); link.remove(); URL.revokeObjectURL(objectURL);
-    } catch (error) { if (error.message !== 'auth_required') notify(error.message, true); }
+    } catch (error) { notify(error.message, true); }
   }
   async function deletePaths(paths) {
     if (!paths.length || !confirm(`确定要删除 ${paths.length} 项吗？删除后可在本次会话中撤销。`)) return;
@@ -135,12 +130,11 @@
     if (!existing) state.uploadQueue.push(item); else { item.status = '上传中'; item.progress = 0; item.conflict = conflict; }
     renderUploadQueue();
     const form = new FormData(); form.append('path', state.path); form.append('conflict', conflict); form.append('file', file, file.name);
-    const xhr = new XMLHttpRequest(); item.xhr = xhr; xhr.open('POST', '/api/files/upload'); if (token()) xhr.setRequestHeader('Authorization', `Bearer ${token()}`);
+    const xhr = new XMLHttpRequest(); item.xhr = xhr; xhr.open('POST', withSerial('/api/files/upload'));
     xhr.upload.onprogress = (event) => { if (event.lengthComputable) { item.progress = Math.round(event.loaded / event.total * 100); renderUploadQueue(); } };
     xhr.onload = () => {
       let data = {}; try { data = JSON.parse(xhr.responseText); } catch (_) { /* 使用通用错误。 */ }
-      if (xhr.status === 401) { item.status = '需要令牌'; showAuthDialog(); }
-      else if (xhr.status === 409 && conflict === 'fail' && confirm(`「${file.name}」已存在，是否保留上传副本？`)) startUpload(file, 'rename', item);
+      if (xhr.status === 409 && conflict === 'fail' && confirm(`「${file.name}」已存在，是否保留上传副本？`)) startUpload(file, 'rename', item);
       else if (xhr.status >= 200 && xhr.status < 300) { item.progress = 100; item.status = '上传完成'; }
       else item.status = data?.error?.message || '上传失败，可重试';
       renderUploadQueue(); if (xhr.status >= 200 && xhr.status < 300) loadFiles();
@@ -172,7 +166,5 @@
   $('load-more-button').addEventListener('click', () => loadFiles({ append: true }));
   $('clear-upload-queue').addEventListener('click', () => { state.uploadQueue = state.uploadQueue.filter((item) => !['上传完成', '已取消'].includes(item.status)); renderUploadQueue(); });
   $('dialog-cancel').addEventListener('click', () => $('action-dialog').close()); $('action-form').addEventListener('submit', (event) => { event.preventDefault(); performAction($('dialog-input').value.trim()); });
-  $('auth-button').addEventListener('click', showAuthDialog); $('auth-cancel').addEventListener('click', () => $('auth-dialog').close()); $('auth-form').addEventListener('submit', (event) => { event.preventDefault(); const value = $('auth-input').value.trim(); if (value) sessionStorage.setItem(tokenKey, value); $('auth-dialog').close(); loadFiles(); });
-
-  loadFiles();
+  if (state.serial) loadFiles(); else { showState('error'); $('files-error-text').textContent = '未指定手机，请从投屏页面打开文件管理'; setStatus('未指定手机'); }
 })();

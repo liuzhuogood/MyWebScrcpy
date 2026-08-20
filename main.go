@@ -59,16 +59,13 @@ func main() {
 	if err := scripts.EnsureRoot(); err != nil {
 		log.Printf("警告: 初始化脚本目录失败: %v", err)
 	}
-	fileManager, err := files.NewManagerFromEnv()
-	if err != nil {
-		log.Fatalf("初始化文件管理目录失败: %v", err)
-	}
+	fileManager := files.NewManager(adbPath)
 
 	mux := http.NewServeMux()
 
 	// 脚本管理 API
 	scripts.RegisterRoutes(mux)
-	// 文件管理 API
+	// 文件管理 API：每个请求都携带当前投屏页面选定的设备 serial，操作手机共享存储。
 	files.RegisterRoutes(mux, fileManager)
 
 	// API: 设备列表

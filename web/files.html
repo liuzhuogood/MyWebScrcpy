@@ -8,9 +8,8 @@
 </head>
 <body class="files-page">
   <header class="files-header">
-    <a href="/" class="files-back" aria-label="返回设备列表">←</a>
     <div class="files-title-wrap">
-      <h1>我的文件</h1>
+      <h1>手机文件</h1>
       <span id="files-status" class="files-status">正在加载文件…</span>
     </div>
     <form id="search-form" class="files-search" role="search">
@@ -19,7 +18,6 @@
       <button type="submit" title="搜索" aria-label="搜索">⌕</button>
     </form>
     <div id="storage-summary" class="storage-summary" aria-live="polite">容量信息加载中</div>
-    <button id="auth-button" class="files-ghost-btn" type="button" title="设置访问令牌">令牌</button>
   </header>
 
   <main class="files-main">
@@ -98,16 +96,6 @@
       <label id="dialog-input-label" for="dialog-input">名称</label>
       <input id="dialog-input" name="value" type="text" required autocomplete="off">
       <div class="dialog-actions"><button id="dialog-cancel" class="files-secondary-btn" type="button">取消</button><button class="files-primary-btn" type="submit">确定</button></div>
-    </form>
-  </dialog>
-
-  <dialog id="auth-dialog" class="files-dialog">
-    <form id="auth-form" method="dialog">
-      <h2>访问文件管理</h2>
-      <p class="dialog-description">此服务启用了文件管理访问令牌。令牌只保存在当前浏览器会话中。</p>
-      <label for="auth-input">访问令牌</label>
-      <input id="auth-input" type="password" required autocomplete="off">
-      <div class="dialog-actions"><button id="auth-cancel" class="files-secondary-btn" type="button">取消</button><button class="files-primary-btn" type="submit">保存并重试</button></div>
     </form>
   </dialog>
 

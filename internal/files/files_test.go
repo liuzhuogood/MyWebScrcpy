@@ -1,201 +1,330 @@
 package files
 
 import (
-	"bytes"
-	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
+	"path"
+	"sort"
 	"strings"
 	"testing"
 )
 
-func newTestManager(t *testing.T, token string) *Manager {
-	t.Helper()
-	m, err := NewManager(t.TempDir(), token, 8)
-	if err != nil {
-		t.Fatal(err)
+func TestParseStatLine(t *testing.T) {
+	item, ok := parseStatLine("regular file\t42\t1710000000\t/sdcard/照片/a b.txt")
+	if !ok {
+		t.Fatal("expected stat line to parse")
 	}
-	return m
-}
-
-func TestManagerListSearchAndSort(t *testing.T) {
-	m := newTestManager(t, "")
-	if err := os.WriteFile(filepath.Join(m.Root(), "z.txt"), []byte("z"), 0644); err != nil {
-		t.Fatal(err)
+	if item.Path != "照片/a b.txt" || item.Kind != "document" || item.Size != 42 {
+		t.Fatalf("unexpected item: %#v", item)
 	}
-	if _, err := m.CreateFolder("", "图片"); err != nil {
-		t.Fatal(err)
+	item, ok = parseStatLine("directory\t4096\t1710000000\t/sdcard/照片")
+	if !ok || item.Kind != "folder" || item.Size != 0 {
+		t.Fatalf("unexpected directory: %#v", item)
 	}
-	if err := os.WriteFile(filepath.Join(m.Root(), "图片", "cat.jpg"), []byte("image"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	result, err := m.List("", "", "all", "name", "asc", 1, 100)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Items) != 2 || result.Items[0].Kind != "folder" || result.Items[0].Name != "图片" {
-		t.Fatalf("unexpected list: %#v", result.Items)
-	}
-	page, err := m.List("", "", "all", "name", "asc", 1, 1)
-	if err != nil || len(page.Items) != 1 || !page.HasMore {
-		t.Fatalf("expected paginated list, result=%#v err=%v", page, err)
-	}
-	result, err = m.List("", "cat", "image", "name", "asc", 1, 100)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Items) != 1 || result.Items[0].Path != "图片/cat.jpg" {
-		t.Fatalf("unexpected search result: %#v", result.Items)
+	if _, ok := parseStatLine("symbolic link\t10\t1710000000\t/sdcard/link"); ok {
+		t.Fatal("symbolic links must not be exposed")
 	}
 }
 
-func TestManagerUploadConflictAndLimit(t *testing.T) {
-	m := newTestManager(t, "")
-	if _, err := m.Upload("", "a.txt", "fail", strings.NewReader("1234")); err != nil {
-		t.Fatal(err)
+func TestCleanRelRejectsServerAndTrashPaths(t *testing.T) {
+	for _, value := range []string{"../outside", "/etc/passwd", "\\windows", ".mywebscrcpy-trash/x", "a\x00b"} {
+		if _, err := cleanRel(value); !errors.Is(err, ErrForbidden) {
+			t.Fatalf("cleanRel(%q) = %v, want ErrForbidden", value, err)
+		}
 	}
-	if _, err := m.Upload("", "a.txt", "fail", strings.NewReader("again")); err != ErrConflict {
-		t.Fatalf("expected conflict, got %v", err)
-	}
-	item, err := m.Upload("", "a.txt", "rename", strings.NewReader("copy"))
-	if err != nil || item.Path != "a (1).txt" {
-		t.Fatalf("expected renamed copy, item=%#v err=%v", item, err)
-	}
-	if _, err := m.Upload("", "large.txt", "fail", strings.NewReader("123456789")); err == nil {
-		t.Fatal("expected upload size error")
+	if got, err := cleanRel("照片/./a.txt"); err != nil || got != "照片/a.txt" {
+		t.Fatalf("cleanRel normalized path = %q, %v", got, err)
 	}
 }
 
-func TestManagerMoveDeleteUndoAndTraversal(t *testing.T) {
-	m := newTestManager(t, "")
-	if _, err := m.CreateFolder("", "目标"); err != nil {
+func TestFileRoutesRequireCurrentPhone(t *testing.T) {
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, NewManager("adb"))
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/files", nil))
+	if response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "missing_serial") {
+		t.Fatalf("unexpected response: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestFileRoutesReportDisconnectedPhone(t *testing.T) {
+	m := NewManager("adb")
+	m.run = func(string, ...string) ([]byte, error) {
+		return []byte("error: device 'phone-a' not found\n"), errors.New("exit status 1: error: device 'phone-a' not found")
+	}
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, m)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/files?serial=phone-a", nil))
+	if response.Code != http.StatusBadGateway || !strings.Contains(response.Body.String(), "device_unavailable") {
+		t.Fatalf("unexpected response: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestListUsesSelectedPhoneStorage(t *testing.T) {
+	m := NewManager("adb")
+	seenSerial := ""
+	m.run = func(serial string, args ...string) ([]byte, error) {
+		seenSerial = serial
+		if len(args) < 2 || args[0] != "shell" {
+			t.Fatalf("unexpected adb command: %v", args)
+		}
+		script := args[1]
+		switch {
+		case strings.HasPrefix(script, "stat -c"):
+			return []byte("directory\t0\t1710000000\t/sdcard\n"), nil
+		case strings.HasPrefix(script, "find"):
+			return []byte("directory\t0\t1710000000\t/sdcard/照片\nregular file\t4\t1710000001\t/sdcard/readme.txt\n"), nil
+		case strings.HasPrefix(script, "df"):
+			return []byte("Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block 100 40 60 40% /sdcard\n"), nil
+		default:
+			t.Fatalf("unexpected shell script: %s", script)
+			return nil, nil
+		}
+	}
+	result, err := m.List("phone-1", "", "", "", "name", "asc", 1, 100)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Upload("", "a.txt", "fail", strings.NewReader("data")); err != nil {
+	if seenSerial != "phone-1" || len(result.Items) != 2 || result.Items[0].Name != "照片" || result.Storage.Total != 100*1024 {
+		t.Fatalf("unexpected phone list: serial=%q result=%#v", seenSerial, result)
+	}
+}
+
+func TestShellQuote(t *testing.T) {
+	if got := shellQuote("a'b"); got != "'a'\\''b'" {
+		t.Fatalf("unexpected shell quote: %q", got)
+	}
+}
+
+type fakePhone struct {
+	dirs  map[string]bool
+	files map[string][]byte
+}
+
+type fakeADB struct{ phones map[string]*fakePhone }
+
+func newFakeADB(serials ...string) *fakeADB {
+	adb := &fakeADB{phones: make(map[string]*fakePhone)}
+	for _, serial := range serials {
+		adb.phones[serial] = &fakePhone{dirs: map[string]bool{"/sdcard": true}, files: make(map[string][]byte)}
+	}
+	return adb
+}
+
+func (a *fakeADB) phone(serial string) (*fakePhone, error) {
+	phone, ok := a.phones[serial]
+	if !ok {
+		return nil, fmt.Errorf("unknown serial %s", serial)
+	}
+	return phone, nil
+}
+
+func (a *fakeADB) run(serial string, args ...string) ([]byte, error) {
+	phone, err := a.phone(serial)
+	if err != nil {
+		return nil, err
+	}
+	if len(args) > 0 && args[0] == "push" {
+		data, err := os.ReadFile(args[1])
+		if err != nil {
+			return nil, err
+		}
+		phone.files[args[2]] = data
+		return nil, nil
+	}
+	if len(args) < 2 || args[0] != "shell" {
+		return nil, fmt.Errorf("unsupported adb command: %v", args)
+	}
+	return phone.shell(args[1])
+}
+
+func (a *fakeADB) stream(serial string, dst io.Writer, args ...string) error {
+	phone, err := a.phone(serial)
+	if err != nil {
+		return err
+	}
+	if len(args) != 3 || args[0] != "exec-out" || args[1] != "cat" {
+		return fmt.Errorf("unsupported stream command: %v", args)
+	}
+	data, ok := phone.files[args[2]]
+	if !ok {
+		return errors.New("No such file or directory")
+	}
+	_, err = dst.Write(data)
+	return err
+}
+
+func quotedPaths(script string) []string {
+	var result []string
+	for len(script) > 0 {
+		start := strings.IndexByte(script, '\'')
+		if start < 0 {
+			break
+		}
+		script = script[start+1:]
+		end := strings.IndexByte(script, '\'')
+		if end < 0 {
+			break
+		}
+		result = append(result, script[:end])
+		script = script[end+1:]
+	}
+	return result
+}
+
+func (p *fakePhone) exists(remote string) bool { return p.dirs[remote] || p.files[remote] != nil }
+
+func (p *fakePhone) statLine(remote string) ([]byte, error) {
+	if p.dirs[remote] {
+		return []byte(fmt.Sprintf("directory\t0\t1710000000\t%s\n", remote)), nil
+	}
+	data, ok := p.files[remote]
+	if !ok {
+		return nil, errors.New("No such file or directory")
+	}
+	return []byte(fmt.Sprintf("regular file\t%d\t1710000000\t%s\n", len(data), remote)), nil
+}
+
+func (p *fakePhone) shell(script string) ([]byte, error) {
+	paths := quotedPaths(script)
+	var remotePaths []string
+	for _, value := range paths {
+		if strings.HasPrefix(value, androidRoot) {
+			remotePaths = append(remotePaths, value)
+		}
+	}
+	switch {
+	case strings.HasPrefix(script, "stat -c"):
+		return p.statLine(remotePaths[len(remotePaths)-1])
+	case strings.HasPrefix(script, "find"):
+		return p.find(remotePaths[0], strings.Contains(script, "-maxdepth"))
+	case strings.HasPrefix(script, "df"):
+		return []byte("Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/block 100 40 60 40% /sdcard\n"), nil
+	case strings.HasPrefix(script, "mkdir"):
+		p.dirs[remotePaths[len(remotePaths)-1]] = true
+		return nil, nil
+	case strings.HasPrefix(script, "mv"):
+		return p.move(remotePaths[0], remotePaths[1])
+	case strings.HasPrefix(script, "rm"):
+		p.remove(remotePaths[len(remotePaths)-1])
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("unsupported shell script: %s", script)
+	}
+}
+
+func (p *fakePhone) find(base string, directOnly bool) ([]byte, error) {
+	if !p.dirs[base] {
+		return nil, errors.New("No such file or directory")
+	}
+	var remotes []string
+	for remote := range p.dirs {
+		if remote != base && strings.HasPrefix(remote, base+"/") && (!directOnly || path.Dir(remote) == base) {
+			remotes = append(remotes, remote)
+		}
+	}
+	for remote := range p.files {
+		if strings.HasPrefix(remote, base+"/") && (!directOnly || path.Dir(remote) == base) {
+			remotes = append(remotes, remote)
+		}
+	}
+	sort.Strings(remotes)
+	var output strings.Builder
+	for _, remote := range remotes {
+		if p.dirs[remote] {
+			fmt.Fprintf(&output, "directory\t0\t1710000000\t%s\n", remote)
+		} else {
+			fmt.Fprintf(&output, "regular file\t%d\t1710000000\t%s\n", len(p.files[remote]), remote)
+		}
+	}
+	return []byte(output.String()), nil
+}
+
+func (p *fakePhone) move(source, target string) ([]byte, error) {
+	if !p.exists(source) {
+		return nil, errors.New("No such file or directory")
+	}
+	if p.dirs[source] {
+		for remote := range p.dirs {
+			if remote == source || strings.HasPrefix(remote, source+"/") {
+				rel := strings.TrimPrefix(remote, source)
+				p.dirs[target+rel] = true
+				delete(p.dirs, remote)
+			}
+		}
+		for remote := range p.files {
+			if strings.HasPrefix(remote, source+"/") {
+				rel := strings.TrimPrefix(remote, source)
+				p.files[target+rel] = p.files[remote]
+				delete(p.files, remote)
+			}
+		}
+		return nil, nil
+	}
+	p.files[target] = p.files[source]
+	delete(p.files, source)
+	return nil, nil
+}
+
+func (p *fakePhone) remove(remote string) {
+	for dir := range p.dirs {
+		if dir == remote || strings.HasPrefix(dir, remote+"/") {
+			delete(p.dirs, dir)
+		}
+	}
+	for file := range p.files {
+		if file == remote || strings.HasPrefix(file, remote+"/") {
+			delete(p.files, file)
+		}
+	}
+}
+
+func TestManagerOperationsStayOnSelectedPhone(t *testing.T) {
+	fake := newFakeADB("phone-a", "phone-b")
+	fake.phones["phone-a"].files["/sdcard/readme.txt"] = []byte("hello")
+	m := NewManager("adb")
+	m.maxUploadBytes = 1024
+	m.run = fake.run
+	m.stream = fake.stream
+
+	if _, err := m.CreateFolder("phone-a", "", "目标"); err != nil {
 		t.Fatal(err)
 	}
-	item, err := m.Move("a.txt", "目标", "fail")
-	if err != nil || item.Path != "目标/a.txt" {
-		t.Fatalf("move failed: %#v %v", item, err)
+	if _, err := m.Upload("phone-a", "", "上传.txt", "fail", strings.NewReader("uploaded")); err != nil {
+		t.Fatal(err)
 	}
-	item, err = m.Rename(item.Path, "renamed.txt", "fail")
-	if err != nil || item.Path != "目标/renamed.txt" {
-		t.Fatalf("rename failed: %#v %v", item, err)
+	item, err := m.Rename("phone-a", "上传.txt", "重命名.txt", "fail")
+	if err != nil || item.Path != "重命名.txt" {
+		t.Fatalf("rename result=%#v err=%v", item, err)
 	}
-	token, err := m.Delete([]string{item.Path})
+	item, err = m.Move("phone-a", "重命名.txt", "目标", "fail")
+	if err != nil || item.Path != "目标/重命名.txt" {
+		t.Fatalf("move result=%#v err=%v", item, err)
+	}
+	var downloaded strings.Builder
+	if err := m.Download("phone-a", item.Path, &downloaded); err != nil || downloaded.String() != "uploaded" {
+		t.Fatalf("download=%q err=%v", downloaded.String(), err)
+	}
+	token, err := m.Delete("phone-a", []string{item.Path})
 	if err != nil || token == "" {
-		t.Fatalf("delete failed: %q %v", token, err)
+		t.Fatalf("delete token=%q err=%v", token, err)
 	}
-	if _, err := os.Stat(filepath.Join(m.Root(), "目标", "renamed.txt")); !os.IsNotExist(err) {
-		t.Fatalf("deleted file still exists: %v", err)
+	if _, err := m.stat("phone-a", item.Path); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("deleted item stat error=%v", err)
 	}
-	if err := m.Undo(token); err != nil {
+	if err := m.Undo("phone-a", token); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(filepath.Join(m.Root(), "目标", "renamed.txt")); err != nil {
-		t.Fatalf("undo did not restore file: %v", err)
+	if _, err := m.stat("phone-a", item.Path); err != nil {
+		t.Fatalf("undo did not restore item: %v", err)
 	}
-	if _, err := m.List("../", "", "all", "name", "asc", 1, 10); err != ErrForbidden {
-		t.Fatalf("expected traversal rejection, got %v", err)
-	}
-	if _, err := m.List(".trash", "", "all", "name", "asc", 1, 10); err != ErrForbidden {
-		t.Fatalf("expected trash rejection, got %v", err)
-	}
-}
-
-func TestHandlerAuthTraversalAndDownload(t *testing.T) {
-	m := newTestManager(t, "secret")
-	if err := os.WriteFile(filepath.Join(m.Root(), "hello.txt"), []byte("hello"), 0644); err != nil {
-		t.Fatal(err)
-	}
-	mux := http.NewServeMux()
-	RegisterRoutes(mux, m)
-
-	unauthorized := httptest.NewRecorder()
-	mux.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/api/files", nil))
-	if unauthorized.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401, got %d", unauthorized.Code)
-	}
-
-	request := httptest.NewRequest(http.MethodGet, "/api/files?path=../", nil)
-	request.Header.Set("Authorization", "Bearer secret")
-	traversal := httptest.NewRecorder()
-	mux.ServeHTTP(traversal, request)
-	if traversal.Code != http.StatusForbidden {
-		t.Fatalf("expected 403, got %d", traversal.Code)
-	}
-
-	request = httptest.NewRequest(http.MethodGet, "/api/files/download?path=hello.txt", nil)
-	request.Header.Set("Authorization", "Bearer secret")
-	download := httptest.NewRecorder()
-	mux.ServeHTTP(download, request)
-	if download.Code != http.StatusOK || download.Body.String() != "hello" {
-		t.Fatalf("unexpected download: %d %q", download.Code, download.Body.String())
-	}
-
-	request = httptest.NewRequest(http.MethodGet, "/api/files/download?path=../outside.txt", nil)
-	request.Header.Set("Authorization", "Bearer secret")
-	blocked := httptest.NewRecorder()
-	mux.ServeHTTP(blocked, request)
-	if blocked.Code != http.StatusForbidden {
-		t.Fatalf("expected forbidden download, got %d", blocked.Code)
-	}
-}
-
-func TestHandlerRejectsSymlinkOutsideRoot(t *testing.T) {
-	m := newTestManager(t, "")
-	outside := filepath.Join(t.TempDir(), "private.txt")
-	if err := os.WriteFile(outside, []byte("private"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(outside, filepath.Join(m.Root(), "link.txt")); err != nil {
-		t.Skipf("symlink unavailable: %v", err)
-	}
-	mux := http.NewServeMux()
-	RegisterRoutes(mux, m)
-	request := httptest.NewRequest(http.MethodGet, "/api/files/download?path=link.txt", nil)
-	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, request)
-	if response.Code != http.StatusForbidden {
-		t.Fatalf("expected symlink escape rejection, got %d %s", response.Code, response.Body.String())
-	}
-}
-
-func TestHandlerUploadMultipart(t *testing.T) {
-	m := newTestManager(t, "")
-	mux := http.NewServeMux()
-	RegisterRoutes(mux, m)
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	if err := writer.WriteField("path", ""); err != nil {
-		t.Fatal(err)
-	}
-	part, err := writer.CreateFormFile("file", "上传.txt")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _ = io.WriteString(part, "content")
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
-	request := httptest.NewRequest(http.MethodPost, "/api/files/upload", &body)
-	request.Header.Set("Content-Type", writer.FormDataContentType())
-	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, request)
-	if response.Code != http.StatusOK {
-		t.Fatalf("upload failed: %d %s", response.Code, response.Body.String())
-	}
-	var payload struct {
-		Item FileItem `json:"item"`
-	}
-	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
-		t.Fatal(err)
-	}
-	if payload.Item.Path != "上传.txt" {
-		t.Fatalf("unexpected uploaded item: %#v", payload.Item)
+	result, err := m.List("phone-b", "", "", "", "name", "asc", 1, 100)
+	if err != nil || result.Total != 0 {
+		t.Fatalf("second phone was affected: result=%#v err=%v", result, err)
 	}
 }

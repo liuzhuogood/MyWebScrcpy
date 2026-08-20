@@ -50,6 +50,12 @@
         </svg>
         <span>横竖屏</span>
       </button>
+      <button id="btn-files" title="文件管理">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z"/>
+        </svg>
+        <span>文件管理</span>
+      </button>
       <button id="btn-fullscreen" title="全屏" class="fs-btn">
         <svg class="fs-enter" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
@@ -80,6 +86,14 @@
       <line x1="6" y1="6" x2="18" y2="18"/>
     </svg>
   </button>
+
+  <dialog id="files-dialog" class="files-modal" aria-label="手机文件管理">
+    <div class="files-modal-header">
+      <strong>手机文件管理</strong>
+      <button id="files-dialog-close" type="button" title="关闭" aria-label="关闭">×</button>
+    </div>
+    <iframe id="files-frame" title="手机文件管理" loading="lazy"></iframe>
+  </dialog>
 
   <div class="player-main">
     <div class="screen-wrap">
@@ -115,6 +129,8 @@
     const fpsEl = document.getElementById('fps');
     const moreBtn = document.getElementById('btn-more');
     const moreMenu = document.getElementById('more-menu');
+    const filesDialog = document.getElementById('files-dialog');
+    const filesFrame = document.getElementById('files-frame');
     function setMoreMenu(open) {
       moreMenu.hidden = !open;
       moreBtn.setAttribute('aria-expanded', String(open));
@@ -129,6 +145,13 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') setMoreMenu(false);
     });
+    document.getElementById('btn-files').addEventListener('click', () => {
+      filesFrame.src = `/files.html?serial=${encodeURIComponent(serial)}`;
+      filesDialog.showModal();
+      setMoreMenu(false);
+    });
+    document.getElementById('files-dialog-close').addEventListener('click', () => filesDialog.close());
+    filesDialog.addEventListener('click', (event) => { if (event.target === filesDialog) filesDialog.close(); });
 
     const decoder = new ScrcpyDecoder(canvas);
     const packer = new ControlPacker();
@@ -452,8 +475,13 @@
     document.getElementById('btn-rotate').addEventListener('click', () => {
       // 使用 scrcpy 协议的 TypeRotateDevice (type=11) 消息旋转设备
       // 设备会自动切换到下一个方向，scrcpy 会发送 session packet 更新分辨率
+      const before = `${canvas.width}x${canvas.height}`;
       send(packer.rotate());
-      console.log('[rotate] 已发送旋转指令');
+      statusEl.textContent = '正在请求旋转…';
+      setTimeout(() => {
+        const after = `${canvas.width}x${canvas.height}`;
+        statusEl.textContent = before === after ? '应用可能锁定方向' : '已切换方向';
+      }, 1200);
       setMoreMenu(false);
     });
     document.getElementById('btn-reboot').addEventListener('click', async () => {

@@ -70,7 +70,7 @@ go build -o mywebscrcpy .
 
 Open `http://localhost:8080` in your browser, click a device to start mirroring.
 
-The file manager is available at `/files.html`. Its root directory defaults to `files/` beside the executable and can be changed with `FILES_DIR`. For production or remote access, set `FILES_TOKEN` and use HTTPS.
+Open the file manager from the player's “More” menu. It operates on the selected phone's shared `/sdcard` storage, so each player page remains bound to its own device in multi-device use.
 
 ### Environment Variables
 
@@ -78,8 +78,6 @@ The file manager is available at `/files.html`. Its root directory defaults to `
 |----------|-------------|---------|
 | `PORT` | HTTP listen port | `8080` |
 | `ANDROID_HOME` | ADB path lookup | System PATH |
-| `FILES_DIR` | File manager root directory | `files` |
-| `FILES_TOKEN` | Bearer token for file APIs; unset means trusted single-user mode | - |
 | `FILES_MAX_UPLOAD_BYTES` | Maximum size per uploaded file (bytes) | `268435456` |
 
 ## Controls
