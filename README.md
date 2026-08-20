@@ -31,6 +31,7 @@
 - 屏幕熄灭检测
 - 自动重连
 - 大屏监控模式（多设备同屏展示，支持小/中/大三档尺寸）
+- 文件管理：浏览目录、搜索筛选、上传下载、移动、重命名、批量删除和撤销
 - 单二进制文件，内嵌 scrcpy-server 和前端资源
 
 ## 原理
@@ -74,6 +75,8 @@ go build -o mywebscrcpy .
 
 浏览器打开 `http://localhost:8080`，点击设备即可投屏。
 
+文件管理页面位于 `/files.html`，也可从设备列表页进入。文件根目录默认为运行目录下的 `files/`，可通过 `FILES_DIR` 指定；生产或远程访问场景建议设置 `FILES_TOKEN` 并使用 HTTPS。
+
 ### Docker 部署
 
 ```bash
@@ -113,6 +116,9 @@ docker run -d \
 | `ANDROID_HOME` | ADB 路径查找 | 系统 PATH |
 | `TLS_CERT` | 自定义 SSL 证书路径 | - |
 | `TLS_KEY` | 自定义 SSL 私钥路径 | - |
+| `FILES_DIR` | 文件管理根目录 | `files` |
+| `FILES_TOKEN` | 文件 API Bearer 访问令牌；未设置时为单用户可信网络模式 | - |
+| `FILES_MAX_UPLOAD_BYTES` | 单文件上传上限（字节） | `268435456` |
 
 ### HTTPS 配置
 
@@ -124,7 +130,7 @@ WebCodecs API 需要安全上下文（HTTPS 或 localhost）才能工作。如�
 ./mywebscrcpy -https
 ```
 
-访问 `https://IP:8080`，浏览器会提示证书不受信任，点击"高级"→"继续访问"即可。
+访问 `https://IP:8080`，浏览器会提示证书不受信任，点击「高级」→「继续访问」即可。
 
 **方式 2：使用自定义证书**
 
@@ -181,6 +187,7 @@ MyWebScrcpy/
 │   └── scrcpy-server          # scrcpy server jar（内嵌）
 ├── internal/
 │   ├── device/manager.go      # ADB 设备管理
+│   ├── files/                  # 文件管理 API、路径安全和回收站
 │   ├── scrcpy/
 │   │   ├── server.go          # scrcpy server 生命周期
 │   │   ├── connection.go      # TCP 连接 + 帧读取
@@ -191,17 +198,19 @@ MyWebScrcpy/
     ├── index.html             # 设备列表页
     ├── player.html            # 投屏播放器页
     ├── dashboard.html         # 大屏监控页
+    ├── files.html              # 文件管理页
     ├── css/style.css
     └── js/
         ├── decoder.js         # WebCodecs H.264 解码器
         ├── control.js         # 浏览器端控制消息打包
-        └── dashboard.js       # 大屏监控逻辑
+        ├── dashboard.js        # 大屏监控逻辑
+        └── files.js            # 文件管理逻辑
 ```
 
 ## 技术栈
 
 - **后端**: Go + gorilla/websocket
-- **前端**: 原生 JS + WebCodecs API + Canvas
+- **前端**: 原生 JavaScript + WebCodecs API + Canvas
 - **投屏协议**: scrcpy 4.0
 - **视频编码**: H.264 (Baseline)
 

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>MyWebScrcpy - 文件管理</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="files-page">
+  <header class="files-header">
+    <a href="/" class="files-back" aria-label="返回设备列表">←</a>
+    <div class="files-title-wrap">
+      <h1>我的文件</h1>
+      <span id="files-status" class="files-status">正在加载文件…</span>
+    </div>
+    <form id="search-form" class="files-search" role="search">
+      <label class="sr-only" for="search-input">搜索文件和文件夹</label>
+      <input id="search-input" type="search" placeholder="搜索文件和文件夹" autocomplete="off">
+      <button type="submit" title="搜索" aria-label="搜索">⌕</button>
+    </form>
+    <div id="storage-summary" class="storage-summary" aria-live="polite">容量信息加载中</div>
+    <button id="auth-button" class="files-ghost-btn" type="button" title="设置访问令牌">令牌</button>
+  </header>
+
+  <main class="files-main">
+    <section class="files-pathbar" aria-label="当前位置和操作">
+      <nav id="breadcrumbs" class="breadcrumbs" aria-label="文件夹层级"></nav>
+      <div class="files-primary-actions">
+        <label class="files-primary-btn" for="file-input">＋ 上传</label>
+        <input id="file-input" type="file" multiple hidden>
+        <button id="new-folder-button" class="files-secondary-btn" type="button">新建文件夹</button>
+      </div>
+    </section>
+
+    <section class="files-toolbar" aria-label="文件筛选和批量操作">
+      <div class="files-filter-group">
+        <label>类型
+          <select id="type-filter">
+            <option value="all">全部</option>
+            <option value="folder">文件夹</option>
+            <option value="image">图片</option>
+            <option value="video">视频</option>
+            <option value="document">文档</option>
+            <option value="audio">音频</option>
+            <option value="other">其他</option>
+          </select>
+        </label>
+        <label>排序
+          <select id="sort-select">
+            <option value="name">名称</option>
+            <option value="modified">修改时间</option>
+            <option value="size">大小</option>
+          </select>
+        </label>
+        <button id="order-button" class="files-plain-btn" type="button" title="切换升序/降序">名称升序</button>
+      </div>
+      <div id="selection-actions" class="selection-actions" hidden>
+        <span id="selection-count">已选择 0 项</span>
+        <button id="select-all-button" class="files-plain-btn" type="button">选择全部</button>
+        <button data-batch-action="move" class="files-plain-btn" type="button">移动到</button>
+        <button data-batch-action="delete" class="files-danger-plain-btn" type="button">删除</button>
+      </div>
+    </section>
+
+    <section id="files-content" class="files-content" aria-live="polite">
+      <div id="files-loading" class="files-state">正在加载文件…</div>
+      <div id="files-error" class="files-state files-error-state" hidden>
+        <p id="files-error-text">文件加载失败，请检查网络后重试</p>
+        <button id="retry-button" class="files-secondary-btn" type="button">重试</button>
+      </div>
+      <div id="files-empty" class="files-state" hidden>
+        <div class="files-state-icon">□</div>
+        <p id="files-empty-text">这个文件夹还是空的</p>
+        <button id="empty-upload-button" class="files-primary-btn" type="button">上传文件</button>
+      </div>
+      <div id="files-table-wrap" hidden>
+        <table class="files-table">
+          <caption class="sr-only">文件列表</caption>
+          <thead>
+            <tr><th class="check-column"><span class="sr-only">选择</span></th><th>名称</th><th>类型</th><th>大小</th><th>修改时间</th><th class="action-column">操作</th></tr>
+          </thead>
+          <tbody id="files-table-body"></tbody>
+        </table>
+      </div>
+      <div id="files-pagination" class="files-pagination" hidden><button id="load-more-button" class="files-secondary-btn" type="button">加载更多</button><span id="pagination-summary"></span></div>
+    </section>
+
+    <section id="upload-queue" class="upload-queue" hidden aria-label="上传队列">
+      <div class="upload-queue-header"><strong>上传队列</strong><span id="upload-summary"></span><button id="clear-upload-queue" type="button">清除已完成</button></div>
+      <ul id="upload-list"></ul>
+    </section>
+  </main>
+
+  <dialog id="action-dialog" class="files-dialog">
+    <form id="action-form" method="dialog">
+      <h2 id="dialog-title">操作文件</h2>
+      <p id="dialog-description" class="dialog-description"></p>
+      <label id="dialog-input-label" for="dialog-input">名称</label>
+      <input id="dialog-input" name="value" type="text" required autocomplete="off">
+      <div class="dialog-actions"><button id="dialog-cancel" class="files-secondary-btn" type="button">取消</button><button class="files-primary-btn" type="submit">确定</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="auth-dialog" class="files-dialog">
+    <form id="auth-form" method="dialog">
+      <h2>访问文件管理</h2>
+      <p class="dialog-description">此服务启用了文件管理访问令牌。令牌只保存在当前浏览器会话中。</p>
+      <label for="auth-input">访问令牌</label>
+      <input id="auth-input" type="password" required autocomplete="off">
+      <div class="dialog-actions"><button id="auth-cancel" class="files-secondary-btn" type="button">取消</button><button class="files-primary-btn" type="submit">保存并重试</button></div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="files-toast" role="status" aria-live="polite" hidden></div>
+  <script src="/js/files.js"></script>
+</body>
+</html>

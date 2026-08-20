@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"mywebscrcpy/internal/device"
+	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/scripts"
 	"mywebscrcpy/internal/ws"
 )
@@ -58,11 +59,17 @@ func main() {
 	if err := scripts.EnsureRoot(); err != nil {
 		log.Printf("警告: 初始化脚本目录失败: %v", err)
 	}
+	fileManager, err := files.NewManagerFromEnv()
+	if err != nil {
+		log.Fatalf("初始化文件管理目录失败: %v", err)
+	}
 
 	mux := http.NewServeMux()
 
 	// 脚本管理 API
 	scripts.RegisterRoutes(mux)
+	// 文件管理 API
+	files.RegisterRoutes(mux, fileManager)
 
 	// API: 设备列表
 	mux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) {

@@ -26,6 +26,7 @@ Browser-based Android screen mirroring powered by Go + WebCodecs. No client inst
 - Fullscreen mode (iOS pseudo-fullscreen supported)
 - Screen-off detection
 - Auto-reconnect
+- File management: browse, search, upload, download, move, rename, bulk delete and undo
 - Single binary with embedded scrcpy-server and web assets
 
 ## How It Works
@@ -69,12 +70,17 @@ go build -o mywebscrcpy .
 
 Open `http://localhost:8080` in your browser, click a device to start mirroring.
 
+The file manager is available at `/files.html`. Its root directory defaults to `files/` beside the executable and can be changed with `FILES_DIR`. For production or remote access, set `FILES_TOKEN` and use HTTPS.
+
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | HTTP listen port | `8080` |
 | `ANDROID_HOME` | ADB path lookup | System PATH |
+| `FILES_DIR` | File manager root directory | `files` |
+| `FILES_TOKEN` | Bearer token for file APIs; unset means trusted single-user mode | - |
+| `FILES_MAX_UPLOAD_BYTES` | Maximum size per uploaded file (bytes) | `268435456` |
 
 ## Controls
 
@@ -95,6 +101,7 @@ MyWebScrcpy/
 │   └── scrcpy-server          # scrcpy server jar (embedded)
 ├── internal/
 │   ├── device/manager.go      # ADB device management
+│   ├── files/                  # File APIs, path safety and trash
 │   ├── scrcpy/
 │   │   ├── server.go          # scrcpy server lifecycle
 │   │   ├── connection.go      # TCP connection + frame reading
@@ -104,10 +111,12 @@ MyWebScrcpy/
 └── web/
     ├── index.html             # Device list page
     ├── player.html            # Screen mirroring player
+    ├── files.html              # File manager
     ├── css/style.css
     └── js/
         ├── decoder.js         # WebCodecs H.264 decoder
-        └── control.js         # Browser-side control message packing
+        ├── control.js          # Browser-side control message packing
+        └── files.js            # File manager logic
 ```
 
 ## Tech Stack
