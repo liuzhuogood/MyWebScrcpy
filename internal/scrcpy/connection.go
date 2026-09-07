@@ -145,12 +145,14 @@ func (c *Connection) Size() (uint32, uint32) { return c.width, c.height }
 func (c *Connection) SetSize(w, h uint32) { c.width, c.height = w, h }
 
 // ReadFrame 从 video socket 读取下一帧。阻塞直到有帧或连接断开。
-// 设置 read deadline 超时，用于检测旋转等导致的编码器重启卡死。
+// 不对媒体流设置固定 read deadline，避免静止画面被误判为断流。
 func (c *Connection) ReadFrame() (*Frame, error) {
 	hdr := make([]byte, PacketHeaderSize)
 	for {
-		// 每次 read 设 10 秒超时，防止旋转编码器重启时永久阻塞
-		c.videoConn.SetReadDeadline(time.Now().Add(10 * time.Second))
+		// 静止画面时 scrcpy 可能很久不产生新的编码包；任何固定读超时
+		// 都可能把正常静止状态误判成断流。连接关闭/设备错误会由 socket
+		// 自身返回，关闭连接也能唤醒这里的阻塞读取。
+		c.videoConn.SetReadDeadline(time.Time{})
 		_, err := io.ReadFull(c.videoConn, hdr)
 		if err != nil {
 			return nil, err

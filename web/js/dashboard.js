@@ -24,6 +24,8 @@ class DeviceClient {
     this.serial = serial;
     this.cardEl = cardEl;
     this.canvas = cardEl.querySelector('canvas');
+    this.detectionCanvas = cardEl.querySelector('.dash-detection-overlay');
+    this.detectionCtx = this.detectionCanvas.getContext('2d');
     this.statusEl = cardEl.querySelector('.dash-status');
     this.overlay = cardEl.querySelector('.dash-overlay');
     this.wrap = cardEl.querySelector('.dash-screen-wrap');
@@ -31,6 +33,9 @@ class DeviceClient {
     this.decoder = new ScrcpyDecoder(this.canvas);
     this.packer = new ControlPacker();
     this.ws = null;
+    this.resultWs = null;
+    this.detectionClearTimer = null;
+    this.sessionId = '';
     this.connected = false;
     this.mouseDown = false;
     this.reconnectAttempts = 0;
@@ -53,6 +58,48 @@ class DeviceClient {
     this.bindToolbar();
     this.observeResize();
     this.connect();
+    this.connectResults();
+  }
+
+  connectResults() {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    this.resultWs = new WebSocket(`${proto}//${location.host}/api/vision/results?serial=${encodeURIComponent(this.serial)}`);
+    this.resultWs.onmessage = (event) => { try { this.drawDetections(JSON.parse(event.data)); } catch (_) {} };
+    this.resultWs.onclose = () => { if (!this.destroyed) setTimeout(() => this.connectResults(), 2000); };
+  }
+
+  drawDetections(msg) {
+    if (msg && msg.session_id && this.sessionId && msg.session_id !== this.sessionId) return;
+    if (!msg || !Array.isArray(msg.objects) || !this.detectionCanvas.width) return;
+    if (this.detectionClearTimer) {
+      clearTimeout(this.detectionClearTimer);
+      this.detectionClearTimer = null;
+    }
+    const ctx = this.detectionCtx;
+    ctx.clearRect(0, 0, this.detectionCanvas.width, this.detectionCanvas.height);
+    ctx.lineWidth = Math.max(1, this.detectionCanvas.width / 400);
+    ctx.font = `${Math.max(10, this.detectionCanvas.width / 50)}px sans-serif`;
+    for (const obj of msg.objects) {
+      const x = obj.x * this.detectionCanvas.width, y = obj.y * this.detectionCanvas.height;
+      const w = obj.w * this.detectionCanvas.width, h = obj.h * this.detectionCanvas.height;
+      ctx.strokeStyle = '#00e676'; ctx.fillStyle = '#00e676'; ctx.strokeRect(x, y, w, h);
+      ctx.fillText(`${obj.label || '对象'} ${Math.round((obj.confidence || 0) * 100)}%`, x, Math.max(12, y - 4));
+    }
+    if (msg.expires_ms > 0) {
+      const createdAt = Number(msg.timestamp) || Date.now();
+      const remaining = Math.max(0, createdAt + Number(msg.expires_ms) - Date.now());
+      this.detectionClearTimer = setTimeout(() => this.clearDetections(), remaining);
+    }
+  }
+
+  clearDetections() {
+    if (this.detectionClearTimer) {
+      clearTimeout(this.detectionClearTimer);
+      this.detectionClearTimer = null;
+    }
+    if (this.detectionCtx && this.detectionCanvas) {
+      this.detectionCtx.clearRect(0, 0, this.detectionCanvas.width, this.detectionCanvas.height);
+    }
   }
 
   // 监听屏幕区域尺寸变化，自动重算 canvas
@@ -134,8 +181,12 @@ class DeviceClient {
       if (typeof event.data === 'string') {
         const msg = JSON.parse(event.data);
         if (msg.type === 'meta') {
+          this.sessionId = msg.session_id || '';
+          this.clearDetections();
           this.packer.setDeviceSize(msg.width, msg.height);
           this.decoder.configure(msg.codec, msg.width, msg.height);
+          this.detectionCanvas.width = msg.width;
+          this.detectionCanvas.height = msg.height;
           this.connected = true;
           this.serverErrorAttempts = 0;
           this.lastErrorMsg = '';
@@ -154,6 +205,8 @@ class DeviceClient {
           }
         } else if (msg.type === 'disconnected') {
           this.connected = false;
+          this.sessionId = '';
+          this.clearDetections();
           this.reconnect();
         }
         return;
@@ -377,6 +430,8 @@ class DeviceClient {
     }
     this.canvas.style.width = Math.round(dw) + 'px';
     this.canvas.style.height = Math.round(dh) + 'px';
+    this.detectionCanvas.style.width = this.canvas.style.width;
+    this.detectionCanvas.style.height = this.canvas.style.height;
   }
 
   destroy() {
@@ -396,10 +451,17 @@ class DeviceClient {
       );
     }
     this.decoder.close();
+    this.sessionId = '';
+    this.clearDetections();
     if (this.ws) {
       this.ws.onclose = null;
       this.ws.close();
       this.ws = null;
+    }
+    if (this.resultWs) {
+      this.resultWs.onclose = null;
+      this.resultWs.close();
+      this.resultWs = null;
     }
   }
 }
@@ -449,6 +511,7 @@ function createCard(serial, device) {
       </button>
       <div class="dash-screen-wrap">
         <canvas></canvas>
+        <canvas class="dash-detection-overlay" aria-hidden="true"></canvas>
         <div class="dash-overlay loading">
           <div class="spinner"></div>
           <div class="overlay-text">连接中...</div>

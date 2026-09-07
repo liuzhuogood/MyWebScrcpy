@@ -98,6 +98,7 @@
   <div class="player-main">
     <div class="screen-wrap">
       <canvas id="screen"></canvas>
+      <canvas id="detection-overlay" aria-hidden="true"></canvas>
       <div class="loading-overlay" id="loading">
         <div class="spinner"></div>
         <div>正在连接设备...</div>
@@ -122,6 +123,9 @@
     document.getElementById('title').textContent = serial;
 
     const canvas = document.getElementById('screen');
+    const detectionOverlay = document.getElementById('detection-overlay');
+    const overlayCtx = detectionOverlay.getContext('2d');
+    let detectionClearTimer = null;
     const loading = document.getElementById('loading');
     const errorBox = document.getElementById('error');
     const screenOffOverlay = document.getElementById('screen-off');
@@ -186,7 +190,54 @@
       }
       canvas.style.width = Math.round(dw) + 'px';
       canvas.style.height = Math.round(dh) + 'px';
+      detectionOverlay.width = canvas.width;
+      detectionOverlay.height = canvas.height;
+      detectionOverlay.style.width = canvas.style.width;
+      detectionOverlay.style.height = canvas.style.height;
     }
+
+    let activeSessionID = '';
+    function cancelDetectionClearTimer() {
+      if (detectionClearTimer) {
+        clearTimeout(detectionClearTimer);
+        detectionClearTimer = null;
+      }
+    }
+    function clearDetections() {
+      cancelDetectionClearTimer();
+      overlayCtx.clearRect(0, 0, detectionOverlay.width, detectionOverlay.height);
+    }
+
+    function drawDetections(msg) {
+      if (msg && msg.session_id && activeSessionID && msg.session_id !== activeSessionID) return;
+      if (!msg || !Array.isArray(msg.objects) || !canvas.width || !canvas.height) return;
+      cancelDetectionClearTimer();
+      overlayCtx.clearRect(0, 0, detectionOverlay.width, detectionOverlay.height);
+      overlayCtx.lineWidth = Math.max(2, canvas.width / 500);
+      overlayCtx.font = `${Math.max(12, canvas.width / 60)}px sans-serif`;
+      for (const obj of msg.objects) {
+        const x = obj.x * canvas.width, y = obj.y * canvas.height;
+        const w = obj.w * canvas.width, h = obj.h * canvas.height;
+        overlayCtx.strokeStyle = '#00e676'; overlayCtx.fillStyle = '#00e676';
+        overlayCtx.strokeRect(x, y, w, h);
+        const label = `${obj.label || '对象'} ${Math.round((obj.confidence || 0) * 100)}%`;
+        overlayCtx.fillText(label, x, Math.max(14, y - 5));
+      }
+      if (msg.expires_ms > 0) {
+        const createdAt = Number(msg.timestamp) || Date.now();
+        const remaining = Math.max(0, createdAt + Number(msg.expires_ms) - Date.now());
+        detectionClearTimer = setTimeout(clearDetections, remaining);
+      }
+    }
+
+    let resultWs = null;
+    function connectDetectionResults() {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      resultWs = new WebSocket(`${proto}//${location.host}/api/vision/results?serial=${encodeURIComponent(serial)}`);
+      resultWs.onmessage = (event) => { try { drawDetections(JSON.parse(event.data)); } catch (_) {} };
+      resultWs.onclose = () => { if (resultWs) setTimeout(connectDetectionResults, 2000); };
+    }
+    connectDetectionResults();
     // 窗口大小变化时重新计算
     window.addEventListener('resize', fitCanvas);
     // 全屏切换后也要重新计算
@@ -198,6 +249,7 @@
     let connected = false;
     let connectionId = 0;
     let lastDecodedFrameAt = 0;
+    let lastStreamActivityAt = 0;
     const NO_FRAME_TIMEOUT = 5000;
     let frameWatchdog = null;
 
@@ -225,12 +277,13 @@
 
     function startFrameWatchdog() {
       clearFrameWatchdog();
-      // 从收到 meta 开始计时，既能发现“连上但始终没有画面”，
-      // 也能发现已经播放后持续无新帧。
+      // 静止画面可能没有新编码帧，因此 watchdog 以流心跳或任意数据包
+      // 作为活跃信号，而不是只依赖解码回调。
       lastDecodedFrameAt = Date.now();
+      lastStreamActivityAt = lastDecodedFrameAt;
       frameWatchdog = setInterval(() => {
-        if (!connected || !lastDecodedFrameAt) return;
-        if (Date.now() - lastDecodedFrameAt > NO_FRAME_TIMEOUT) {
+        if (!connected || !lastStreamActivityAt) return;
+        if (Date.now() - lastStreamActivityAt > NO_FRAME_TIMEOUT) {
           handleStreamLoss('视频流已中断，正在重连');
         }
       }, 1000);
@@ -252,6 +305,8 @@
     function handleStreamLoss(message) {
       if (!connected && reconnectTimer) return;
       connected = false;
+      activeSessionID = '';
+      clearDetections();
       clearFrameWatchdog();
       closeWebSocket();
       setStatus(message || '视频流已中断，正在重连', false);
@@ -362,12 +417,15 @@
         try {
         if (typeof event.data === 'string') {
           const msg = JSON.parse(event.data);
+          if (msg.type === 'stream.heartbeat') lastStreamActivityAt = Date.now();
           if (msg.type === 'meta') {
             clearConnectTimeout();
             serverErrorAttempts = 0;
             lastErrorMsg = '';
             errorShown = false;
             errorBox.style.display = 'none';
+            activeSessionID = msg.session_id || '';
+            clearDetections();
             packer.setDeviceSize(msg.width, msg.height);
             try {
               decoder.configure(msg.codec, msg.width, msg.height);
@@ -400,6 +458,7 @@
           return;
         }
         // 二进制视频帧
+        lastStreamActivityAt = Date.now();
         const data = new Uint8Array(event.data);
         decoder.handleFrame(data);
         } catch(err) {

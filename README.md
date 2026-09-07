@@ -56,6 +56,20 @@ Go 后端负责：
 3. 启动设备端 scrcpy server 进程
 4. 通过 WebSocket 在浏览器和设备之间双向转发视频帧和控制消息
 
+### Python Vision 对接
+
+项目提供独立的 Vision WebSocket，Python 可以订阅同一套 scrcpy 视频会话，
+返回识别框和自动化动作；浏览器会把识别结果叠加到投屏画面上。完整的二进制帧格式、
+示例脚本、结果与动作协议见 [Python Vision 对接说明](docs/vision-integration.md)。
+
+```bash
+python3 -m pip install -r scripts/vision/requirements.txt
+python3 scripts/vision/demo_vision.py --url ws://127.0.0.1:8080 --serial 10.0.0.30:5555
+```
+
+Vision 接口当前支持协议版本 `1`。显式发送未知版本会收到
+`unsupported_protocol`；省略版本号仍兼容旧客户端。
+
 ## 环境要求
 
 - Go 1.21+

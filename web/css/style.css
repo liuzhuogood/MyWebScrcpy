@@ -234,6 +234,11 @@ body {
   cursor: pointer;
   /* JS 会动态设置 max-width/max-height (px) 实现精确缩放 */
 }
+#detection-overlay {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
 .loading-overlay {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -432,6 +437,12 @@ body {
   display: block;
   touch-action: none; cursor: pointer;
   /* 尺寸由 JS fitCanvas() 精确计算，保证坐标映射准确 */
+}
+.dash-screen-wrap .dash-detection-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
 }
 /* 手机卡片容器: flex-wrap 下每个卡片按自然尺寸排列 */
 .dash-card {

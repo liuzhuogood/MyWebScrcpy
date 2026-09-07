@@ -87,6 +87,15 @@ func KeyCodeEvent(action uint8, keycode, repeat, metastate uint32) []byte {
 	return b
 }
 
+// TextEvent 构造 UTF-8 文本注入消息 (type=1，共 5+len(text) 字节)。
+func TextEvent(text string) []byte {
+	b := make([]byte, 5+len(text))
+	b[0] = TypeInjectText
+	binary.BigEndian.PutUint32(b[1:5], uint32(len(text)))
+	copy(b[5:], text)
+	return b
+}
+
 // BackEvent 构造返回/点亮消息 (type=4，2 字节)。
 // action: KeyActionDown 点亮屏幕，KeyActionUp 释放。
 func BackEvent(action uint8) []byte {

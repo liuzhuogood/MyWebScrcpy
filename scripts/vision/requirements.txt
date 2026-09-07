@@ -1,0 +1,4 @@
+# Vision demo/benchmark dependencies
+websocket-client>=1.8,<2
+av>=14,<16
+opencv-python>=4.10,<5

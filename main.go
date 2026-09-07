@@ -159,6 +159,11 @@ func main() {
 
 	// WebSocket
 	mux.HandleFunc("/ws", hub.ServeWS)
+	// Python Vision 双向帧/结果通道，以及浏览器检测结果通道。
+	mux.HandleFunc("/api/vision/stream", hub.ServeVisionWS)
+	mux.HandleFunc("/api/vision/results", hub.ServeVisionResults)
+	mux.HandleFunc("/api/vision/stats", hub.ServeVisionStats)
+	mux.HandleFunc("/api/vision/debug", hub.ServeVisionDebug)
 
 	// 静态资源
 	webRoot, _ := fs.Sub(webFS, "web")

@@ -1,7 +1,10 @@
 package ws
 
 import (
+	"context"
+	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
@@ -9,7 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"mywebscrcpy/internal/action"
+	debuglog "mywebscrcpy/internal/debug"
 	"mywebscrcpy/internal/scrcpy"
+	"mywebscrcpy/internal/vision"
 
 	"github.com/gorilla/websocket"
 )
@@ -24,14 +30,25 @@ var upgrader = websocket.Upgrader{
 
 // Hub 管理所有设备的 scrcpy server 会话。
 type Hub struct {
-	adbPath  string
-	jarPath  string
-	portMu   sync.Mutex
-	nextPort int
+	adbPath   string
+	jarPath   string
+	portMu    sync.Mutex
+	nextPort  int
+	resultMu  sync.Mutex
+	results   map[string]map[chan vision.Message]struct{}
+	events    *debuglog.Ring
+	sessionMu sync.Mutex
+	sessions  map[string]*managedSession
 }
 
 func NewHub(adbPath, jarPath string) *Hub {
-	return &Hub{adbPath: adbPath, jarPath: jarPath, nextPort: 27183}
+	return &Hub{adbPath: adbPath, jarPath: jarPath, nextPort: 27183, results: make(map[string]map[chan vision.Message]struct{}), sessions: make(map[string]*managedSession), events: debuglog.New(512)}
+}
+
+func (h *Hub) recordEvent(e debuglog.Event) {
+	if h.events != nil {
+		h.events.Append(e)
+	}
 }
 
 // allocPort 分配一个唯一的本地端口给 forward。
@@ -77,14 +94,13 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[ws] 客户端连接 serial=%s", serial)
 
-	// 启动 scrcpy server
-	sess, meta, err := h.startSession(serial)
+	ms, meta, cancel, err := h.acquireSession(serial)
 	if err != nil {
 		log.Printf("[ws] 启动 server 失败 serial=%s: %v", serial, err)
 		writeJSON(c, map[string]interface{}{"type": "error", "message": "启动 scrcpy 失败: " + err.Error()})
 		return
 	}
-	defer sess.close()
+	defer cancel()
 
 	log.Printf("[ws] server 就绪 serial=%s codec=%s %dx%d",
 		serial, meta.Codec, meta.Width, meta.Height)
@@ -98,14 +114,14 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// video 帧 → WS 写
 	go func() {
 		defer wg.Done()
-		h.pumpVideo(c, sess, done)
+		h.pumpSharedVideo(c, ms, done)
 	}()
 
 	// WS 控制消息 → control socket
 	go func() {
 		defer wg.Done()
 		defer close(done)
-		h.pumpControl(c, sess)
+		h.pumpControl(c, ms)
 	}()
 
 	wg.Wait()
@@ -113,11 +129,20 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 }
 
 type handshakeMeta struct {
-	Type   string `json:"type"`
-	Codec  string `json:"codec"`
-	Width  uint32 `json:"width"`
-	Height uint32 `json:"height"`
-	Serial string `json:"serial"`
+	Type      string `json:"type"`
+	Codec     string `json:"codec"`
+	Width     uint32 `json:"width"`
+	Height    uint32 `json:"height"`
+	Serial    string `json:"serial"`
+	SessionID string `json:"session_id"`
+}
+
+func newSessionID() string {
+	var b [12]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return fmt.Sprintf("session-%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b[:])
 }
 
 func codecName(codecID uint32) string {
@@ -174,11 +199,12 @@ func (h *Hub) startSession(serial string) (*session, *handshakeMeta, error) {
 
 	w, hh := conn.Size()
 	meta := &handshakeMeta{
-		Type:   "meta",
-		Codec:  codecName(conn.CodecID()),
-		Width:  w,
-		Height: hh,
-		Serial: serial,
+		Type:      "meta",
+		Codec:     codecName(conn.CodecID()),
+		Width:     w,
+		Height:    hh,
+		Serial:    serial,
+		SessionID: newSessionID(),
 	}
 	return &session{server: server, conn: conn}, meta, nil
 }
@@ -227,7 +253,7 @@ func (h *Hub) pumpVideo(c *websocket.Conn, sess *session, done <-chan struct{}) 
 }
 
 // pumpControl 读浏览器发来的控制消息并写入 control socket。
-func (h *Hub) pumpControl(c *websocket.Conn, sess *session) {
+func (h *Hub) pumpControl(c *websocket.Conn, ms *managedSession) {
 	for {
 		_, data, err := c.ReadMessage()
 		if err != nil {
@@ -240,8 +266,9 @@ func (h *Hub) pumpControl(c *websocket.Conn, sess *session) {
 		if len(data) == 0 {
 			continue
 		}
-		if err := sess.conn.WriteControl(data); err != nil {
-			log.Printf("[ws] 写 control 失败: %v", err)
+		result := <-ms.actions.Submit(context.Background(), action.Request{DeviceID: ms.meta.Serial, Source: "browser", Action: "raw", Raw: append([]byte(nil), data...), ExpiresMS: 3000})
+		if !result.Executed && result.ErrorCode != "" {
+			log.Printf("[ws] 写 control 失败: %s", result.ErrorCode)
 			return
 		}
 	}
