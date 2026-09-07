@@ -71,6 +71,12 @@
           <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
         </svg>
       </button>
+      <button id="btn-raw-size" title="打开原始尺寸窗口">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v4a1 1 0 0 0 1 1h4"/><path d="M16 21v-4a1 1 0 0 0-1-1h-4"/>
+        </svg>
+        <span>原始尺寸窗口</span>
+      </button>
       <button id="btn-reboot" title="重启设备" class="danger-action">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
         <span>重启设备</span>
@@ -133,6 +139,7 @@
     const fpsEl = document.getElementById('fps');
     const moreBtn = document.getElementById('btn-more');
     const moreMenu = document.getElementById('more-menu');
+    const rawSizeMode = params.get('raw') === '1';
     const filesDialog = document.getElementById('files-dialog');
     const filesFrame = document.getElementById('files-frame');
     function setMoreMenu(open) {
@@ -154,12 +161,20 @@
       filesDialog.showModal();
       setMoreMenu(false);
     });
+    document.getElementById('btn-raw-size').addEventListener('click', () => {
+      const rawUrl = new URL(location.href);
+      rawUrl.searchParams.set('raw', '1');
+      const rawWindow = window.open(rawUrl.toString(), 'mywebscrcpy-raw-size', 'popup=yes,width=520,height=1120,resizable=yes,scrollbars=yes');
+      if (!rawWindow) alert('浏览器阻止了新窗口，请允许本网站打开弹出窗口。');
+      setMoreMenu(false);
+    });
     document.getElementById('files-dialog-close').addEventListener('click', () => filesDialog.close());
     filesDialog.addEventListener('click', (event) => { if (event.target === filesDialog) filesDialog.close(); });
 
     const decoder = new ScrcpyDecoder(canvas);
     const packer = new ControlPacker();
     const mainEl = document.querySelector('.player-main');
+    if (rawSizeMode) document.body.classList.add('raw-size-page');
 
     decoder.onFps = (fps) => { fpsEl.textContent = fps + ' fps'; };
     decoder.onError = ({ message }) => {
@@ -175,6 +190,16 @@
       const cw = canvas.width;   // 视频内部宽度
       const ch = canvas.height;  // 视频内部高度
       if (!cw || !ch) return;
+
+      if (rawSizeMode) {
+        canvas.style.width = cw + 'px';
+        canvas.style.height = ch + 'px';
+        detectionOverlay.width = cw;
+        detectionOverlay.height = ch;
+        detectionOverlay.style.width = cw + 'px';
+        detectionOverlay.style.height = ch + 'px';
+        return;
+      }
 
       const padding = 24; // .player-main 的 padding*2
       const availW = mainEl.clientWidth - padding;

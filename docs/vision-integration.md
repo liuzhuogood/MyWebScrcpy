@@ -1,6 +1,8 @@
 # Python Vision 对接说明
 
-本文档说明 Python Vision 如何连接 MyWebScrcpy，接收 Android 投屏帧、回传识别框，并按需请求设备动作。
+本文档说明 Python Vision 如何连接 MyWebScrcpy，直接接收 Android 实时视频流，在内存中的解码帧上执行 OpenCV/YOLO/OCR 识别，回传识别框，并按需请求设备动作。
+
+Vision 的输入不是本地截图或本地视频文件。Python 只需要提供设备 `serial`，通过 `/api/vision/stream` 接收实时 H.264 帧；模板图片、模型权重等识别资源仍可放在本地目录，但不需要把每一帧保存成文件。
 
 ## 1. 启动
 
@@ -11,9 +13,22 @@ adb devices -l
 curl http://127.0.0.1:8080/api/devices
 python3 -m pip install -r scripts/vision/requirements.txt
 python3 scripts/vision/demo_vision.py --serial 10.0.0.30:5555 --max-fps 5
+# 分组模板匹配示例：输入仍来自实时视频流，不指定截图文件
+cd /Users/liuzhuo/code/yolo_wepork
+.venv/bin/python -m opencv_match.stream_vision --serial 10.0.0.30:5555
 ```
 
-演示脚本会在 Python 窗口显示解码画面，绘制 `demo-box`，把同一个框回传到浏览器播放器，并每 5 秒发送一次 heartbeat；`--max-fps 0` 可关闭 Vision 端降采样。
+如果 MyWebScrcpy 部署在 `10.0.0.6` 且使用内置自签名证书，应改用 `wss` 并增加 `--insecure`：
+
+```bash
+cd /Users/liuzhuo/code/yolo_wepork
+.venv/bin/python -m opencv_match.stream_vision \
+  --url wss://10.0.0.6 \
+  --serial 10.0.0.30:5555 \
+  --insecure
+```
+
+演示脚本直接从 Vision WebSocket 接收视频流，在内存中解码并在 Python 窗口显示画面，绘制 `demo-box`，把同一个框回传到浏览器播放器，并每 5 秒发送一次 heartbeat。它不需要 `--input`、截图路径或视频文件路径；`--max-fps 0` 可关闭 Vision 端降采样。
 
 如需取得本机性能基线，可运行只读基准：
 
@@ -130,10 +145,16 @@ Go 返回：
 {"type":"action.request","request_id":"text-001","action":"text","text":"你好","expires_ms":1000}
 ```
 
-## 6. Python 核心循环
+## 6. Python 核心循环：直接处理视频流帧
+
+Python 收到 binary 视频包后，先用 PyAV 解码为内存中的 BGR 图像，再把 `image` 直接交给识别器。下面的 `detect(image)` 可以替换为 OpenCV 模板匹配、YOLO 或 OCR；整个过程不产生本地帧文件。
 
 ```python
 import json
+from pathlib import Path
+
+import av
+import cv2
 import websocket
 
 serial = "10.0.0.30:5555"
@@ -142,7 +163,16 @@ ws = websocket.create_connection(url, timeout=15)
 hello = json.loads(ws.recv())
 print(hello)
 
-latest = None
+decoder = av.CodecContext.create("h264", "r")
+latest = {}
+
+def detect(image):
+    """直接接收 BGR 帧；不要在这里读取 screenshot.png 或写入临时文件。"""
+    # 这里替换为 OpenCV 模板匹配、YOLO 或 OCR。
+    height, width = image.shape[:2]
+    return [{"label": "demo", "confidence": 0.99,
+             "x": 0.25, "y": 0.25, "w": 0.5, "h": 0.5}]
+
 while True:
     message = ws.recv()
     if isinstance(message, str):
@@ -151,19 +181,66 @@ while True:
             latest = info
         continue
 
+    if len(message) < 9:
+        continue
     kind = message[0]
     payload = message[9:]
     if kind not in (0, 1, 2):
         continue
-    # 用 PyAV 解码 payload，再执行 YOLO/OCR。
-    ws.send(json.dumps({
-        "type": "detection.result",
-        "device_id": serial,
-        "session_id": hello.get("session_id"),
-        "frame_id": latest.get("frame_id", 0) if latest else 0,
-        "objects": [{"label":"demo","confidence":0.99,"x":0.25,"y":0.25,"w":0.5,"h":0.5}],
-    }))
+
+    # 这两个转换函数沿用 demo_vision.py，用于兼容 Annex-B、AVCC
+    # 和 scrcpy 的 NAL 边界；不要把一个 WebSocket 消息直接当作完整帧。
+    if kind == 0:
+        payload = avcc_description_to_annexb(payload)
+    else:
+        payload = annexb_nals(payload)
+    for packet in decoder.parse(payload):
+        for frame in decoder.decode(packet):
+            image = frame.to_ndarray(format="bgr24")
+            objects = detect(image)
+            if not objects:
+                continue
+
+            # 识别结果通过同一条 Vision WebSocket 回传，不落盘。
+            ws.send(json.dumps({
+                "type": "detection.result",
+                "device_id": serial,
+                "session_id": hello.get("session_id"),
+                "frame_id": latest.get("frame_id", 0),
+                "timestamp": latest.get("timestamp", 0),
+                "objects": objects,
+            }))
 ```
+
+如果使用分组模板匹配，模板目录仍然可以是本地目录，但输入改为当前视频帧：
+
+```python
+from opencv_match import TemplateMatcher
+
+matcher = TemplateMatcher.from_config(
+    Path("opencv_match/templates"),
+    Path("opencv_match/targets.json"),
+)
+
+def detect(image):
+    height, width = image.shape[:2]
+    objects = []
+    for item in matcher.match_image(image):
+        if not item.matched or item.box is None:
+            continue
+        x, y, box_width, box_height = item.box
+        objects.append({
+            "label": item.target,
+            "confidence": item.score,
+            "x": x / width,
+            "y": y / height,
+            "w": box_width / width,
+            "h": box_height / height,
+        })
+    return objects
+```
+
+这里的 `image` 来自实时视频流，不是图片路径。模板匹配返回的像素框需要按当前帧的 `width`、`height` 转换成 `0~1` 归一化坐标后再发送 `detection.result`。
 
 ## 7. 断线、安全与限制
 

@@ -30,8 +30,17 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 	var writeMu sync.Mutex
 	var optionsMu sync.RWMutex
-	maxFPS := 0
-	writeJSON := func(v interface{}) error { writeMu.Lock(); defer writeMu.Unlock(); return c.WriteJSON(v) }
+	// 客户端会在收到 hello 后发送自己的 max_fps。握手完成前不能按“不限帧”
+	// 推送，否则高码率设备可能先把 WebSocket 写缓冲塞满，触发写超时并断开。
+	maxFPS := 5
+	writeJSON := func(v interface{}) error {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		// 二进制帧的 deadline 不能沿用到下一次 JSON 帧头；静止画面时两帧
+		// 之间可能超过 3 秒，否则下一次写会立即命中已过期的 deadline。
+		c.SetWriteDeadline(time.Now().Add(3 * time.Second))
+		return c.WriteJSON(v)
+	}
 	writeBinary := func(b []byte) error {
 		writeMu.Lock()
 		defer writeMu.Unlock()
@@ -137,9 +146,11 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 		}
 		lastSent = now
 		if e := writeJSON(map[string]interface{}{"type": "frame", "device_id": serial, "session_id": meta.SessionID, "frame_id": frameID, "pts": pts, "timestamp": time.Now().UnixMilli(), "width": width, "height": height, "kind": kind, "codec": meta.Codec}); e != nil {
+			h.recordEvent(debuglog.Event{Type: "vision.write_error", DeviceID: serial, SessionID: meta.SessionID, Message: e.Error(), Fields: map[string]interface{}{"stage": "frame_metadata"}})
 			return
 		}
 		if e := writeBinary(data); e != nil {
+			h.recordEvent(debuglog.Event{Type: "vision.write_error", DeviceID: serial, SessionID: meta.SessionID, Message: e.Error(), Fields: map[string]interface{}{"stage": "frame_binary", "kind": kind, "bytes": len(data)}})
 			return
 		}
 	}

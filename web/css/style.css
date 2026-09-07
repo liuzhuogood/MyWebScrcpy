@@ -220,6 +220,22 @@ body {
   min-height: 0;
   min-width: 0;
 }
+/* 原始尺寸窗口：canvas 的 CSS 像素与视频帧像素一一对应，页面允许滚动。 */
+.raw-size-page {
+  min-width: 0;
+  min-height: 100%;
+  overflow: auto;
+}
+.raw-size-page .player-main {
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: auto;
+}
+.raw-size-page .screen-wrap {
+  flex: 0 0 auto;
+  border-radius: 0;
+  box-shadow: none;
+}
 .screen-wrap {
   position: relative;
   border-radius: 8px;
