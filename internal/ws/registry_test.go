@@ -47,11 +47,27 @@ func TestSubscribeSharedReplaysLatestHeaders(t *testing.T) {
 	}
 }
 
+func TestSubscribeSharedKeepsHeadersWhileFramesArrive(t *testing.T) {
+	ms := &managedSession{subs: make(map[chan []byte]struct{}), lastConfig: []byte("config"), lastKey: []byte("key")}
+	ch, cancel := (&Hub{}).subscribeShared(ms)
+	defer cancel()
+	for i := byte(0); i < 20; i++ {
+		f := &scrcpy.Frame{Kind: scrcpy.FrameDelta, Payload: []byte{i}}
+		cacheAndBroadcast(ms, f, encodeFrame(f))
+	}
+	if got := string(<-ch); got != "config" {
+		t.Fatalf("config frame was displaced: %q", got)
+	}
+	if got := string(<-ch); got != "key" {
+		t.Fatalf("key frame was displaced: %q", got)
+	}
+}
+
 func TestCacheAndBroadcastDropsOldFramesForSlowSubscriber(t *testing.T) {
 	ms := &managedSession{subs: make(map[chan []byte]struct{})}
 	ch, cancel := (&Hub{}).subscribeShared(ms)
 	defer cancel()
-	for i := byte(0); i < 20; i++ {
+	for i := byte(0); i < 100; i++ {
 		f := &scrcpy.Frame{Kind: scrcpy.FrameDelta, Payload: []byte{i}}
 		cacheAndBroadcast(ms, f, encodeFrame(f))
 	}
@@ -66,7 +82,7 @@ func TestCacheAndBroadcastDropsOldFramesForSlowSubscriber(t *testing.T) {
 		select {
 		case last = <-ch:
 		default:
-			if len(last) == 0 || last[9] != 19 {
+			if len(last) == 0 || last[9] != 99 {
 				t.Fatalf("slow subscriber did not retain latest frame: %v", last)
 			}
 			return

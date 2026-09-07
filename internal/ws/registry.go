@@ -32,6 +32,8 @@ type managedSession struct {
 	lastFrame  time.Time
 }
 
+const sharedVideoQueueSize = 64
+
 func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, func(), error) {
 	h.sessionMu.Lock()
 	if ms := h.sessions[serial]; ms != nil {
@@ -88,7 +90,9 @@ func (h *Hub) releaseSession(serial string, ms *managedSession) {
 }
 
 func (h *Hub) subscribeShared(ms *managedSession) (<-chan []byte, func()) {
-	ch := make(chan []byte, 8)
+	// 新订阅者先接收缓存的 config/key，再接收增量帧；留出足够空间，避免
+	// 浏览器刚刷新、解码器尚未初始化时把关键帧挤出队列。
+	ch := make(chan []byte, sharedVideoQueueSize)
 	ms.mu.Lock()
 	ms.subs[ch] = struct{}{}
 	if ms.lastConfig != nil {
