@@ -19,7 +19,7 @@ type managedSession struct {
 	meta       *handshakeMeta
 	mu         sync.Mutex
 	refs       int
-	subs       map[chan []byte]struct{}
+	subs       map[chan sharedVideoFrame]struct{}
 	controlMu  sync.Mutex
 	closeTimer *time.Timer
 	lastConfig []byte
@@ -33,6 +33,14 @@ type managedSession struct {
 }
 
 const sharedVideoQueueSize = 64
+
+// sharedVideoFrame keeps the cached decoder bootstrap separate from live source
+// packets. Consumers may need a replayed config/key to initialize a decoder,
+// but must not mistake it for a frame captured after they subscribed.
+type sharedVideoFrame struct {
+	data     []byte
+	replayed bool
+}
 
 func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, func(), error) {
 	h.sessionMu.Lock()
@@ -54,7 +62,7 @@ func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, fu
 		h.sessionMu.Unlock()
 		return nil, nil, nil, err
 	}
-	ms := &managedSession{sess: sess, meta: meta, refs: 1, subs: make(map[chan []byte]struct{}), width: meta.Width, height: meta.Height}
+	ms := &managedSession{sess: sess, meta: meta, refs: 1, subs: make(map[chan sharedVideoFrame]struct{}), width: meta.Width, height: meta.Height}
 	ms.actions = action.New(deviceActionExecutor{ms: ms}, 64)
 	h.sessions[serial] = ms
 	h.sessionMu.Unlock()
@@ -89,17 +97,17 @@ func (h *Hub) releaseSession(serial string, ms *managedSession) {
 	_ = refs
 }
 
-func (h *Hub) subscribeShared(ms *managedSession) (<-chan []byte, func()) {
+func (h *Hub) subscribeShared(ms *managedSession) (<-chan sharedVideoFrame, func()) {
 	// 新订阅者先接收缓存的 config/key，再接收增量帧；留出足够空间，避免
 	// 浏览器刚刷新、解码器尚未初始化时把关键帧挤出队列。
-	ch := make(chan []byte, sharedVideoQueueSize)
+	ch := make(chan sharedVideoFrame, sharedVideoQueueSize)
 	ms.mu.Lock()
 	ms.subs[ch] = struct{}{}
 	if ms.lastConfig != nil {
-		ch <- append([]byte(nil), ms.lastConfig...)
+		ch <- sharedVideoFrame{data: append([]byte(nil), ms.lastConfig...), replayed: true}
 	}
 	if ms.lastKey != nil {
-		ch <- append([]byte(nil), ms.lastKey...)
+		ch <- sharedVideoFrame{data: append([]byte(nil), ms.lastKey...), replayed: true}
 	}
 	ms.mu.Unlock()
 	return ch, func() {
@@ -127,7 +135,7 @@ func (h *Hub) readSharedSession(serial string, ms *managedSession) {
 			for ch := range ms.subs {
 				close(ch)
 			}
-			ms.subs = make(map[chan []byte]struct{})
+			ms.subs = make(map[chan sharedVideoFrame]struct{})
 			ms.mu.Unlock()
 			ms.actions.Close()
 			ms.sess.close()
@@ -158,7 +166,7 @@ func cacheAndBroadcast(ms *managedSession, f *scrcpy.Frame, buf []byte) {
 	}
 	for ch := range ms.subs {
 		select {
-		case ch <- append([]byte(nil), buf...):
+		case ch <- sharedVideoFrame{data: append([]byte(nil), buf...)}:
 		default:
 			ms.dropped++
 			select {
@@ -166,7 +174,7 @@ func cacheAndBroadcast(ms *managedSession, f *scrcpy.Frame, buf []byte) {
 			default:
 			}
 			select {
-			case ch <- append([]byte(nil), buf...):
+			case ch <- sharedVideoFrame{data: append([]byte(nil), buf...)}:
 			default:
 			}
 		}
@@ -230,7 +238,7 @@ func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan
 				_ = c.Close()
 				return
 			}
-		case data, ok := <-ch:
+		case frame, ok := <-ch:
 			if !ok {
 				// End the browser socket as well as the video pump. Otherwise the
 				// control reader can remain blocked forever and the UI cannot retry.
@@ -239,7 +247,7 @@ func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan
 				return
 			}
 			c.SetWriteDeadline(timeNow())
-			if err := c.WriteMessage(websocket.BinaryMessage, data); err != nil {
+			if err := c.WriteMessage(websocket.BinaryMessage, frame.data); err != nil {
 				_ = c.Close()
 				return
 			}

@@ -126,10 +126,11 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 			return
 		default:
 		}
-		data, ok := <-frames
+		frame, ok := <-frames
 		if !ok {
 			return
 		}
+		data := frame.data
 		frameID++
 		kind := data[0]
 		pts := binary.BigEndian.Uint64(data[1:9])
@@ -145,7 +146,7 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		lastSent = now
-		if e := writeJSON(map[string]interface{}{"type": "frame", "device_id": serial, "session_id": meta.SessionID, "frame_id": frameID, "pts": pts, "timestamp": time.Now().UnixMilli(), "width": width, "height": height, "kind": kind, "codec": meta.Codec}); e != nil {
+		if e := writeJSON(map[string]interface{}{"type": "frame", "device_id": serial, "session_id": meta.SessionID, "frame_id": frameID, "pts": pts, "timestamp": time.Now().UnixMilli(), "width": width, "height": height, "kind": kind, "codec": meta.Codec, "replayed": frame.replayed}); e != nil {
 			h.recordEvent(debuglog.Event{Type: "vision.write_error", DeviceID: serial, SessionID: meta.SessionID, Message: e.Error(), Fields: map[string]interface{}{"stage": "frame_metadata"}})
 			return
 		}

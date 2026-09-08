@@ -24,7 +24,7 @@ func TestEncodeFrameUsesStableEnvelope(t *testing.T) {
 }
 
 func TestSessionFrameInvalidatesCachedHeaders(t *testing.T) {
-	ms := &managedSession{subs: make(map[chan []byte]struct{})}
+	ms := &managedSession{subs: make(map[chan sharedVideoFrame]struct{})}
 	cacheAndBroadcast(ms, &scrcpy.Frame{Kind: scrcpy.FrameConfig, Payload: []byte("config")}, []byte("config"))
 	cacheAndBroadcast(ms, &scrcpy.Frame{Kind: scrcpy.FrameKey, Payload: []byte("key")}, []byte("key"))
 	cacheAndBroadcast(ms, &scrcpy.Frame{Kind: scrcpy.FrameSession, Width: 1024, Height: 448}, encodeFrame(&scrcpy.Frame{Kind: scrcpy.FrameSession, Width: 1024, Height: 448}))
@@ -36,35 +36,35 @@ func TestSessionFrameInvalidatesCachedHeaders(t *testing.T) {
 }
 
 func TestSubscribeSharedReplaysLatestHeaders(t *testing.T) {
-	ms := &managedSession{subs: make(map[chan []byte]struct{}), lastConfig: []byte("config"), lastKey: []byte("key")}
+	ms := &managedSession{subs: make(map[chan sharedVideoFrame]struct{}), lastConfig: []byte("config"), lastKey: []byte("key")}
 	ch, cancel := (&Hub{}).subscribeShared(ms)
 	defer cancel()
-	if got := string(<-ch); got != "config" {
-		t.Fatalf("first cached frame = %q", got)
+	if frame := <-ch; string(frame.data) != "config" || !frame.replayed {
+		t.Fatalf("first cached frame = %#v", frame)
 	}
-	if got := string(<-ch); got != "key" {
-		t.Fatalf("second cached frame = %q", got)
+	if frame := <-ch; string(frame.data) != "key" || !frame.replayed {
+		t.Fatalf("second cached frame = %#v", frame)
 	}
 }
 
 func TestSubscribeSharedKeepsHeadersWhileFramesArrive(t *testing.T) {
-	ms := &managedSession{subs: make(map[chan []byte]struct{}), lastConfig: []byte("config"), lastKey: []byte("key")}
+	ms := &managedSession{subs: make(map[chan sharedVideoFrame]struct{}), lastConfig: []byte("config"), lastKey: []byte("key")}
 	ch, cancel := (&Hub{}).subscribeShared(ms)
 	defer cancel()
 	for i := byte(0); i < 20; i++ {
 		f := &scrcpy.Frame{Kind: scrcpy.FrameDelta, Payload: []byte{i}}
 		cacheAndBroadcast(ms, f, encodeFrame(f))
 	}
-	if got := string(<-ch); got != "config" {
-		t.Fatalf("config frame was displaced: %q", got)
+	if frame := <-ch; string(frame.data) != "config" || !frame.replayed {
+		t.Fatalf("config frame was displaced: %#v", frame)
 	}
-	if got := string(<-ch); got != "key" {
-		t.Fatalf("key frame was displaced: %q", got)
+	if frame := <-ch; string(frame.data) != "key" || !frame.replayed {
+		t.Fatalf("key frame was displaced: %#v", frame)
 	}
 }
 
 func TestCacheAndBroadcastDropsOldFramesForSlowSubscriber(t *testing.T) {
-	ms := &managedSession{subs: make(map[chan []byte]struct{})}
+	ms := &managedSession{subs: make(map[chan sharedVideoFrame]struct{})}
 	ch, cancel := (&Hub{}).subscribeShared(ms)
 	defer cancel()
 	for i := byte(0); i < 100; i++ {
@@ -77,12 +77,12 @@ func TestCacheAndBroadcastDropsOldFramesForSlowSubscriber(t *testing.T) {
 	if dropped == 0 {
 		t.Fatal("slow subscriber did not record dropped frames")
 	}
-	var last []byte
+	var last sharedVideoFrame
 	for {
 		select {
 		case last = <-ch:
 		default:
-			if len(last) == 0 || last[9] != 99 {
+			if len(last.data) == 0 || last.data[9] != 99 || last.replayed {
 				t.Fatalf("slow subscriber did not retain latest frame: %v", last)
 			}
 			return
