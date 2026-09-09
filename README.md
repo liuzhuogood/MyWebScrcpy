@@ -103,9 +103,12 @@ go build -o mywebscrcpy .
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | `POST` | `/api/recordings?serial=...` | 请求体 `{"max_duration_ms":300000}`，创建录制。 |
+| `GET` | `/api/recordings?serial=...` | 获取该设备的录制记录。 |
 | `GET` | `/api/recordings/{recording_id}?serial=...` | 查询状态。 |
 | `POST` | `/api/recordings/{recording_id}/stop?serial=...` | 提前停止，幂等。 |
 | `GET` | `/api/recordings/{recording_id}/download?serial=...` | 下载已完成的 MP4。 |
+| `GET` | `/api/recordings/download?serial=...&recording_id=...` | 下载指定记录；省略 `recording_id` 下载最后一次完成的录像。 |
+| `DELETE` | `/api/recordings/{recording_id}?serial=...` | 删除已结束的录制记录及文件。 |
 
 录制仅支持当前默认的 H.264 共享流；未完成文件不会开放下载。完成文件会在受控目录中保留到期，服务重启会清理未完成的临时文件。
 

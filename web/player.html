@@ -79,6 +79,13 @@
         </svg>
         <span>原始尺寸窗口</span>
       </button>
+      <button id="btn-capture" title="截取区域截图">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/>
+          <rect x="7" y="7" width="10" height="10" rx="1"/>
+        </svg>
+        <span>区域截图</span>
+      </button>
       <button id="btn-reboot" title="重启设备" class="danger-action">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
         <span>重启设备</span>
@@ -120,6 +127,19 @@
         <div style="font-size:12px;color:#666">点击电源键唤醒</div>
       </div>
       <div class="error-overlay" id="error" style="display:none"></div>
+      <div class="capture-layer" id="capture-layer" hidden>
+        <div class="capture-actions">
+          <span class="capture-hint">拖动边框选择区域</span>
+          <button id="capture-save" type="button">下载截图</button>
+          <button id="capture-cancel" type="button">取消</button>
+        </div>
+        <div class="capture-selection" id="capture-selection">
+          <span class="capture-size" id="capture-size"></span>
+          <i class="capture-handle nw" data-dir="nw"></i><i class="capture-handle n" data-dir="n"></i><i class="capture-handle ne" data-dir="ne"></i>
+          <i class="capture-handle e" data-dir="e"></i><i class="capture-handle se" data-dir="se"></i><i class="capture-handle s" data-dir="s"></i>
+          <i class="capture-handle sw" data-dir="sw"></i><i class="capture-handle w" data-dir="w"></i>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -166,9 +186,136 @@
     document.getElementById('btn-raw-size').addEventListener('click', () => {
       const rawUrl = new URL(location.href);
       rawUrl.searchParams.set('raw', '1');
-      const rawWindow = window.open(rawUrl.toString(), 'mywebscrcpy-raw-size', 'popup=yes,width=520,height=1120,resizable=yes,scrollbars=yes');
-      if (!rawWindow) alert('浏览器阻止了新窗口，请允许本网站打开弹出窗口。');
+      location.assign(rawUrl.toString());
       setMoreMenu(false);
+    });
+
+    // ===== 区域截图 =====
+    const captureLayer = document.getElementById('capture-layer');
+    const captureSelection = document.getElementById('capture-selection');
+    const captureSize = document.getElementById('capture-size');
+    let captureRect = null;
+    let captureDrag = null;
+    const CAPTURE_MIN = 24;
+
+    function updateCaptureSelection() {
+      if (!captureRect) return;
+      captureSelection.style.left = `${captureRect.x}px`;
+      captureSelection.style.top = `${captureRect.y}px`;
+      captureSelection.style.width = `${captureRect.w}px`;
+      captureSelection.style.height = `${captureRect.h}px`;
+      const scaleX = canvas.width / Math.max(1, canvas.clientWidth);
+      const scaleY = canvas.height / Math.max(1, canvas.clientHeight);
+      captureSize.textContent = `${Math.round(captureRect.w * scaleX)} × ${Math.round(captureRect.h * scaleY)}`;
+    }
+
+    function openCapture() {
+      if (!canvas.width || !canvas.height || !canvas.clientWidth || !canvas.clientHeight) {
+        alert('画面尚未准备好，暂时无法截图。');
+        return;
+      }
+      const w = Math.max(CAPTURE_MIN, Math.round(canvas.clientWidth * .7));
+      const h = Math.max(CAPTURE_MIN, Math.round(canvas.clientHeight * .7));
+      captureRect = {
+        x: Math.max(0, Math.round((canvas.clientWidth - w) / 2)),
+        y: Math.max(0, Math.round((canvas.clientHeight - h) / 2)), w, h,
+      };
+      captureLayer.hidden = false;
+      updateCaptureSelection();
+    }
+
+    function closeCapture() {
+      captureLayer.hidden = true;
+      captureRect = null;
+      captureDrag = null;
+    }
+
+    function capturePoint(event) {
+      const rect = captureLayer.getBoundingClientRect();
+      return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    }
+
+    captureLayer.addEventListener('pointerdown', (event) => {
+      if (event.button !== undefined && event.button !== 0) return;
+      const handle = event.target.closest('.capture-handle');
+      const inside = event.target.closest('.capture-selection');
+      if (!inside) return;
+      const point = capturePoint(event);
+      captureDrag = {
+        mode: handle ? 'resize' : 'move', dir: handle && handle.dataset.dir,
+        startX: point.x, startY: point.y, rect: { ...captureRect },
+      };
+      captureLayer.setPointerCapture(event.pointerId);
+      event.preventDefault();
+    });
+
+    captureLayer.addEventListener('pointermove', (event) => {
+      if (!captureDrag) return;
+      const point = capturePoint(event);
+      const dx = point.x - captureDrag.startX;
+      const dy = point.y - captureDrag.startY;
+      const start = captureDrag.rect;
+      const maxW = captureLayer.clientWidth;
+      const maxH = captureLayer.clientHeight;
+      let next = { ...start };
+      if (captureDrag.mode === 'move') {
+        next.x = Math.max(0, Math.min(maxW - start.w, start.x + dx));
+        next.y = Math.max(0, Math.min(maxH - start.h, start.y + dy));
+      } else {
+        const dir = captureDrag.dir;
+        if (dir.includes('e')) next.w = Math.max(CAPTURE_MIN, Math.min(maxW - start.x, start.w + dx));
+        if (dir.includes('s')) next.h = Math.max(CAPTURE_MIN, Math.min(maxH - start.y, start.h + dy));
+        if (dir.includes('w')) {
+          const right = start.x + start.w;
+          next.x = Math.max(0, Math.min(right - CAPTURE_MIN, start.x + dx));
+          next.w = right - next.x;
+        }
+        if (dir.includes('n')) {
+          const bottom = start.y + start.h;
+          next.y = Math.max(0, Math.min(bottom - CAPTURE_MIN, start.y + dy));
+          next.h = bottom - next.y;
+        }
+      }
+      captureRect = next;
+      updateCaptureSelection();
+      event.preventDefault();
+    });
+
+    captureLayer.addEventListener('pointerup', (event) => {
+      if (captureDrag) {
+        captureDrag = null;
+        if (captureLayer.hasPointerCapture(event.pointerId)) captureLayer.releasePointerCapture(event.pointerId);
+      }
+    });
+
+    document.getElementById('btn-capture').addEventListener('click', () => {
+      setMoreMenu(false);
+      openCapture();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !captureLayer.hidden) closeCapture();
+    });
+    document.getElementById('capture-cancel').addEventListener('click', closeCapture);
+    document.getElementById('capture-save').addEventListener('click', () => {
+      if (!captureRect || !canvas.width || !canvas.height) return;
+      const scaleX = canvas.width / Math.max(1, canvas.clientWidth);
+      const scaleY = canvas.height / Math.max(1, canvas.clientHeight);
+      const sx = Math.max(0, Math.round(captureRect.x * scaleX));
+      const sy = Math.max(0, Math.round(captureRect.y * scaleY));
+      const sw = Math.min(canvas.width - sx, Math.max(1, Math.round(captureRect.w * scaleX)));
+      const sh = Math.min(canvas.height - sy, Math.max(1, Math.round(captureRect.h * scaleY)));
+      const output = document.createElement('canvas');
+      output.width = sw; output.height = sh;
+      output.getContext('2d').drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+      output.toBlob((blob) => {
+        if (!blob) { alert('截图生成失败，请重试。'); return; }
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `mywebscrcpy-${serial || 'screen'}-${sw}x${sh}.png`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+        closeCapture();
+      }, 'image/png');
     });
     document.getElementById('files-dialog-close').addEventListener('click', () => filesDialog.close());
     filesDialog.addEventListener('click', (event) => { if (event.target === filesDialog) filesDialog.close(); });

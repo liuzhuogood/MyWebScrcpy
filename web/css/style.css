@@ -273,6 +273,50 @@ body {
   background: rgba(245,80,80,0.92); color: #fff; gap: 8px; padding: 32px; text-align: center;
 }
 
+/* 区域截图选择框 */
+.capture-layer[hidden] { display: none; }
+.capture-layer {
+  position: absolute; inset: 0; z-index: 10;
+  user-select: none; touch-action: none;
+  background: transparent;
+}
+.capture-actions {
+  position: absolute; top: 10px; left: 10px; z-index: 3;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 7px;
+  background: rgba(31, 35, 41, .9); color: #fff;
+  font-size: 12px; line-height: 1;
+}
+.capture-actions button {
+  border: 0; border-radius: 5px; padding: 6px 9px;
+  color: #1f2329; background: #fff; cursor: pointer; font-size: 12px;
+}
+.capture-actions button:hover { background: #e8f3ff; color: #165dff; }
+.capture-selection {
+  position: absolute; min-width: 24px; min-height: 24px;
+  border: 2px solid #165dff; background: rgba(22, 93, 255, .12);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, .3);
+  cursor: move;
+}
+.capture-size {
+  position: absolute; left: 4px; top: 4px; padding: 2px 4px;
+  border-radius: 3px; color: #fff; background: rgba(0, 0, 0, .65);
+  font: 11px/1.2 -apple-system, BlinkMacSystemFont, sans-serif;
+  pointer-events: none; white-space: nowrap;
+}
+.capture-handle {
+  position: absolute; width: 10px; height: 10px; border: 2px solid #fff;
+  border-radius: 2px; background: #165dff; z-index: 2;
+}
+.capture-handle.nw { left: -6px; top: -6px; cursor: nwse-resize; }
+.capture-handle.n { left: 50%; top: -6px; transform: translateX(-50%); cursor: ns-resize; }
+.capture-handle.ne { right: -6px; top: -6px; cursor: nesw-resize; }
+.capture-handle.e { right: -6px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+.capture-handle.se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.capture-handle.s { left: 50%; bottom: -6px; transform: translateX(-50%); cursor: ns-resize; }
+.capture-handle.sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.capture-handle.w { left: -6px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+
 .screen-off-overlay {
   position: absolute; inset: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;

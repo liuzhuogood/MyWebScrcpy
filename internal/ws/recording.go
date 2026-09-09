@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -312,6 +313,63 @@ func (m *recordingManager) get(id, serial string) (*recording, error) {
 	return rec, nil
 }
 
+func (m *recordingManager) list(serial string) ([]recordingView, error) {
+	if serial == "" {
+		return nil, badRecordingRequest("missing serial")
+	}
+	m.mu.Lock()
+	entries := make([]*recording, 0, len(m.entries))
+	for _, rec := range m.entries {
+		if rec.serial == serial {
+			entries = append(entries, rec)
+		}
+	}
+	m.mu.Unlock()
+	views := make([]recordingView, 0, len(entries))
+	for _, rec := range entries {
+		views = append(views, rec.view())
+	}
+	sort.Slice(views, func(i, j int) bool { return views[i].StartedAt.After(views[j].StartedAt) })
+	return views, nil
+}
+
+func (m *recordingManager) deleteRecording(id, serial string) error {
+	rec, err := m.get(id, serial)
+	if err != nil {
+		return err
+	}
+	rec.mu.Lock()
+	status, path := rec.status, rec.path
+	rec.mu.Unlock()
+	if status == recordingActive || status == recordingStopping {
+		return recordingConflict("recording is still active")
+	}
+	if path != "" {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return recordingServiceUnavailable("recording file cannot be deleted")
+		}
+	}
+	m.mu.Lock()
+	if m.entries[id] == rec {
+		delete(m.entries, id)
+	}
+	m.mu.Unlock()
+	return nil
+}
+
+func (m *recordingManager) latestCompleted(serial string) (*recording, error) {
+	entries, err := m.list(serial)
+	if err != nil {
+		return nil, err
+	}
+	for _, entry := range entries {
+		if entry.Status == recordingComplete {
+			return m.get(entry.RecordingID, serial)
+		}
+	}
+	return nil, recordingNotFound("no completed recording found")
+}
+
 func (m *recordingManager) cleanupExpired(now time.Time) {
 	m.mu.Lock()
 	entries := make([]*recording, 0, len(m.entries))
@@ -386,9 +444,12 @@ func writeRecordingError(w http.ResponseWriter, err error) {
 
 func (h *Hub) RegisterRecordingRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/recordings", h.startRecording)
+	mux.HandleFunc("GET /api/recordings", h.listRecordings)
 	mux.HandleFunc("GET /api/recordings/{recording_id}", h.getRecording)
 	mux.HandleFunc("POST /api/recordings/{recording_id}/stop", h.stopRecording)
 	mux.HandleFunc("GET /api/recordings/{recording_id}/download", h.downloadRecording)
+	mux.HandleFunc("GET /api/recordings/download", h.downloadLatestRecording)
+	mux.HandleFunc("DELETE /api/recordings/{recording_id}", h.deleteRecording)
 }
 
 func (h *Hub) startRecording(w http.ResponseWriter, r *http.Request) {
@@ -422,6 +483,16 @@ func (h *Hub) getRecording(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(rec.view())
 }
 
+func (h *Hub) listRecordings(w http.ResponseWriter, r *http.Request) {
+	entries, err := h.recordings.list(r.URL.Query().Get("serial"))
+	if err != nil {
+		writeRecordingError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"recordings": entries})
+}
+
 func (h *Hub) stopRecording(w http.ResponseWriter, r *http.Request) {
 	rec, err := h.recordings.stopRecording(r.PathValue("recording_id"), r.URL.Query().Get("serial"))
 	if err != nil {
@@ -439,6 +510,29 @@ func (h *Hub) downloadRecording(w http.ResponseWriter, r *http.Request) {
 		writeRecordingError(w, err)
 		return
 	}
+	h.serveRecordingDownload(w, r, rec)
+}
+
+func (h *Hub) downloadLatestRecording(w http.ResponseWriter, r *http.Request) {
+	serial := r.URL.Query().Get("serial")
+	id := r.URL.Query().Get("recording_id")
+	var (
+		rec *recording
+		err error
+	)
+	if id != "" {
+		rec, err = h.recordings.get(id, serial)
+	} else {
+		rec, err = h.recordings.latestCompleted(serial)
+	}
+	if err != nil {
+		writeRecordingError(w, err)
+		return
+	}
+	h.serveRecordingDownload(w, r, rec)
+}
+
+func (h *Hub) serveRecordingDownload(w http.ResponseWriter, r *http.Request, rec *recording) {
 	rec.mu.Lock()
 	status, path, ended := rec.status, rec.path, rec.endedAt
 	rec.mu.Unlock()
@@ -463,6 +557,14 @@ func (h *Hub) downloadRecording(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "video/mp4")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", rec.id+".mp4"))
 	http.ServeContent(w, r, rec.id+".mp4", ended, f)
+}
+
+func (h *Hub) deleteRecording(w http.ResponseWriter, r *http.Request) {
+	if err := h.recordings.deleteRecording(r.PathValue("recording_id"), r.URL.Query().Get("serial")); err != nil {
+		writeRecordingError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // avccToAnnexB normalizes either 4-byte-length-prefixed NAL units or Annex-B

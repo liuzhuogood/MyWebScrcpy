@@ -83,6 +83,63 @@ func TestRecordingHTTPStatusBoundaries(t *testing.T) {
 	}
 }
 
+func TestRecordingListAndDelete(t *testing.T) {
+	dir := t.TempDir()
+	h := &Hub{}
+	h.recordings = &recordingManager{hub: h, dir: dir, entries: make(map[string]*recording), bySerial: make(map[string]string)}
+	completed := &recording{id: "rec_done", serial: "phone-a", status: recordingComplete, startedAt: time.Now().Add(-time.Minute), endedAt: time.Now(), path: filepath.Join(dir, "rec_done.mp4")}
+	if err := os.WriteFile(completed.path, []byte("mp4"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	active := &recording{id: "rec_active", serial: "phone-a", status: recordingActive, startedAt: time.Now(), stop: make(chan struct{})}
+	h.recordings.entries[completed.id] = completed
+	h.recordings.entries[active.id] = active
+	mux := http.NewServeMux()
+	h.RegisterRecordingRoutes(mux)
+
+	list := httptest.NewRecorder()
+	mux.ServeHTTP(list, httptest.NewRequest(http.MethodGet, "/api/recordings?serial=phone-a", nil))
+	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), "rec_done") {
+		t.Fatalf("list status=%d body=%s", list.Code, list.Body.String())
+	}
+	deleteDone := httptest.NewRecorder()
+	mux.ServeHTTP(deleteDone, httptest.NewRequest(http.MethodDelete, "/api/recordings/rec_done?serial=phone-a", nil))
+	if deleteDone.Code != http.StatusNoContent {
+		t.Fatalf("delete status=%d body=%s", deleteDone.Code, deleteDone.Body.String())
+	}
+	if _, err := os.Stat(completed.path); !os.IsNotExist(err) {
+		t.Fatalf("completed file remains: %v", err)
+	}
+	deleteActive := httptest.NewRecorder()
+	mux.ServeHTTP(deleteActive, httptest.NewRequest(http.MethodDelete, "/api/recordings/rec_active?serial=phone-a", nil))
+	if deleteActive.Code != http.StatusConflict {
+		t.Fatalf("active delete status=%d body=%s", deleteActive.Code, deleteActive.Body.String())
+	}
+}
+
+func TestDownloadLatestRecording(t *testing.T) {
+	dir := t.TempDir()
+	h := &Hub{}
+	h.recordings = &recordingManager{hub: h, dir: dir, entries: make(map[string]*recording), bySerial: make(map[string]string)}
+	older := &recording{id: "rec_old", serial: "phone-a", status: recordingComplete, startedAt: time.Now().Add(-2 * time.Minute), endedAt: time.Now().Add(-time.Minute), path: filepath.Join(dir, "rec_old.mp4")}
+	latest := &recording{id: "rec_new", serial: "phone-a", status: recordingComplete, startedAt: time.Now().Add(-time.Minute), endedAt: time.Now(), path: filepath.Join(dir, "rec_new.mp4")}
+	for _, rec := range []*recording{older, latest} {
+		if err := os.WriteFile(rec.path, []byte(rec.id), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		h.recordings.entries[rec.id] = rec
+	}
+	mux := http.NewServeMux()
+	h.RegisterRecordingRoutes(mux)
+	for _, target := range []string{"/api/recordings/download?serial=phone-a", "/api/recordings/download?serial=phone-a&recording_id=rec_old"} {
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, httptest.NewRequest(http.MethodGet, target, nil))
+		if w.Code != http.StatusOK {
+			t.Fatalf("download %s status=%d body=%s", target, w.Code, w.Body.String())
+		}
+	}
+}
+
 func TestRecordingRunProducesPlayableMP4(t *testing.T) {
 	ffmpeg, err := exec.LookPath("ffmpeg")
 	if err != nil {

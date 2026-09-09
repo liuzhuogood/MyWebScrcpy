@@ -89,9 +89,12 @@ Use the player toolbar's Record control to choose an automatic stop time from 1 
 | Method | Path | Purpose |
 |------|------|------|
 | `POST` | `/api/recordings?serial=...` | Start with `{"max_duration_ms":300000}`. |
+| `GET` | `/api/recordings?serial=...` | List recordings for the device. |
 | `GET` | `/api/recordings/{recording_id}?serial=...` | Read status. |
 | `POST` | `/api/recordings/{recording_id}/stop?serial=...` | Stop early; idempotent. |
 | `GET` | `/api/recordings/{recording_id}/download?serial=...` | Download a completed MP4. |
+| `GET` | `/api/recordings/download?serial=...&recording_id=...` | Download a selected recording, or the latest completed one when `recording_id` is omitted. |
+| `DELETE` | `/api/recordings/{recording_id}?serial=...` | Delete a completed recording and its file. |
 
 Recording supports the default H.264 shared stream only. Incomplete files are never downloadable; completed files expire from the controlled recording directory, and incomplete temporary files are removed on service restart.
 
