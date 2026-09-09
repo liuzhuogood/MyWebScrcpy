@@ -25,7 +25,8 @@
 - ✅ 支持显示当前 XML 快照全部带 bounds 的元素，并从绿框反选 XML 树节点。
 - ✅ 按 XML 原始尺寸与 Canvas 实际尺寸做 X/Y 坐标换算，解决缩放投屏时绿框偏移。
 - ✅ XML 接口返回 Android 有效显示尺寸，避免将系统栏裁剪后的 XML bounds 高度拉伸至完整视频画面。
-- ✅ 元素详情支持勾选 `text`、`resource-id`、`bounds` 组合 XPath；默认优先稳定的非空 `resource-id`。
+- ✅ 元素详情支持勾选任意非空属性（含 `text`、`resource-id`、`class`、`package`、`bounds`）组合 XPath；默认优先稳定的非空 `resource-id`。
+- ✅ 选择 XML 节点或切换定位属性时自动执行生成的 XPath，并移除属性详情中的重复 XPath 文本。
 
 ## 验证与发布
 
