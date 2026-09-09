@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -212,6 +213,48 @@ func TestRecordingAutoStopFinalizesMP4(t *testing.T) {
 	waitForRecording(t, rec, recordingComplete)
 	if _, err := os.Stat(rec.path); err != nil {
 		t.Fatalf("automatic stop did not publish MP4: %v", err)
+	}
+}
+
+func TestRecordingRunRebasesReplayedFrameTimestamp(t *testing.T) {
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg is required for the MP4 integration test")
+	}
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("ffprobe is required for the MP4 integration test")
+	}
+	stream := h264Fixture(t, ffmpeg)
+	config, key := splitH264ConfigAndKey(t, stream)
+	configFrame := &scrcpy.Frame{Kind: scrcpy.FrameConfig, Payload: makeAVCC(config...)}
+	replayedKey := &scrcpy.Frame{Kind: scrcpy.FrameKey, PTS: 1, Payload: makeAVCC(key...)}
+	dir := t.TempDir()
+	h := &Hub{}
+	m := &recordingManager{hub: h, dir: dir, quota: 64 << 20, retention: time.Hour, entries: make(map[string]*recording), bySerial: make(map[string]string)}
+	ms := &managedSession{subs: make(map[chan sharedVideoFrame]struct{}), lastConfig: encodeFrame(configFrame), lastKey: encodeFrame(replayedKey)}
+	rec := &recording{id: "rec_replayed", serial: "phone-a", status: recordingActive, startedAt: time.Now(), maxDuration: time.Minute, path: filepath.Join(dir, "rec_replayed.mp4"), partialPath: filepath.Join(dir, "rec_replayed.mp4.partial"), stop: make(chan struct{})}
+	m.entries[rec.id] = rec
+	m.bySerial[rec.serial] = rec.id
+	go m.run(rec, ms, func() {})
+	waitForSubscriber(t, ms)
+
+	// The cached key is 327 seconds old, matching the reported production bug.
+	cacheAndBroadcast(ms, &scrcpy.Frame{Kind: scrcpy.FrameKey, PTS: 327_000_000, Payload: makeAVCC(key...)}, encodeFrame(&scrcpy.Frame{Kind: scrcpy.FrameKey, PTS: 327_000_000, Payload: makeAVCC(key...)}))
+	time.Sleep(100 * time.Millisecond)
+	rec.stopOnce.Do(func() { close(rec.stop) })
+	waitForRecording(t, rec, recordingComplete)
+
+	out, err := exec.Command(ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", rec.path).Output()
+	if err != nil {
+		t.Fatalf("probe recording: %v", err)
+	}
+	duration, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+	if err != nil {
+		t.Fatalf("parse duration %q: %v", out, err)
+	}
+	if duration > 1 {
+		t.Fatalf("replayed timestamp inflated recording duration to %.3fs", duration)
 	}
 }
 
