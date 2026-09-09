@@ -19,4 +19,5 @@ Thumbs.db
 # Temp
 *.tmp
 *.log
+recordings/
 .zcode/
