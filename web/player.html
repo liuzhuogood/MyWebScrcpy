@@ -433,12 +433,15 @@
 
     function drawDetections(msg) {
       if (msg && msg.session_id && activeSessionID && msg.session_id !== activeSessionID) return;
-      if (!msg || !Array.isArray(msg.objects) || !canvas.width || !canvas.height) return;
+      if (!msg || !canvas.width || !canvas.height) return;
+      // Older Vision senders omitted objects for an empty detection result.
+      // Treat that form as an explicit clear rather than retaining old boxes.
+      const objects = Array.isArray(msg.objects) ? msg.objects : [];
       cancelDetectionClearTimer();
       overlayCtx.clearRect(0, 0, detectionOverlay.width, detectionOverlay.height);
       overlayCtx.lineWidth = Math.max(2, canvas.width / 500);
       overlayCtx.font = `${Math.max(12, canvas.width / 60)}px sans-serif`;
-      for (const obj of msg.objects) {
+      for (const obj of objects) {
         const x = obj.x * canvas.width, y = obj.y * canvas.height;
         const w = obj.w * canvas.width, h = obj.h * canvas.height;
         overlayCtx.strokeStyle = '#00e676'; overlayCtx.fillStyle = '#00e676';
@@ -455,12 +458,24 @@
 
     let resultWs = null;
     function connectDetectionResults() {
+      if (!activeSessionID || (resultWs && resultWs.sessionID === activeSessionID)) return;
+      if (resultWs) {
+        const oldResultWs = resultWs;
+        resultWs = null;
+        oldResultWs.onclose = null;
+        oldResultWs.close();
+      }
       const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      resultWs = new WebSocket(`${proto}//${location.host}/api/vision/results?serial=${encodeURIComponent(serial)}`);
-      resultWs.onmessage = (event) => { try { drawDetections(JSON.parse(event.data)); } catch (_) {} };
-      resultWs.onclose = () => { if (resultWs) setTimeout(connectDetectionResults, 2000); };
+      const socket = new WebSocket(`${proto}//${location.host}/api/vision/results?serial=${encodeURIComponent(serial)}&session_id=${encodeURIComponent(activeSessionID)}`);
+      socket.sessionID = activeSessionID;
+      resultWs = socket;
+      socket.onmessage = (event) => { try { drawDetections(JSON.parse(event.data)); } catch (_) {} };
+      socket.onclose = () => {
+        if (resultWs !== socket) return;
+        resultWs = null;
+        setTimeout(connectDetectionResults, 2000);
+      };
     }
-    connectDetectionResults();
     // 窗口大小变化时重新计算
     window.addEventListener('resize', fitCanvas);
     // 全屏切换后也要重新计算
@@ -530,6 +545,11 @@
       connected = false;
       activeSessionID = '';
       clearDetections();
+      if (resultWs) {
+        resultWs.onclose = null;
+        resultWs.close();
+        resultWs = null;
+      }
       clearFrameWatchdog();
       closeWebSocket();
       setStatus(message || '视频流已中断，正在重连', false);
@@ -651,6 +671,7 @@
             activeSessionID = msg.session_id || '';
             if (msg.audio_available === false) window.deviceAudio?.status({ type: 'audio.status', status: 'unavailable', reason: msg.audio_reason || '设备音频不可用' });
             clearDetections();
+            connectDetectionResults();
             packer.setDeviceSize(msg.width, msg.height);
             try {
               decoder.configure(msg.codec, msg.width, msg.height);

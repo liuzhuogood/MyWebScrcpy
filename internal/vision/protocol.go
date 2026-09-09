@@ -7,17 +7,19 @@ import (
 )
 
 type Message struct {
-	Type      string   `json:"type"`
-	Protocol  string   `json:"protocol_version,omitempty"`
-	DeviceID  string   `json:"device_id,omitempty"`
-	SessionID string   `json:"session_id,omitempty"`
-	FrameID   uint64   `json:"frame_id,omitempty"`
-	Timestamp int64    `json:"timestamp,omitempty"`
-	Width     uint32   `json:"width,omitempty"`
-	Height    uint32   `json:"height,omitempty"`
-	Encoding  string   `json:"encoding,omitempty"`
-	MaxFPS    int      `json:"max_fps,omitempty"`
-	Objects   []Object `json:"objects,omitempty"`
+	Type      string `json:"type"`
+	Protocol  string `json:"protocol_version,omitempty"`
+	DeviceID  string `json:"device_id,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
+	FrameID   uint64 `json:"frame_id,omitempty"`
+	Timestamp int64  `json:"timestamp,omitempty"`
+	Width     uint32 `json:"width,omitempty"`
+	Height    uint32 `json:"height,omitempty"`
+	Encoding  string `json:"encoding,omitempty"`
+	MaxFPS    int    `json:"max_fps,omitempty"`
+	// Objects is deliberately kept in detection results even when it is empty:
+	// an empty list is the instruction for clients to remove prior overlays.
+	Objects   []Object `json:"objects"`
 	RequestID string   `json:"request_id,omitempty"`
 	Action    string   `json:"action,omitempty"`
 	X         float64  `json:"x,omitempty"`

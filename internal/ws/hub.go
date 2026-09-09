@@ -40,7 +40,8 @@ type Hub struct {
 	portMu     sync.Mutex
 	nextPort   int
 	resultMu   sync.Mutex
-	results    map[string]map[chan vision.Message]struct{}
+	results    map[string]map[chan vision.Message]string
+	lastResult map[string]vision.Message
 	events     *debuglog.Ring
 	sessionMu  sync.Mutex
 	sessions   map[string]*managedSession
@@ -51,7 +52,7 @@ type Hub struct {
 }
 
 func NewHub(adbPath, jarPath string) *Hub {
-	h := &Hub{adbPath: adbPath, jarPath: jarPath, nextPort: 27183, results: make(map[string]map[chan vision.Message]struct{}), sessions: make(map[string]*managedSession), gates: make(map[string]*devicegate.Gate), events: debuglog.New(512)}
+	h := &Hub{adbPath: adbPath, jarPath: jarPath, nextPort: 27183, results: make(map[string]map[chan vision.Message]string), lastResult: make(map[string]vision.Message), sessions: make(map[string]*managedSession), gates: make(map[string]*devicegate.Gate), events: debuglog.New(512)}
 	h.recordings = newRecordingManager(h)
 	h.commands = adbcommand.New(adbPath, h.gateFor)
 	return h

@@ -183,13 +183,41 @@ func shouldEmitVisionFrame(kind byte, maxFPS int, lastSent, now time.Time) bool 
 }
 
 func (h *Hub) publishResult(serial string, msg vision.Message) {
+	// Detection producers that omit objects mean "no target". Normalize that
+	// legacy form so downstream clients always receive an explicit empty list
+	// and can clear an existing overlay.
+	if msg.Objects == nil {
+		msg.Objects = []vision.Object{}
+	}
 	h.resultMu.Lock()
 	defer h.resultMu.Unlock()
-	for ch := range h.results[serial] {
+	h.lastResult[serial] = msg
+	for ch, sessionID := range h.results[serial] {
+		if sessionID != "" && sessionID != msg.SessionID {
+			continue
+		}
 		select {
 		case ch <- msg:
 		default:
 		}
+	}
+}
+
+func (h *Hub) subscribeResults(serial, sessionID string) (chan vision.Message, func()) {
+	ch := make(chan vision.Message, 8)
+	h.resultMu.Lock()
+	if h.results[serial] == nil {
+		h.results[serial] = make(map[chan vision.Message]string)
+	}
+	h.results[serial][ch] = sessionID
+	if latest, ok := h.lastResult[serial]; ok && sessionID != "" && latest.SessionID == sessionID {
+		ch <- latest
+	}
+	h.resultMu.Unlock()
+	return ch, func() {
+		h.resultMu.Lock()
+		delete(h.results[serial], ch)
+		h.resultMu.Unlock()
 	}
 }
 
@@ -200,19 +228,14 @@ func (h *Hub) ServeVisionResults(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "missing serial", 400)
 		return
 	}
+	sessionID := r.URL.Query().Get("session_id")
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
 	defer c.Close()
-	ch := make(chan vision.Message, 8)
-	h.resultMu.Lock()
-	if h.results[serial] == nil {
-		h.results[serial] = make(map[chan vision.Message]struct{})
-	}
-	h.results[serial][ch] = struct{}{}
-	h.resultMu.Unlock()
-	defer func() { h.resultMu.Lock(); delete(h.results[serial], ch); h.resultMu.Unlock() }()
+	ch, unsubscribe := h.subscribeResults(serial, sessionID)
+	defer unsubscribe()
 	for msg := range ch {
 		c.SetWriteDeadline(time.Now().Add(3 * time.Second))
 		if err := c.WriteJSON(msg); err != nil {

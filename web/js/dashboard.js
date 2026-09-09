@@ -62,15 +62,30 @@ class DeviceClient {
   }
 
   connectResults() {
+    if (!this.sessionId || (this.resultWs && this.resultWs.sessionId === this.sessionId)) return;
+    if (this.resultWs) {
+      this.resultWs.onclose = null;
+      this.resultWs.close();
+      this.resultWs = null;
+    }
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    this.resultWs = new WebSocket(`${proto}//${location.host}/api/vision/results?serial=${encodeURIComponent(this.serial)}`);
-    this.resultWs.onmessage = (event) => { try { this.drawDetections(JSON.parse(event.data)); } catch (_) {} };
-    this.resultWs.onclose = () => { if (!this.destroyed) setTimeout(() => this.connectResults(), 2000); };
+    const socket = new WebSocket(`${proto}//${location.host}/api/vision/results?serial=${encodeURIComponent(this.serial)}&session_id=${encodeURIComponent(this.sessionId)}`);
+    socket.sessionId = this.sessionId;
+    this.resultWs = socket;
+    socket.onmessage = (event) => { try { this.drawDetections(JSON.parse(event.data)); } catch (_) {} };
+    socket.onclose = () => {
+      if (this.resultWs !== socket) return;
+      this.resultWs = null;
+      if (!this.destroyed) setTimeout(() => this.connectResults(), 2000);
+    };
   }
 
   drawDetections(msg) {
     if (msg && msg.session_id && this.sessionId && msg.session_id !== this.sessionId) return;
-    if (!msg || !Array.isArray(msg.objects) || !this.detectionCanvas.width) return;
+    if (!msg || !this.detectionCanvas.width) return;
+    // Older Vision senders omitted objects for an empty detection result.
+    // Treat that form as an explicit clear rather than retaining old boxes.
+    const objects = Array.isArray(msg.objects) ? msg.objects : [];
     if (this.detectionClearTimer) {
       clearTimeout(this.detectionClearTimer);
       this.detectionClearTimer = null;
@@ -79,7 +94,7 @@ class DeviceClient {
     ctx.clearRect(0, 0, this.detectionCanvas.width, this.detectionCanvas.height);
     ctx.lineWidth = Math.max(1, this.detectionCanvas.width / 400);
     ctx.font = `${Math.max(10, this.detectionCanvas.width / 50)}px sans-serif`;
-    for (const obj of msg.objects) {
+    for (const obj of objects) {
       const x = obj.x * this.detectionCanvas.width, y = obj.y * this.detectionCanvas.height;
       const w = obj.w * this.detectionCanvas.width, h = obj.h * this.detectionCanvas.height;
       ctx.strokeStyle = '#00e676'; ctx.fillStyle = '#00e676'; ctx.strokeRect(x, y, w, h);
@@ -183,6 +198,7 @@ class DeviceClient {
         if (msg.type === 'meta') {
           this.sessionId = msg.session_id || '';
           this.clearDetections();
+          this.connectResults();
           this.packer.setDeviceSize(msg.width, msg.height);
           this.decoder.configure(msg.codec, msg.width, msg.height);
           this.detectionCanvas.width = msg.width;

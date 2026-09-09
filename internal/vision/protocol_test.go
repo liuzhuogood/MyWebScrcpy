@@ -1,6 +1,7 @@
 package vision
 
 import (
+	"encoding/json"
 	"math"
 	"testing"
 )
@@ -35,5 +36,19 @@ func TestValidateObjectsRejectsNonFiniteValues(t *testing.T) {
 		if err := ValidateObjects([]Object{object}); err == nil {
 			t.Fatalf("non-finite object should be rejected: %+v", object)
 		}
+	}
+}
+
+func TestEmptyObjectsAreSerializedForOverlayClear(t *testing.T) {
+	payload, err := json.Marshal(Message{Type: "detection.result", Objects: []Object{}})
+	if err != nil {
+		t.Fatalf("marshal detection result: %v", err)
+	}
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("unmarshal detection result: %v", err)
+	}
+	if string(decoded["objects"]) != "[]" {
+		t.Fatalf("objects = %s, want []", decoded["objects"])
 	}
 }
