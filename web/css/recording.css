@@ -1,0 +1,8 @@
+.player-toolbar { position: relative; }
+.player-toolbar .tools { min-width: 0; flex: 0 1 auto; white-space: nowrap; }
+.record-btn { gap: 5px; }
+.record-btn.is-recording { color: #d03050; }
+.recording-panel[hidden] { display: none; }
+.recording-panel { position:absolute; z-index:40; top:calc(100% - 4px); right:24px; width:min(290px,calc(100vw - 24px)); padding:14px; border:1px solid #e5e6eb; border-radius:10px; background:#fff; box-shadow:0 10px 28px rgba(0,0,0,.16); font-size:13px; line-height:1.5; }
+.recording-panel label { display:flex; justify-content:space-between; color:#4e5969; }.recording-panel output{font-weight:600;color:#1f2329}.recording-panel input{width:100%;margin:10px 0;accent-color:#165dff}.recording-panel-actions{display:flex;justify-content:flex-end;gap:8px}.recording-panel button,.recording-panel a{border:0;border-radius:6px;padding:7px 10px;cursor:pointer;text-decoration:none}.recording-panel #recording-start{color:#fff;background:#165dff}.recording-panel #recording-cancel{color:#4e5969;background:#f2f3f5}.recording-state{min-height:20px;margin:10px 0 0;color:#4e5969}.recording-panel a{display:inline-block;margin-top:8px;color:#165dff;background:#e8f3ff}
+@media (max-width:768px){.record-label{display:none}.recording-panel{right:12px}}

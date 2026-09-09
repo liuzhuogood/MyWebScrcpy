@@ -13,7 +13,9 @@ import (
 	"time"
 
 	"mywebscrcpy/internal/action"
+	"mywebscrcpy/internal/adbcommand"
 	debuglog "mywebscrcpy/internal/debug"
+	"mywebscrcpy/internal/devicegate"
 	"mywebscrcpy/internal/scrcpy"
 	"mywebscrcpy/internal/vision"
 
@@ -30,19 +32,37 @@ var upgrader = websocket.Upgrader{
 
 // Hub 管理所有设备的 scrcpy server 会话。
 type Hub struct {
-	adbPath   string
-	jarPath   string
-	portMu    sync.Mutex
-	nextPort  int
-	resultMu  sync.Mutex
-	results   map[string]map[chan vision.Message]struct{}
-	events    *debuglog.Ring
-	sessionMu sync.Mutex
-	sessions  map[string]*managedSession
+	adbPath    string
+	jarPath    string
+	portMu     sync.Mutex
+	nextPort   int
+	resultMu   sync.Mutex
+	results    map[string]map[chan vision.Message]struct{}
+	events     *debuglog.Ring
+	sessionMu  sync.Mutex
+	sessions   map[string]*managedSession
+	recordings *recordingManager
+	gates      map[string]*devicegate.Gate
+	gateMu     sync.Mutex
+	commands   *adbcommand.Manager
 }
 
 func NewHub(adbPath, jarPath string) *Hub {
-	return &Hub{adbPath: adbPath, jarPath: jarPath, nextPort: 27183, results: make(map[string]map[chan vision.Message]struct{}), sessions: make(map[string]*managedSession), events: debuglog.New(512)}
+	h := &Hub{adbPath: adbPath, jarPath: jarPath, nextPort: 27183, results: make(map[string]map[chan vision.Message]struct{}), sessions: make(map[string]*managedSession), gates: make(map[string]*devicegate.Gate), events: debuglog.New(512)}
+	h.recordings = newRecordingManager(h)
+	h.commands = adbcommand.New(adbPath, h.gateFor)
+	return h
+}
+
+func (h *Hub) gateFor(serial string) *devicegate.Gate {
+	h.gateMu.Lock()
+	defer h.gateMu.Unlock()
+	if gate := h.gates[serial]; gate != nil {
+		return gate
+	}
+	gate := devicegate.New(int(envPositiveInt64("ADB_MAX_PARALLEL_PER_SERIAL", 2)))
+	h.gates[serial] = gate
+	return gate
 }
 
 func (h *Hub) recordEvent(e debuglog.Event) {

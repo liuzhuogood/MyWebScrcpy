@@ -32,6 +32,7 @@
 - 触摸支持（移动端浏览器）
 - 一键旋转屏幕
 - 全屏模式（支持 iOS 伪全屏）
+- 受控 MP4 录屏：选择自动停止时长、提前停止与完成下载
 - 屏幕熄灭检测
 - 自动重连
 - 大屏监控模式（多设备同屏展示，支持小/中/大三档尺寸）
@@ -95,6 +96,25 @@ go build -o mywebscrcpy .
 
 文件管理从投屏页面“更多”菜单打开，操作对象是当前选定手机的 `/storage/emulated/0` 共享存储。多手机场景下，每个投屏页面都会绑定自己的设备。
 
+### 录屏
+
+播放器工具栏提供“录制”入口。开始前选择 1 分钟至 8 小时的自动停止时长（默认 30 分钟）；可以提前停止，完成后直接下载 MP4。录屏复用当前设备的共享 H.264 会话，不中断投屏、控制或 Vision 订阅；每台设备同一时刻只能有一条录制。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/recordings?serial=...` | 请求体 `{"max_duration_ms":300000}`，创建录制。 |
+| `GET` | `/api/recordings/{recording_id}?serial=...` | 查询状态。 |
+| `POST` | `/api/recordings/{recording_id}/stop?serial=...` | 提前停止，幂等。 |
+| `GET` | `/api/recordings/{recording_id}/download?serial=...` | 下载已完成的 MP4。 |
+
+录制仅支持当前默认的 H.264 共享流；未完成文件不会开放下载。完成文件会在受控目录中保留到期，服务重启会清理未完成的临时文件。
+
+### 受控 ADB 命令与组合键
+
+`POST /api/adb/commands?serial=...` 仅以参数数组运行 `adb -s <serial> <args...>`，不执行宿主机 shell，也拒绝 `-s`、`--serial`、`-H`、`-P`、`-L` 等改变目标或 host 的参数。默认超时 60 秒；可用 `async: true` 查询后续状态，或以 `parallel: true` 在资源上限内显式绕过同设备 FIFO（调用方需自行承担设备状态竞态）。
+
+`POST /api/sendkey?serial=...` 接收 `{"keycode":29,"modifiers":["ctrl","shift"]}`，支持 `shift`、`alt`、`ctrl`、`meta` 四种修饰键。
+
 ### Docker 部署
 
 ```bash
@@ -135,6 +155,13 @@ docker run -d \
 | `TLS_CERT` | 自定义 SSL 证书路径 | - |
 | `TLS_KEY` | 自定义 SSL 私钥路径 | - |
 | `FILES_MAX_UPLOAD_BYTES` | 单文件上传上限（字节） | `268435456` |
+| `RECORDINGS_DIR` | MP4 录像目录 | `recordings` |
+| `RECORDINGS_MAX_BYTES` | 录像目录总配额（字节） | `10737418240` |
+| `RECORDINGS_RETENTION_HOURS` | 完成录像保留时长（小时） | `168` |
+| `ADB_MAX_TIMEOUT_MS` | 单条 ADB 命令最大超时（毫秒） | `600000` |
+| `ADB_MAX_QUEUE_WAIT_MS` | FIFO 命令最大排队时长（毫秒） | `600000` |
+| `ADB_MAX_OUTPUT_BYTES` | 单条 ADB 命令最大输出（字节） | `1048576` |
+| `ADB_MAX_PARALLEL_PER_SERIAL` | 同设备显式并行 ADB 命令上限 | `2` |
 
 ### HTTPS 配置
 

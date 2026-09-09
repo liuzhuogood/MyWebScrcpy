@@ -1,0 +1,22 @@
+(() => {
+  const serial = new URLSearchParams(location.search).get('serial');
+  const tools = document.querySelector('.player-toolbar .tools');
+  const more = document.getElementById('more-menu');
+  const moreButton = document.getElementById('btn-more');
+  const record = document.createElement('button');
+  record.id='btn-record'; record.className='record-btn'; record.title='录制屏幕'; record.setAttribute('aria-haspopup','dialog'); record.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="7"/></svg><span class="record-label">录制</span>';
+  tools.insertBefore(record, moreButton);
+  const panel=document.createElement('div'); panel.id='recording-panel'; panel.className='recording-panel'; panel.hidden=true; panel.setAttribute('role','dialog'); panel.setAttribute('aria-label','录制设置'); panel.innerHTML='<label>录制时长 <output>30 分钟</output></label><input type="range" min="1" max="480" value="30" step="1"><div class="recording-panel-actions"><button id="recording-start">开始录制</button><button id="recording-cancel">取消</button></div><p class="recording-state" aria-live="polite"></p><a hidden download>下载录像</a>';
+  document.querySelector('.player-toolbar').append(panel);
+  const range=panel.querySelector('input'), output=panel.querySelector('output'), start=panel.querySelector('#recording-start'), cancel=panel.querySelector('#recording-cancel'), state=panel.querySelector('p'), download=panel.querySelector('a'); let active=null,timer;
+  const duration=m=>m>=60?`${Math.floor(m/60)} 小时${m%60?` ${m%60} 分钟`:''}`:`${m} 分钟`;
+  const close=()=>{panel.hidden=true;record.setAttribute('aria-expanded','false')};
+  const render=()=>{const running=active&&['recording','stopping'].includes(active.status);record.classList.toggle('is-recording',running);record.querySelector('span').textContent=active?.status==='recording'?'停止录制':active?.status==='stopping'?'停止中':'录制';download.hidden=active?.status!=='completed';if(active?.status==='completed'){download.href=`/api/recordings/${encodeURIComponent(active.recording_id)}/download?serial=${encodeURIComponent(serial)}`;state.textContent='录制完成，可以下载。'}else if(active?.status==='failed'){state.textContent='录制未完成，请重新开始。'}else if(active?.status==='stopping'){state.textContent='正在完成录像…'}else if(active){state.textContent='录制中';}};
+  const poll=()=>{clearTimeout(timer);if(!active||!['recording','stopping'].includes(active.status))return;timer=setTimeout(async()=>{try{const r=await fetch(`/api/recordings/${encodeURIComponent(active.recording_id)}?serial=${encodeURIComponent(serial)}`);if(r.ok)active=await r.json()}catch(_){}render();poll()},1000)};
+  range.oninput=()=>output.textContent=duration(+range.value);range.addEventListener('keydown',e=>e.stopPropagation());cancel.onclick=close;
+  record.onclick=async()=>{if(active?.status==='recording'){record.disabled=true;try{const r=await fetch(`/api/recordings/${encodeURIComponent(active.recording_id)}/stop?serial=${encodeURIComponent(serial)}`,{method:'POST'});if(!r.ok)throw Error();active=await r.json();close()}catch(_){state.textContent='暂时无法停止录制，请重试。'}finally{record.disabled=false;render();poll()}return}panel.hidden=!panel.hidden;record.setAttribute('aria-expanded',String(!panel.hidden));};
+  start.onclick=async()=>{start.disabled=true;state.textContent='正在开始录制…';try{const r=await fetch(`/api/recordings?serial=${encodeURIComponent(serial)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({max_duration_ms:+range.value*60000})});if(!r.ok)throw Error();active=await r.json();close()}catch(_){state.textContent='暂时无法开始录制，请稍后重试。'}finally{start.disabled=false;render();poll()}};
+  const all=['btn-power','btn-recents','btn-rotate','btn-files','btn-fullscreen','btn-raw-size','btn-capture','btn-reboot'].map(id=>document.getElementById(id)).filter(Boolean), low=all.filter(b=>!['btn-fullscreen','btn-capture'].includes(b.id));
+  const layout=()=>{more.hidden=true;all.forEach(b=>tools.insertBefore(b,moreButton));moreButton.hidden=true;for(const b of [...low].reverse()){if(tools.scrollWidth<=tools.clientWidth)break;more.append(b);moreButton.hidden=false}};
+  new ResizeObserver(()=>requestAnimationFrame(layout)).observe(tools);requestAnimationFrame(layout);
+})();

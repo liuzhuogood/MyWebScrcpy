@@ -21,6 +21,7 @@ type Request struct {
 	Y2        float64 `json:"y2,omitempty"`
 	Text      string  `json:"text,omitempty"`
 	Keycode   uint32  `json:"keycode,omitempty"`
+	MetaState uint32  `json:"meta_state,omitempty"`
 	Raw       []byte  `json:"-"`
 	FrameID   uint64  `json:"frame_id,omitempty"`
 	ExpiresMS int64   `json:"expires_ms,omitempty"`

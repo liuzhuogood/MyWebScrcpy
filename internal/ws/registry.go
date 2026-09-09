@@ -11,6 +11,7 @@ import (
 	"github.com/gorilla/websocket"
 	"mywebscrcpy/internal/action"
 	debuglog "mywebscrcpy/internal/debug"
+	"mywebscrcpy/internal/devicegate"
 	"mywebscrcpy/internal/scrcpy"
 )
 
@@ -63,7 +64,7 @@ func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, fu
 		return nil, nil, nil, err
 	}
 	ms := &managedSession{sess: sess, meta: meta, refs: 1, subs: make(map[chan sharedVideoFrame]struct{}), width: meta.Width, height: meta.Height}
-	ms.actions = action.New(deviceActionExecutor{ms: ms}, 64)
+	ms.actions = action.New(deviceActionExecutor{ms: ms, gate: h.gateFor(serial)}, 64)
 	h.sessions[serial] = ms
 	h.sessionMu.Unlock()
 	h.recordEvent(debuglog.Event{Type: "session.started", DeviceID: serial, SessionID: meta.SessionID, Fields: map[string]interface{}{"codec": meta.Codec, "width": meta.Width, "height": meta.Height}})
@@ -257,9 +258,19 @@ func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan
 
 func timeNow() time.Time { return time.Now().Add(3 * time.Second) }
 
-type deviceActionExecutor struct{ ms *managedSession }
+type deviceActionExecutor struct {
+	ms   *managedSession
+	gate *devicegate.Gate
+}
 
 func (e deviceActionExecutor) Execute(ctx context.Context, r action.Request) error {
+	if e.gate != nil {
+		return e.gate.Run(ctx, false, func(ctx context.Context) error { return e.execute(ctx, r) })
+	}
+	return e.execute(ctx, r)
+}
+
+func (e deviceActionExecutor) execute(ctx context.Context, r action.Request) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -294,10 +305,10 @@ func (e deviceActionExecutor) Execute(ctx context.Context, r action.Request) err
 		return e.ms.sess.conn.WriteControl(scrcpy.TouchEvent(scrcpy.ActionUp, scrcpy.PointerIDMouse, x2, y2, w, h, 0, 0, 0))
 	}
 	if r.Action == "key" {
-		if err := e.ms.sess.conn.WriteControl(scrcpy.KeyCodeEvent(scrcpy.KeyActionDown, r.Keycode, 0, 0)); err != nil {
+		if err := e.ms.sess.conn.WriteControl(scrcpy.KeyCodeEvent(scrcpy.KeyActionDown, r.Keycode, 0, r.MetaState)); err != nil {
 			return err
 		}
-		return e.ms.sess.conn.WriteControl(scrcpy.KeyCodeEvent(scrcpy.KeyActionUp, r.Keycode, 0, 0))
+		return e.ms.sess.conn.WriteControl(scrcpy.KeyCodeEvent(scrcpy.KeyActionUp, r.Keycode, 0, r.MetaState))
 	}
 	if r.Action == "text" {
 		return e.ms.sess.conn.WriteControl(scrcpy.TextEvent(r.Text))

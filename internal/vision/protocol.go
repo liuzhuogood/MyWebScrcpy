@@ -26,6 +26,7 @@ type Message struct {
 	Y2        float64  `json:"y2,omitempty"`
 	Text      string   `json:"text,omitempty"`
 	Keycode   uint32   `json:"keycode,omitempty"`
+	MetaState uint32   `json:"meta_state,omitempty"`
 	ExpiresMS int64    `json:"expires_ms,omitempty"`
 }
 

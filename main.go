@@ -159,6 +159,9 @@ func main() {
 
 	// WebSocket
 	mux.HandleFunc("/ws", hub.ServeWS)
+	hub.RegisterRecordingRoutes(mux)
+	hub.RegisterADBCommandRoutes(mux)
+	hub.RegisterSendKeyRoute(mux)
 	// Python Vision 双向帧/结果通道，以及浏览器检测结果通道。
 	mux.HandleFunc("/api/vision/stream", hub.ServeVisionWS)
 	mux.HandleFunc("/api/vision/results", hub.ServeVisionResults)

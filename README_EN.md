@@ -32,6 +32,7 @@ An open-source Android device mirroring and control tool built with Go and WebCo
 - Touch support (mobile browsers)
 - One-click screen rotation
 - Fullscreen mode (iOS pseudo-fullscreen supported)
+- Controlled MP4 recording with an automatic stop time, early stop, and download
 - Screen-off detection
 - Auto-reconnect
 - Multi-device monitoring with small, medium and large device sizes
@@ -81,6 +82,25 @@ Open `http://localhost:8080` in your browser, click a device to start mirroring.
 
 Open the file manager from the player's “More” menu. It operates on the selected phone's shared `/storage/emulated/0` storage, so each player page remains bound to its own device in multi-device use.
 
+### Recording
+
+Use the player toolbar's Record control to choose an automatic stop time from 1 minute to 8 hours (30 minutes by default), stop early, and download the completed MP4. Recording reuses the device's shared H.264 session, so it does not interrupt mirroring, control, or Vision subscribers. Only one active recording is allowed per device.
+
+| Method | Path | Purpose |
+|------|------|------|
+| `POST` | `/api/recordings?serial=...` | Start with `{"max_duration_ms":300000}`. |
+| `GET` | `/api/recordings/{recording_id}?serial=...` | Read status. |
+| `POST` | `/api/recordings/{recording_id}/stop?serial=...` | Stop early; idempotent. |
+| `GET` | `/api/recordings/{recording_id}/download?serial=...` | Download a completed MP4. |
+
+Recording supports the default H.264 shared stream only. Incomplete files are never downloadable; completed files expire from the controlled recording directory, and incomplete temporary files are removed on service restart.
+
+### Controlled ADB Commands and Shortcut Keys
+
+`POST /api/adb/commands?serial=...` executes only `adb -s <serial> <args...>` from an argument array. It never invokes a host shell and rejects target/host switches such as `-s`, `--serial`, `-H`, `-P`, and `-L`. Commands default to 60 seconds; use `async: true` for status polling, or bounded `parallel: true` only when the caller accepts device-state races.
+
+`POST /api/sendkey?serial=...` accepts `{"keycode":29,"modifiers":["ctrl","shift"]}` and supports `shift`, `alt`, `ctrl`, and `meta`.
+
 ### Docker Deployment
 
 ```bash
@@ -121,6 +141,13 @@ Open `https://IP:8080` in your browser (HTTPS is enabled by default), then click
 | `TLS_CERT` | Custom SSL certificate path | - |
 | `TLS_KEY` | Custom SSL private key path | - |
 | `FILES_MAX_UPLOAD_BYTES` | Maximum size per uploaded file (bytes) | `268435456` |
+| `RECORDINGS_DIR` | MP4 recording directory | `recordings` |
+| `RECORDINGS_MAX_BYTES` | Total recording-directory quota (bytes) | `10737418240` |
+| `RECORDINGS_RETENTION_HOURS` | Completed recording retention (hours) | `168` |
+| `ADB_MAX_TIMEOUT_MS` | Maximum ADB command timeout (milliseconds) | `600000` |
+| `ADB_MAX_QUEUE_WAIT_MS` | Maximum FIFO command wait (milliseconds) | `600000` |
+| `ADB_MAX_OUTPUT_BYTES` | Maximum ADB command output (bytes) | `1048576` |
+| `ADB_MAX_PARALLEL_PER_SERIAL` | Per-device explicit parallel ADB limit | `2` |
 
 ### HTTPS Configuration
 
