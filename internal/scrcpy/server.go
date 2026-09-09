@@ -10,36 +10,40 @@ import (
 
 // ServerConfig 是启动一个 scrcpy server 实例所需的参数。
 type ServerConfig struct {
-	Serial    string // adb 设备序列号，如 10.0.0.104:5555
-	MaxSize   int    // 最大边长像素，0=不变换
-	BitRate   int    // 视频码率 bps
-	MaxFPS    int    // 最大帧率，0=不限
-	Codec     string // h264 / h265 / av1
-	Control   bool   // 是否开启控制通道
+	Serial     string // adb 设备序列号，如 10.0.0.104:5555
+	MaxSize    int    // 最大边长像素，0=不变换
+	BitRate    int    // 视频码率 bps
+	MaxFPS     int    // 最大帧率，0=不限
+	Codec      string // h264 / h265 / av1
+	Control    bool   // 是否开启控制通道
+	Audio      bool   // 是否开启设备音频通道
+	AudioCodec string // 当前仅支持 aac，便于网页播放和 MP4 封装
 }
 
 // DefaultConfig 返回适合 web 投屏 + 操作的默认参数。
 func DefaultConfig(serial string) ServerConfig {
 	return ServerConfig{
-		Serial:  serial,
-		MaxSize: 1024,
-		BitRate: 2_000_000,
-		MaxFPS:  15,
-		Codec:   "h264",
-		Control: true,
+		Serial:     serial,
+		MaxSize:    1024,
+		BitRate:    2_000_000,
+		MaxFPS:     15,
+		Codec:      "h264",
+		Control:    true,
+		Audio:      true,
+		AudioCodec: "aac",
 	}
 }
 
 // Server 代表一个正在运行（或将要运行）的 scrcpy server 实例。
 type Server struct {
-	cfg        ServerConfig
-	scid       uint32   // 31 位随机 id
-	scidHex    string   // 8 位十六进制
-	socketName string   // localabstract socket 名: scrcpy_<hex>
-	forwardSpec string  // adb forward 的 remote spec
-	localPort  int      // adb forward 的本地端口
-	adbPath    string
-	cmd        *exec.Cmd // app_process 后台进程
+	cfg         ServerConfig
+	scid        uint32 // 31 位随机 id
+	scidHex     string // 8 位十六进制
+	socketName  string // localabstract socket 名: scrcpy_<hex>
+	forwardSpec string // adb forward 的 remote spec
+	localPort   int    // adb forward 的本地端口
+	adbPath     string
+	cmd         *exec.Cmd // app_process 后台进程
 }
 
 // NewServer 创建一个 server 实例（不启动）。
@@ -110,7 +114,8 @@ func (s *Server) Start() error {
 		"scid=" + s.scidHex,
 		"log_level=warn",
 		"video=true",
-		"audio=false",
+		"audio=" + fmt.Sprintf("%t", s.cfg.Audio),
+		"audio_codec=" + s.cfg.AudioCodec,
 		"tunnel_forward=true",
 		"control=" + controlStr,
 		"video_codec=" + s.cfg.Codec,

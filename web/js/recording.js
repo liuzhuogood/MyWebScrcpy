@@ -16,6 +16,7 @@
     <section class="recording-new">
       <label>录制时长 <output>30 分钟</output></label>
       <input type="range" min="1" max="480" value="30" step="1">
+	  <label class="recording-audio-option"><span>同时录制设备声音</span><input id="recording-audio" type="checkbox"></label>
       <div class="recording-panel-actions"><button id="recording-start">开始录制</button><button id="recording-cancel">取消</button></div>
       <p class="recording-state" aria-live="polite"></p>
     </section>
@@ -27,6 +28,8 @@
   const start = panel.querySelector('#recording-start');
   const cancel = panel.querySelector('#recording-cancel');
   const state = panel.querySelector('.recording-state');
+
+  const recordAudio = panel.querySelector('#recording-audio');
   const history = panel.querySelector('.recording-history');
   const historyList = history.querySelector('ul');
   const historyEmpty = history.querySelector('.recording-history-empty');
@@ -64,7 +67,7 @@
       recordings.forEach(entry => {
         const item = document.createElement('li');
         const details = document.createElement('div');
-        details.innerHTML = `<strong>${recordingTime(entry)}</strong><span>录制 ${recordingDuration(entry)}</span>`;
+        details.innerHTML = `<strong>${recordingTime(entry)}</strong><span>录制 ${recordingDuration(entry)}${entry.record_audio ? ' · 含声音' : ' · 无声音'}</span>`;
         const actions = document.createElement('div'); actions.className = 'recording-history-actions';
         if (entry.status === 'completed') {
           const download = document.createElement('a');
@@ -125,10 +128,10 @@
   start.onclick = async () => {
     start.disabled = true; state.textContent = '正在开始录制…';
     try {
-      const response = await fetch(`/api/recordings?serial=${encodeURIComponent(serial)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max_duration_ms: +range.value * 60000 }) });
-      if (!response.ok) throw Error();
+      const response = await fetch(`/api/recordings?serial=${encodeURIComponent(serial)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max_duration_ms: +range.value * 60000, record_audio: recordAudio.checked }) });
+      if (!response.ok) { const detail = await response.json().catch(() => ({})); throw Error(detail.message || '暂时无法开始录制，请稍后重试。'); }
       active = await response.json(); close(); await loadHistory();
-    } catch (_) { state.textContent = '暂时无法开始录制，请稍后重试。'; }
+    } catch (error) { state.textContent = error.message || '暂时无法开始录制，请稍后重试。'; }
     finally { start.disabled = false; render(); poll(); }
   };
 

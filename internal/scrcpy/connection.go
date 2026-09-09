@@ -28,20 +28,30 @@ const (
 	FrameSession FrameKind = 3
 )
 
-// Connection 管理到 scrcpy server 的两条 socket 连接。
+// Connection 管理到 scrcpy server 的视频、音频和控制 socket 连接。
 type Connection struct {
-	videoConn  net.Conn
-	ctrlConn   net.Conn
-	hasControl bool
-	width      uint32
-	height     uint32
-	codecID    uint32
+	videoConn    net.Conn
+	audioConn    net.Conn
+	ctrlConn     net.Conn
+	hasControl   bool
+	width        uint32
+	height       uint32
+	codecID      uint32
+	audioCodecID uint32
+}
+
+// AudioPacket is an encoded packet from the audio socket. Configuration packets
+// carry the AAC AudioSpecificConfig; media packets preserve device PTS.
+type AudioPacket struct {
+	Config  bool
+	PTS     uint64
+	Payload []byte
 }
 
 // Dial 连接到 scrcpy server。需要先完成 Forward。
 // server 已经 Start。连接顺序固定：先 video，再 control（若开启）。
 // 因为 forward 模式下设备端 accept 顺序也是 video 优先。
-func Dial(localPort int, hasControl bool, timeout time.Duration) (*Connection, error) {
+func Dial(localPort int, hasAudio, hasControl bool, timeout time.Duration) (*Connection, error) {
 	addr := fmt.Sprintf("127.0.0.1:%d", localPort)
 
 	// 连 video socket
@@ -58,28 +68,67 @@ func Dial(localPort int, hasControl bool, timeout time.Duration) (*Connection, e
 		return nil, err
 	}
 
-	// 阶段 2: 连 control socket。
-	// 关键：server 在 accept 了 video + control 两个 socket 后才开始发 codec id。
-	// 所以必须在读完 dummy byte 后、读 codec id 之前连上 control。
+	// 阶段 2: 按 scrcpy 4.0 固定顺序连 audio、control socket。服务端会等所有
+	// 启用的 socket 接入后才发送流头，因此不能提前读取 video codec id。
+	if hasAudio {
+		audioConn, err := net.DialTimeout("tcp", addr, timeout)
+		if err != nil {
+			videoConn.Close()
+			return nil, fmt.Errorf("dial audio socket: %w", err)
+		}
+		c.audioConn = audioConn
+	}
 	if hasControl {
 		ctrlConn, err := net.DialTimeout("tcp", addr, timeout)
 		if err != nil {
+			if c.audioConn != nil {
+				c.audioConn.Close()
+			}
 			videoConn.Close()
 			return nil, fmt.Errorf("dial control socket: %w", err)
 		}
 		c.ctrlConn = ctrlConn
 	}
 
-	// 阶段 3: 读 codec id + session packet (此时 server 已收到两个 socket，开始发数据)
+	// 阶段 3: 读 codec id + session packet (此时 server 已收到全部 socket)。
 	if err := c.readStreamHeader(); err != nil {
 		if c.ctrlConn != nil {
 			c.ctrlConn.Close()
 		}
+		if c.audioConn != nil {
+			c.audioConn.Close()
+		}
 		videoConn.Close()
 		return nil, err
 	}
+	if hasAudio {
+		if err := c.readAudioHeader(); err != nil {
+			c.Close()
+			return nil, err
+		}
+	}
 
 	return c, nil
+}
+
+func (c *Connection) readAudioHeader() error {
+	c.audioConn.SetReadDeadline(time.Now().Add(10 * time.Second))
+	defer c.audioConn.SetReadDeadline(time.Time{})
+	var codecBuf [4]byte
+	if _, err := io.ReadFull(c.audioConn, codecBuf[:]); err != nil {
+		return fmt.Errorf("read audio codec id: %w", err)
+	}
+	c.audioCodecID = binary.BigEndian.Uint32(codecBuf[:])
+	if c.audioCodecID == 0 {
+		return errors.New("device disabled audio stream")
+	}
+	if c.audioCodecID == 1 {
+		return errors.New("device audio configuration error")
+	}
+	if c.audioCodecID != CodecIDAAC {
+		return fmt.Errorf("unsupported device audio codec: 0x%x", c.audioCodecID)
+	}
+	return nil
 }
 
 // readDummyByte 读取 forward 模式的 dummy byte (1 字节 0x00)。
@@ -136,7 +185,8 @@ func (c *Connection) parseSessionHeader(hdr []byte) error {
 }
 
 // CodecID 返回握手得到的 codec id。
-func (c *Connection) CodecID() uint32 { return c.codecID }
+func (c *Connection) CodecID() uint32      { return c.codecID }
+func (c *Connection) AudioCodecID() uint32 { return c.audioCodecID }
 
 // Size 返回视频分辨率。
 func (c *Connection) Size() (uint32, uint32) { return c.width, c.height }
@@ -193,6 +243,31 @@ func (c *Connection) ReadFrame() (*Frame, error) {
 	}
 }
 
+// ReadAudioPacket reads the standard 12-byte scrcpy media frame header from
+// the audio socket. Audio has no session packets.
+func (c *Connection) ReadAudioPacket() (*AudioPacket, error) {
+	if c.audioConn == nil {
+		return nil, errors.New("audio socket not available")
+	}
+	var hdr [PacketHeaderSize]byte
+	if _, err := io.ReadFull(c.audioConn, hdr[:]); err != nil {
+		return nil, err
+	}
+	ptsFlags := binary.BigEndian.Uint64(hdr[0:8])
+	if ptsFlags&FlagSessionPacket != 0 {
+		return nil, errors.New("unexpected audio session packet")
+	}
+	size := binary.BigEndian.Uint32(hdr[8:12])
+	if size == 0 {
+		return nil, errors.New("invalid audio packet size 0")
+	}
+	payload := make([]byte, size)
+	if _, err := io.ReadFull(c.audioConn, payload); err != nil {
+		return nil, err
+	}
+	return &AudioPacket{Config: ptsFlags&FlagConfigPacket != 0, PTS: ptsFlags & PTSMask, Payload: payload}, nil
+}
+
 // WriteControl 向 control socket 写入控制消息（已打包的字节）。
 func (c *Connection) WriteControl(b []byte) error {
 	if c.ctrlConn == nil {
@@ -209,5 +284,8 @@ func (c *Connection) Close() {
 	}
 	if c.ctrlConn != nil {
 		c.ctrlConn.Close()
+	}
+	if c.audioConn != nil {
+		c.audioConn.Close()
 	}
 }

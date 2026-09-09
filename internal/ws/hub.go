@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -149,12 +152,15 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 }
 
 type handshakeMeta struct {
-	Type      string `json:"type"`
-	Codec     string `json:"codec"`
-	Width     uint32 `json:"width"`
-	Height    uint32 `json:"height"`
-	Serial    string `json:"serial"`
-	SessionID string `json:"session_id"`
+	Type           string `json:"type"`
+	Codec          string `json:"codec"`
+	Width          uint32 `json:"width"`
+	Height         uint32 `json:"height"`
+	Serial         string `json:"serial"`
+	SessionID      string `json:"session_id"`
+	AudioAvailable bool   `json:"audio_available"`
+	AudioCodec     string `json:"audio_codec,omitempty"`
+	AudioReason    string `json:"audio_reason,omitempty"`
 }
 
 func newSessionID() string {
@@ -185,6 +191,15 @@ func writeJSON(c *websocket.Conn, v interface{}) {
 // startSession 完成 push → forward → start → dial 全流程。
 func (h *Hub) startSession(serial string) (*session, *handshakeMeta, error) {
 	cfg := scrcpy.DefaultConfig(serial)
+	audioReason := ""
+	// Android 11 (API 30) is the first supported release for scrcpy's direct
+	// device-output audio capture. Keep older devices on the established
+	// video/control path instead of letting an unavailable audio stream prevent
+	// screen mirroring altogether.
+	if sdk, err := androidSDK(h.adbPath, serial); err == nil && sdk < 30 {
+		cfg.Audio = false
+		audioReason = "audio_unsupported_android"
+	}
 	server := scrcpy.NewServer(cfg, h.adbPath, h.allocPort())
 
 	if err := server.Push(h.jarPath); err != nil {
@@ -205,7 +220,7 @@ func (h *Hub) startSession(serial string) (*session, *handshakeMeta, error) {
 	var conn *scrcpy.Connection
 	var dialErr error
 	for i := 0; i < 15; i++ {
-		conn, dialErr = scrcpy.Dial(server.LocalPort(), cfg.Control, 3*time.Second)
+		conn, dialErr = scrcpy.Dial(server.LocalPort(), cfg.Audio, cfg.Control, 3*time.Second)
 		if dialErr == nil {
 			break
 		}
@@ -219,14 +234,31 @@ func (h *Hub) startSession(serial string) (*session, *handshakeMeta, error) {
 
 	w, hh := conn.Size()
 	meta := &handshakeMeta{
-		Type:      "meta",
-		Codec:     codecName(conn.CodecID()),
-		Width:     w,
-		Height:    hh,
-		Serial:    serial,
-		SessionID: newSessionID(),
+		Type:           "meta",
+		Codec:          codecName(conn.CodecID()),
+		Width:          w,
+		Height:         hh,
+		Serial:         serial,
+		SessionID:      newSessionID(),
+		AudioAvailable: cfg.Audio && conn.AudioCodecID() == scrcpy.CodecIDAAC,
+		AudioReason:    audioReason,
+	}
+	if meta.AudioAvailable {
+		meta.AudioCodec = "aac"
 	}
 	return &session{server: server, conn: conn}, meta, nil
+}
+
+func androidSDK(adbPath, serial string) (int, error) {
+	out, err := exec.Command(adbPath, "-s", serial, "shell", "getprop", "ro.build.version.sdk").Output()
+	if err != nil {
+		return 0, err
+	}
+	sdk, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil || sdk <= 0 {
+		return 0, fmt.Errorf("invalid Android SDK level %q", strings.TrimSpace(string(out)))
+	}
+	return sdk, nil
 }
 
 // pumpVideo 读 video 帧并推给浏览器。

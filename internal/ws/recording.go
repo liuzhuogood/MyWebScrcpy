@@ -46,6 +46,8 @@ type recording struct {
 	startedAt     time.Time
 	endedAt       time.Time
 	maxDuration   time.Duration
+	recordAudio   bool
+	audioStatus   string
 	bytesWritten  int64
 	failureReason string
 	path          string
@@ -63,12 +65,14 @@ type recordingView struct {
 	MaxDurationMS int64           `json:"max_duration_ms"`
 	BytesWritten  int64           `json:"bytes_written"`
 	FailureReason string          `json:"failure_reason,omitempty"`
+	RecordAudio   bool            `json:"record_audio"`
+	AudioStatus   string          `json:"audio_status"`
 }
 
 func (r *recording) view() recordingView {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	v := recordingView{RecordingID: r.id, Serial: r.serial, Status: r.status, StartedAt: r.startedAt.UTC(), MaxDurationMS: r.maxDuration.Milliseconds(), BytesWritten: r.bytesWritten, FailureReason: r.failureReason}
+	v := recordingView{RecordingID: r.id, Serial: r.serial, Status: r.status, StartedAt: r.startedAt.UTC(), MaxDurationMS: r.maxDuration.Milliseconds(), BytesWritten: r.bytesWritten, FailureReason: r.failureReason, RecordAudio: r.recordAudio, AudioStatus: r.audioStatus}
 	if !r.endedAt.IsZero() {
 		ended := r.endedAt.UTC()
 		v.EndedAt = &ended
@@ -125,7 +129,7 @@ func newRecordingID() string {
 	return fmt.Sprintf("rec_%d", time.Now().UnixNano())
 }
 
-func (m *recordingManager) start(serial string, duration time.Duration) (*recording, error) {
+func (m *recordingManager) start(serial string, duration time.Duration, recordAudio bool) (*recording, error) {
 	if serial == "" {
 		return nil, badRecordingRequest("missing serial")
 	}
@@ -137,7 +141,7 @@ func (m *recordingManager) start(serial string, duration time.Duration) (*record
 	}
 	m.cleanupExpired(time.Now())
 
-	rec := &recording{id: newRecordingID(), serial: serial, status: recordingActive, startedAt: time.Now(), maxDuration: duration, stop: make(chan struct{})}
+	rec := &recording{id: newRecordingID(), serial: serial, status: recordingActive, startedAt: time.Now(), maxDuration: duration, recordAudio: recordAudio, audioStatus: "disabled", stop: make(chan struct{})}
 	m.mu.Lock()
 	if _, exists := m.bySerial[serial]; exists {
 		m.mu.Unlock()
@@ -157,6 +161,18 @@ func (m *recordingManager) start(serial string, duration time.Duration) (*record
 		m.finish(rec, recordingFailed, "unsupported codec: "+meta.Codec, false)
 		return nil, recordingServiceUnavailable("recording currently supports h264 shared streams")
 	}
+	if recordAudio {
+		available, reason := audioState(ms)
+		if !available {
+			if reason == "" {
+				reason = "audio_unavailable"
+			}
+			release()
+			m.finish(rec, recordingFailed, reason, false)
+			return nil, recordingServiceUnavailable("设备音频不可用，无法开始含音频录制")
+		}
+		rec.audioStatus = "starting"
+	}
 	rec.path = filepath.Join(m.dir, rec.id+".mp4")
 	rec.partialPath = rec.path + ".partial"
 	go m.run(rec, ms, release)
@@ -167,7 +183,13 @@ func (m *recordingManager) run(rec *recording, ms *managedSession, release func(
 	defer release()
 	frames, cancelFrames := m.hub.subscribeShared(ms)
 	defer cancelFrames()
-	muxer, err := newMP4RecordingMuxer(rec.partialPath)
+	var audio <-chan sharedAudioPacket
+	var cancelAudio func()
+	if rec.recordAudio {
+		audio, cancelAudio = m.hub.subscribeAudio(ms)
+		defer cancelAudio()
+	}
+	muxer, err := newMP4RecordingMuxer(rec.partialPath, rec.recordAudio)
 	if err != nil {
 		m.finish(rec, recordingFailed, "mp4 muxer start failed: "+err.Error(), false)
 		return
@@ -176,6 +198,7 @@ func (m *recordingManager) run(rec *recording, ms *managedSession, release func(
 	timer := time.NewTimer(rec.maxDuration)
 	defer timer.Stop()
 	gotKey := false
+	replayedBootstrap := false
 	var runErr error
 	for runErr == nil {
 		select {
@@ -202,10 +225,19 @@ func (m *recordingManager) run(rec *recording, ms *managedSession, release func(
 			if kind != scrcpy.FrameConfig && kind != scrcpy.FrameKey && kind != scrcpy.FrameDelta {
 				continue
 			}
+			pts := binary.BigEndian.Uint64(frame.data[1:9])
+			if frame.replayed {
+				replayedBootstrap = true
+			} else if replayedBootstrap {
+				// Cached config/key frames make a late subscriber decodable, but their
+				// PTS can be minutes older than the first live frame. Rebase that first
+				// duration to elapsed recording time rather than creating a frozen gap.
+				muxer.rebasePendingPTS(pts, time.Now())
+				replayedBootstrap = false
+			}
 			if kind == scrcpy.FrameDelta && !gotKey {
 				continue
 			}
-			pts := binary.BigEndian.Uint64(frame.data[1:9])
 			if err := muxer.Write(kind, pts, frame.data[9:], time.Now()); err != nil {
 				runErr = fmt.Errorf("mp4 muxer write failed: %w", err)
 				break
@@ -216,6 +248,21 @@ func (m *recordingManager) run(rec *recording, ms *managedSession, release func(
 			if err := m.checkQuota(rec); err != nil {
 				runErr = err
 			}
+		case packet, ok := <-audio:
+			if !ok {
+				runErr = errors.New("audio_stream_interrupted")
+				break
+			}
+			if len(packet.data) < 10 {
+				continue
+			}
+			if err := muxer.WriteAudio(packet.data[1] == 1, binary.BigEndian.Uint64(packet.data[2:10]), packet.data[10:], time.Now()); err != nil {
+				runErr = fmt.Errorf("mp4 audio muxer write failed: %w", err)
+				break
+			}
+			rec.mu.Lock()
+			rec.audioStatus = "recording"
+			rec.mu.Unlock()
 		}
 	}
 
@@ -466,6 +513,7 @@ func (h *Hub) startRecording(w http.ResponseWriter, r *http.Request) {
 	serial := r.URL.Query().Get("serial")
 	var body struct {
 		MaxDurationMS *int64 `json:"max_duration_ms"`
+		RecordAudio   bool   `json:"record_audio"`
 	}
 	decoder := json.NewDecoder(io.LimitReader(r.Body, 4096))
 	decoder.DisallowUnknownFields()
@@ -473,7 +521,7 @@ func (h *Hub) startRecording(w http.ResponseWriter, r *http.Request) {
 		writeRecordingError(w, badRecordingRequest("max_duration_ms is required"))
 		return
 	}
-	rec, err := h.recordings.start(serial, time.Duration(*body.MaxDurationMS)*time.Millisecond)
+	rec, err := h.recordings.start(serial, time.Duration(*body.MaxDurationMS)*time.Millisecond, body.RecordAudio)
 	if err != nil {
 		log.Printf("[recording] start failed serial=%s: %v", serial, err)
 		writeRecordingError(w, err)

@@ -1,12 +1,14 @@
 package ws
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/Eyevinn/mp4ff/aac"
 	"github.com/Eyevinn/mp4ff/mp4"
 	"mywebscrcpy/internal/scrcpy"
 )
@@ -21,23 +23,29 @@ type pendingSample struct {
 }
 
 type mp4RecordingMuxer struct {
-	file        *os.File
-	config      []byte
-	initialized bool
-	trackID     uint32
-	fragment    *mp4.Fragment
-	sequence    uint32
-	decodeTime  uint64
-	fragmentDur uint64
-	pending     *pendingSample
+	file            *os.File
+	config          []byte
+	initialized     bool
+	trackID         uint32
+	audioTrackID    uint32
+	needsAudio      bool
+	audioConfig     []byte
+	audioTimescale  uint64
+	audioPending    *pendingSample
+	audioDecodeTime uint64
+	fragment        *mp4.Fragment
+	sequence        uint32
+	decodeTime      uint64
+	fragmentDur     uint64
+	pending         *pendingSample
 }
 
-func newMP4RecordingMuxer(path string) (*mp4RecordingMuxer, error) {
+func newMP4RecordingMuxer(path string, needsAudio bool) (*mp4RecordingMuxer, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o640)
 	if err != nil {
 		return nil, err
 	}
-	return &mp4RecordingMuxer{file: f}, nil
+	return &mp4RecordingMuxer{file: f, needsAudio: needsAudio}, nil
 }
 
 func (m *mp4RecordingMuxer) Write(kind scrcpy.FrameKind, pts uint64, payload []byte, now time.Time) error {
@@ -51,6 +59,9 @@ func (m *mp4RecordingMuxer) Write(kind scrcpy.FrameKind, pts uint64, payload []b
 	case scrcpy.FrameKey, scrcpy.FrameDelta:
 		if !m.initialized {
 			if kind != scrcpy.FrameKey {
+				return nil
+			}
+			if m.needsAudio && len(m.audioConfig) == 0 {
 				return nil
 			}
 			if err := m.initialize(); err != nil {
@@ -77,6 +88,37 @@ func (m *mp4RecordingMuxer) Write(kind scrcpy.FrameKind, pts uint64, payload []b
 	}
 }
 
+// WriteAudio accepts AAC config/media packets from the shared scrcpy audio
+// stream. Packets before the video keyframe are intentionally discarded: the
+// recording starts at a decodable video boundary rather than producing a file
+// with an arbitrary leading audio-only segment.
+func (m *mp4RecordingMuxer) WriteAudio(config bool, pts uint64, payload []byte, now time.Time) error {
+	if !m.needsAudio {
+		return nil
+	}
+	if config {
+		if m.initialized {
+			return errors.New("audio encoder configuration changed during recording")
+		}
+		m.audioConfig = append([]byte(nil), payload...)
+		return nil
+	}
+	if !m.initialized {
+		return nil
+	}
+	if m.audioPending != nil {
+		duration := pts - m.audioPending.pts
+		if pts <= m.audioPending.pts {
+			duration = 1
+		}
+		if err := m.addAudioPending(duration); err != nil {
+			return err
+		}
+	}
+	m.audioPending = &pendingSample{pts: pts, arrived: now, data: append([]byte(nil), payload...)}
+	return nil
+}
+
 func (m *mp4RecordingMuxer) initialize() error {
 	sps, pps, err := h264ParameterSets(m.config)
 	if err != nil {
@@ -87,10 +129,25 @@ func (m *mp4RecordingMuxer) initialize() error {
 	if err := trak.SetAVCDescriptor("avc1", sps, pps, true); err != nil {
 		return fmt.Errorf("create h264 descriptor: %w", err)
 	}
+	m.trackID = trak.Tkhd.TrackID
+	if m.needsAudio {
+		asc, err := aac.DecodeAudioSpecificConfig(bytes.NewReader(m.audioConfig))
+		if err != nil {
+			return fmt.Errorf("parse aac config: %w", err)
+		}
+		if asc.ChannelConfiguration != 2 {
+			return fmt.Errorf("unsupported aac channel configuration: %d", asc.ChannelConfiguration)
+		}
+		audioTrak := init.AddEmptyTrack(uint32(asc.SamplingFrequency), "audio", "und")
+		if err := audioTrak.SetAACDescriptor(asc.ObjectType, asc.SamplingFrequency); err != nil {
+			return fmt.Errorf("create aac descriptor: %w", err)
+		}
+		m.audioTrackID = audioTrak.Tkhd.TrackID
+		m.audioTimescale = uint64(asc.SamplingFrequency)
+	}
 	if err := init.Encode(m.file); err != nil {
 		return fmt.Errorf("write mp4 header: %w", err)
 	}
-	m.trackID = trak.Tkhd.TrackID
 	m.initialized = true
 	return nil
 }
@@ -102,29 +159,83 @@ func (m *mp4RecordingMuxer) addPending(duration uint64) error {
 	if duration > uint64(^uint32(0)) {
 		return errors.New("h264 frame duration is too large")
 	}
-	if m.fragment == nil {
-		m.sequence++
-		fragment, err := mp4.CreateFragment(m.sequence, m.trackID)
-		if err != nil {
-			return err
-		}
-		m.fragment = fragment
+	if err := m.ensureFragment(); err != nil {
+		return err
 	}
 	flags := mp4.NonSyncSampleFlags
 	if m.pending.sync {
 		flags = mp4.SyncSampleFlags
 	}
-	m.fragment.AddFullSample(mp4.FullSample{
+	if err := m.fragment.AddFullSampleToTrack(mp4.FullSample{
 		Sample:     mp4.Sample{Flags: flags, Dur: uint32(duration), Size: uint32(len(m.pending.data))},
 		DecodeTime: m.decodeTime,
 		Data:       m.pending.data,
-	})
+	}, m.trackID); err != nil {
+		return err
+	}
 	m.decodeTime += duration
 	m.fragmentDur += duration
 	if m.fragmentDur >= recordingTimescale {
 		return m.flushFragment()
 	}
 	return nil
+}
+
+func (m *mp4RecordingMuxer) addAudioPending(duration uint64) error {
+	if m.audioTimescale == 0 {
+		return errors.New("audio timescale unavailable")
+	}
+	// Audio PTS are in microseconds while the AAC track timescale is samples/s.
+	duration = duration * m.audioTimescale / recordingTimescale
+	if duration == 0 {
+		duration = 1
+	}
+	if duration > uint64(^uint32(0)) {
+		return errors.New("aac frame duration is too large")
+	}
+	if err := m.ensureFragment(); err != nil {
+		return err
+	}
+	if err := m.fragment.AddFullSampleToTrack(mp4.FullSample{Sample: mp4.Sample{Flags: mp4.SyncSampleFlags, Dur: uint32(duration), Size: uint32(len(m.audioPending.data))}, DecodeTime: m.audioDecodeTime, Data: m.audioPending.data}, m.audioTrackID); err != nil {
+		return err
+	}
+	m.audioDecodeTime += duration
+	return nil
+}
+
+func (m *mp4RecordingMuxer) ensureFragment() error {
+	if m.fragment != nil {
+		return nil
+	}
+	m.sequence++
+	trackIDs := []uint32{m.trackID}
+	if m.needsAudio {
+		trackIDs = append(trackIDs, m.audioTrackID)
+	}
+	fragment, err := mp4.CreateMultiTrackFragment(m.sequence, trackIDs)
+	if err != nil {
+		return err
+	}
+	m.fragment = fragment
+	return nil
+}
+
+// rebasePendingPTS aligns a replayed bootstrap sample with the first live
+// frame. The sample remains in the recording, but it only occupies the wall
+// time spent waiting for that live frame.
+func (m *mp4RecordingMuxer) rebasePendingPTS(pts uint64, now time.Time) {
+	if m.pending == nil {
+		return
+	}
+	elapsed := now.Sub(m.pending.arrived).Microseconds()
+	if elapsed < 1 {
+		elapsed = 1
+	}
+	if uint64(elapsed) >= pts {
+		m.pending.pts = 0
+		return
+	}
+	m.pending.pts = pts - uint64(elapsed)
 }
 
 func (m *mp4RecordingMuxer) flushFragment() error {
@@ -150,12 +261,24 @@ func (m *mp4RecordingMuxer) Close(now time.Time) error {
 	if !m.initialized || m.pending == nil {
 		return errors.New("no decodable key frame received")
 	}
+	if m.needsAudio && m.audioPending == nil {
+		return errors.New("no aac audio frame received")
+	}
 	duration := uint64(now.Sub(m.pending.arrived).Microseconds())
 	if duration == 0 {
 		duration = 1
 	}
 	if err := m.addPending(duration); err != nil {
 		return err
+	}
+	if m.needsAudio {
+		audioDuration := uint64(now.Sub(m.audioPending.arrived).Microseconds())
+		if audioDuration == 0 {
+			audioDuration = 1
+		}
+		if err := m.addAudioPending(audioDuration); err != nil {
+			return err
+		}
 	}
 	return m.flushFragment()
 }

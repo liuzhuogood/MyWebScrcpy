@@ -37,7 +37,8 @@
 - 一键旋转屏幕
 - 全屏模式（支持 iOS 伪全屏）
 - 播放器检查器：取色坐标、像素放大镜、XML 树、XPath 与元素定位联动
-- 受控 MP4 录屏：选择自动停止时长、提前停止与完成下载
+- 设备音频播放：默认静音，用户可主动开启网页播放
+- 受控 MP4 录屏：选择自动停止时长、可选录入设备声音、提前停止与完成下载
 - 屏幕熄灭检测
 - 自动重连
 - 大屏监控模式（多设备同屏展示，支持小/中/大三档尺寸）
@@ -107,7 +108,7 @@ go build -o mywebscrcpy .
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| `POST` | `/api/recordings?serial=...` | 请求体 `{"max_duration_ms":300000}`，创建录制。 |
+| `POST` | `/api/recordings?serial=...` | 请求体 `{"max_duration_ms":300000,"record_audio":false}`，创建录制；`record_audio` 缺省或 `false` 保持无声录像。 |
 | `GET` | `/api/recordings?serial=...` | 获取该设备的录制记录。 |
 | `GET` | `/api/recordings/{recording_id}?serial=...` | 查询状态。 |
 | `POST` | `/api/recordings/{recording_id}/stop?serial=...` | 提前停止，幂等。 |

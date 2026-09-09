@@ -16,29 +16,41 @@ import (
 )
 
 type managedSession struct {
-	sess       *session
-	meta       *handshakeMeta
-	mu         sync.Mutex
-	refs       int
-	subs       map[chan sharedVideoFrame]struct{}
-	controlMu  sync.Mutex
-	closeTimer *time.Timer
-	lastConfig []byte
-	lastKey    []byte
-	actions    *action.Queue
-	width      uint32
-	height     uint32
-	frames     uint64
-	dropped    uint64
-	lastFrame  time.Time
+	sess            *session
+	meta            *handshakeMeta
+	mu              sync.Mutex
+	refs            int
+	subs            map[chan sharedVideoFrame]struct{}
+	audioSubs       map[chan sharedAudioPacket]struct{}
+	controlMu       sync.Mutex
+	closeTimer      *time.Timer
+	lastConfig      []byte
+	lastKey         []byte
+	lastAudioConfig []byte
+	audioAvailable  bool
+	audioReason     string
+	actions         *action.Queue
+	width           uint32
+	height          uint32
+	frames          uint64
+	dropped         uint64
+	lastFrame       time.Time
 }
 
 const sharedVideoQueueSize = 64
+const sharedAudioQueueSize = 256
 
 // sharedVideoFrame keeps the cached decoder bootstrap separate from live source
 // packets. Consumers may need a replayed config/key to initialize a decoder,
 // but must not mistake it for a frame captured after they subscribed.
 type sharedVideoFrame struct {
+	data     []byte
+	replayed bool
+}
+
+// sharedAudioPacket is independent of video delivery so a slow audio consumer
+// can shed old packets without ever delaying video/control traffic.
+type sharedAudioPacket struct {
 	data     []byte
 	replayed bool
 }
@@ -63,13 +75,22 @@ func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, fu
 		h.sessionMu.Unlock()
 		return nil, nil, nil, err
 	}
-	ms := &managedSession{sess: sess, meta: meta, refs: 1, subs: make(map[chan sharedVideoFrame]struct{}), width: meta.Width, height: meta.Height}
+	ms := &managedSession{sess: sess, meta: meta, refs: 1, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), audioAvailable: meta.AudioAvailable, audioReason: meta.AudioReason, width: meta.Width, height: meta.Height}
 	ms.actions = action.New(deviceActionExecutor{ms: ms, gate: h.gateFor(serial)}, 64)
 	h.sessions[serial] = ms
 	h.sessionMu.Unlock()
 	h.recordEvent(debuglog.Event{Type: "session.started", DeviceID: serial, SessionID: meta.SessionID, Fields: map[string]interface{}{"codec": meta.Codec, "width": meta.Width, "height": meta.Height}})
 	go h.readSharedSession(serial, ms)
+	if ms.audioAvailable {
+		go h.readSharedAudio(serial, ms)
+	}
 	return ms, meta, func() { h.releaseSession(serial, ms) }, nil
+}
+
+func audioState(ms *managedSession) (bool, string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	return ms.audioAvailable, ms.audioReason
 }
 
 func (h *Hub) releaseSession(serial string, ms *managedSession) {
@@ -121,6 +142,24 @@ func (h *Hub) subscribeShared(ms *managedSession) (<-chan sharedVideoFrame, func
 	}
 }
 
+func (h *Hub) subscribeAudio(ms *managedSession) (<-chan sharedAudioPacket, func()) {
+	ch := make(chan sharedAudioPacket, sharedAudioQueueSize)
+	ms.mu.Lock()
+	if ms.lastAudioConfig != nil {
+		ch <- sharedAudioPacket{data: append([]byte(nil), ms.lastAudioConfig...), replayed: true}
+	}
+	ms.audioSubs[ch] = struct{}{}
+	ms.mu.Unlock()
+	return ch, func() {
+		ms.mu.Lock()
+		if _, ok := ms.audioSubs[ch]; ok {
+			delete(ms.audioSubs, ch)
+			close(ch)
+		}
+		ms.mu.Unlock()
+	}
+}
+
 func (h *Hub) readSharedSession(serial string, ms *managedSession) {
 	for {
 		f, err := ms.sess.conn.ReadFrame()
@@ -137,6 +176,10 @@ func (h *Hub) readSharedSession(serial string, ms *managedSession) {
 				close(ch)
 			}
 			ms.subs = make(map[chan sharedVideoFrame]struct{})
+			for ch := range ms.audioSubs {
+				close(ch)
+			}
+			ms.audioSubs = make(map[chan sharedAudioPacket]struct{})
 			ms.mu.Unlock()
 			ms.actions.Close()
 			ms.sess.close()
@@ -144,6 +187,62 @@ func (h *Hub) readSharedSession(serial string, ms *managedSession) {
 		}
 		buf := encodeFrame(f)
 		cacheAndBroadcast(ms, f, buf)
+	}
+}
+
+func (h *Hub) readSharedAudio(serial string, ms *managedSession) {
+	for {
+		packet, err := ms.sess.conn.ReadAudioPacket()
+		if err != nil {
+			log.Printf("[ws] shared audio ended serial=%s: %v", serial, err)
+			ms.mu.Lock()
+			ms.audioAvailable = false
+			ms.audioReason = "audio_stream_interrupted"
+			for ch := range ms.audioSubs {
+				close(ch)
+			}
+			ms.audioSubs = make(map[chan sharedAudioPacket]struct{})
+			ms.mu.Unlock()
+			return
+		}
+		cacheAndBroadcastAudio(ms, packet)
+	}
+}
+
+// Audio WS envelope: 0x80, config flag, PTS (u64 BE), AAC bytes. Video keeps
+// its original 0..3 envelope, so existing browser clients remain compatible.
+func encodeAudioPacket(packet *scrcpy.AudioPacket) []byte {
+	buf := make([]byte, 10+len(packet.Payload))
+	buf[0] = 0x80
+	if packet.Config {
+		buf[1] = 1
+	}
+	binary.BigEndian.PutUint64(buf[2:10], packet.PTS)
+	copy(buf[10:], packet.Payload)
+	return buf
+}
+
+func cacheAndBroadcastAudio(ms *managedSession, packet *scrcpy.AudioPacket) {
+	data := encodeAudioPacket(packet)
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	if packet.Config {
+		ms.lastAudioConfig = append([]byte(nil), data...)
+	}
+	for ch := range ms.audioSubs {
+		select {
+		case ch <- sharedAudioPacket{data: data}:
+		default:
+			// Keep the newest audio close to real time for lagging consumers.
+			select {
+			case <-ch:
+			default:
+			}
+			select {
+			case ch <- sharedAudioPacket{data: data}:
+			default:
+			}
+		}
 	}
 }
 
@@ -227,6 +326,13 @@ func encodeFrame(f *scrcpy.Frame) []byte {
 func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan struct{}) {
 	ch, cancel := h.subscribeShared(ms)
 	defer cancel()
+	var audio <-chan sharedAudioPacket
+	var cancelAudio func()
+	if available, _ := audioState(ms); available {
+		audio, cancelAudio = h.subscribeAudio(ms)
+		defer cancelAudio()
+		_ = c.WriteJSON(map[string]interface{}{"type": "audio.status", "status": "connecting", "codec": "aac"})
+	}
 	heartbeat := time.NewTicker(2 * time.Second)
 	defer heartbeat.Stop()
 	for {
@@ -249,6 +355,17 @@ func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan
 			}
 			c.SetWriteDeadline(timeNow())
 			if err := c.WriteMessage(websocket.BinaryMessage, frame.data); err != nil {
+				_ = c.Close()
+				return
+			}
+		case packet, ok := <-audio:
+			if !ok {
+				audio = nil
+				_ = c.WriteJSON(map[string]interface{}{"type": "audio.status", "status": "interrupted", "reason": "audio_stream_interrupted"})
+				continue
+			}
+			c.SetWriteDeadline(timeNow())
+			if err := c.WriteMessage(websocket.BinaryMessage, packet.data); err != nil {
 				_ = c.Close()
 				return
 			}
