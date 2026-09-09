@@ -158,7 +158,7 @@ docker run -d \
 | `TLS_CERT` | 自定义 SSL 证书路径 | - |
 | `TLS_KEY` | 自定义 SSL 私钥路径 | - |
 | `FILES_MAX_UPLOAD_BYTES` | 单文件上传上限（字节） | `268435456` |
-| `RECORDINGS_DIR` | MP4 录像目录 | `recordings` |
+| `RECORDINGS_DIR` | MP4 录像目录 | 用户缓存目录下的 `mywebscrcpy/recordings` |
 | `RECORDINGS_MAX_BYTES` | 录像目录总配额（字节） | `10737418240` |
 | `RECORDINGS_RETENTION_HOURS` | 完成录像保留时长（小时） | `168` |
 | `ADB_MAX_TIMEOUT_MS` | 单条 ADB 命令最大超时（毫秒） | `600000` |

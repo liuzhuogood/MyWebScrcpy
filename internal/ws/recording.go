@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -87,16 +88,25 @@ type recordingManager struct {
 }
 
 func newRecordingManager(h *Hub) *recordingManager {
-	dir := os.Getenv("RECORDINGS_DIR")
-	if dir == "" {
-		dir = "recordings"
-	}
+	dir := recordingStorageDir()
 	quota := envPositiveInt64("RECORDINGS_MAX_BYTES", defaultRecordingQuota)
 	retention := time.Duration(envPositiveInt64("RECORDINGS_RETENTION_HOURS", int64(defaultRecordingRetention/time.Hour))) * time.Hour
 	m := &recordingManager{hub: h, dir: dir, quota: quota, retention: retention, entries: make(map[string]*recording), bySerial: make(map[string]string)}
 	m.removeIncompleteFiles()
 	go m.cleanupLoop()
 	return m
+}
+
+// recordingStorageDir keeps the default recording location writable when the
+// service is launched by a supervisor without a working directory.
+func recordingStorageDir() string {
+	if dir := strings.TrimSpace(os.Getenv("RECORDINGS_DIR")); dir != "" {
+		return dir
+	}
+	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
+		return filepath.Join(cacheDir, "mywebscrcpy", "recordings")
+	}
+	return filepath.Join(os.TempDir(), "mywebscrcpy-recordings")
 }
 
 func envPositiveInt64(name string, fallback int64) int64 {
@@ -465,6 +475,7 @@ func (h *Hub) startRecording(w http.ResponseWriter, r *http.Request) {
 	}
 	rec, err := h.recordings.start(serial, time.Duration(*body.MaxDurationMS)*time.Millisecond)
 	if err != nil {
+		log.Printf("[recording] start failed serial=%s: %v", serial, err)
 		writeRecordingError(w, err)
 		return
 	}

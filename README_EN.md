@@ -144,7 +144,7 @@ Open `https://IP:8080` in your browser (HTTPS is enabled by default), then click
 | `TLS_CERT` | Custom SSL certificate path | - |
 | `TLS_KEY` | Custom SSL private key path | - |
 | `FILES_MAX_UPLOAD_BYTES` | Maximum size per uploaded file (bytes) | `268435456` |
-| `RECORDINGS_DIR` | MP4 recording directory | `recordings` |
+| `RECORDINGS_DIR` | MP4 recording directory | `mywebscrcpy/recordings` under the user cache directory |
 | `RECORDINGS_MAX_BYTES` | Total recording-directory quota (bytes) | `10737418240` |
 | `RECORDINGS_RETENTION_HOURS` | Completed recording retention (hours) | `168` |
 | `ADB_MAX_TIMEOUT_MS` | Maximum ADB command timeout (milliseconds) | `600000` |

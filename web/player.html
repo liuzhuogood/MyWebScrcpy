@@ -73,11 +73,11 @@
           <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
         </svg>
       </button>
-      <button id="btn-raw-size" title="打开原始尺寸窗口">
+      <button id="btn-display-size" title="调整显示尺寸" aria-haspopup="dialog" aria-expanded="false">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v4a1 1 0 0 0 1 1h4"/><path d="M16 21v-4a1 1 0 0 0-1-1h-4"/>
         </svg>
-        <span>原始尺寸窗口</span>
+        <span>显示尺寸</span>
       </button>
       <button id="btn-capture" title="截取区域截图">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -91,6 +91,14 @@
         <span>重启设备</span>
       </button>
       </div>
+    </div>
+    <div id="display-size-panel" class="display-size-panel" hidden role="dialog" aria-label="调整显示尺寸">
+      <label>显示尺寸 <output id="display-size-output">适应窗口</output></label>
+      <div class="display-size-slider">
+        <input id="display-size-range" type="range" min="25" max="175" value="100" step="1" aria-label="显示尺寸百分比">
+        <span class="display-size-original">原始尺寸</span>
+      </div>
+      <button id="display-size-fit" type="button">适应窗口</button>
     </div>
   </div>
 
@@ -161,7 +169,11 @@
     const fpsEl = document.getElementById('fps');
     const moreBtn = document.getElementById('btn-more');
     const moreMenu = document.getElementById('more-menu');
-    const rawSizeMode = params.get('raw') === '1';
+    const displaySizeButton = document.getElementById('btn-display-size');
+    const displaySizePanel = document.getElementById('display-size-panel');
+    const displaySizeRange = document.getElementById('display-size-range');
+    const displaySizeOutput = document.getElementById('display-size-output');
+    let displayScale = null;
     const filesDialog = document.getElementById('files-dialog');
     const filesFrame = document.getElementById('files-frame');
     function setMoreMenu(open) {
@@ -183,13 +195,6 @@
       filesDialog.showModal();
       setMoreMenu(false);
     });
-    document.getElementById('btn-raw-size').addEventListener('click', () => {
-      const rawUrl = new URL(location.href);
-      rawUrl.searchParams.set('raw', '1');
-      location.assign(rawUrl.toString());
-      setMoreMenu(false);
-    });
-
     // ===== 区域截图 =====
     const captureLayer = document.getElementById('capture-layer');
     const captureSelection = document.getElementById('capture-selection');
@@ -323,8 +328,6 @@
     const decoder = new ScrcpyDecoder(canvas);
     const packer = new ControlPacker();
     const mainEl = document.querySelector('.player-main');
-    if (rawSizeMode) document.body.classList.add('raw-size-page');
-
     decoder.onFps = (fps) => { fpsEl.textContent = fps + ' fps'; };
     decoder.onError = ({ message }) => {
       console.error('[decoder] 通知播放器:', message);
@@ -340,27 +343,24 @@
       const ch = canvas.height;  // 视频内部高度
       if (!cw || !ch) return;
 
-      if (rawSizeMode) {
-        canvas.style.width = cw + 'px';
-        canvas.style.height = ch + 'px';
-        detectionOverlay.width = cw;
-        detectionOverlay.height = ch;
-        detectionOverlay.style.width = cw + 'px';
-        detectionOverlay.style.height = ch + 'px';
-        return;
-      }
-
       const padding = 24; // .player-main 的 padding*2
       const availW = mainEl.clientWidth - padding;
       const availH = mainEl.clientHeight - padding;
       if (availW <= 0 || availH <= 0) return;
 
-      const ratio = cw / ch;
-      let dw = availW;
-      let dh = dw / ratio;
-      if (dh > availH) {
-        dh = availH;
-        dw = dh * ratio;
+      let dw;
+      let dh;
+      if (displayScale !== null) {
+        dw = cw * displayScale / 100;
+        dh = ch * displayScale / 100;
+      } else {
+        const ratio = cw / ch;
+        dw = availW;
+        dh = dw / ratio;
+        if (dh > availH) {
+          dh = availH;
+          dw = dh * ratio;
+        }
       }
       canvas.style.width = Math.round(dw) + 'px';
       canvas.style.height = Math.round(dh) + 'px';
@@ -369,6 +369,35 @@
       detectionOverlay.style.width = canvas.style.width;
       detectionOverlay.style.height = canvas.style.height;
     }
+
+    function updateDisplaySize(scale) {
+      const snapped = Math.abs(scale - 100) <= 4 ? 100 : scale;
+      displayScale = snapped;
+      displaySizeRange.value = String(snapped);
+      if (canvas.width && canvas.height) {
+        const width = Math.round(canvas.width * snapped / 100);
+        const height = Math.round(canvas.height * snapped / 100);
+        displaySizeOutput.textContent = snapped === 100 ? `原始尺寸 ${width} × ${height}` : `${width} × ${height}`;
+      } else {
+        displaySizeOutput.textContent = `${snapped}%`;
+      }
+      mainEl.classList.add('custom-display-size');
+      fitCanvas();
+    }
+
+    displaySizeButton.addEventListener('click', () => {
+      displaySizePanel.hidden = !displaySizePanel.hidden;
+      displaySizeButton.setAttribute('aria-expanded', String(!displaySizePanel.hidden));
+      setMoreMenu(false);
+    });
+    displaySizeRange.addEventListener('input', () => updateDisplaySize(Number(displaySizeRange.value)));
+    document.getElementById('display-size-fit').addEventListener('click', () => {
+      displayScale = null;
+      displaySizeRange.value = '100';
+      displaySizeOutput.textContent = '适应窗口';
+      mainEl.classList.remove('custom-display-size');
+      fitCanvas();
+    });
 
     let activeSessionID = '';
     function cancelDetectionClearTimer() {

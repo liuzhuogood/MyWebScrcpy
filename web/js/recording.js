@@ -132,7 +132,7 @@
     finally { start.disabled = false; render(); poll(); }
   };
 
-  const all = ['btn-power', 'btn-recents', 'btn-rotate', 'btn-files', 'btn-fullscreen', 'btn-raw-size', 'btn-capture', 'btn-reboot'].map(id => document.getElementById(id)).filter(Boolean);
+  const all = ['btn-power', 'btn-recents', 'btn-rotate', 'btn-files', 'btn-fullscreen', 'btn-display-size', 'btn-capture', 'btn-reboot'].map(id => document.getElementById(id)).filter(Boolean);
   const low = all.filter(button => !['btn-fullscreen', 'btn-capture'].includes(button.id));
   const layout = () => {
     more.hidden = true; all.forEach(button => tools.insertBefore(button, moreButton)); moreButton.hidden = true;

@@ -52,6 +52,19 @@ func TestRecordingStateAndSerialBoundary(t *testing.T) {
 	}
 }
 
+func TestRecordingStorageDir(t *testing.T) {
+	t.Setenv("RECORDINGS_DIR", "/tmp/custom-recordings")
+	if got := recordingStorageDir(); got != "/tmp/custom-recordings" {
+		t.Fatalf("configured directory = %q", got)
+	}
+
+	t.Setenv("RECORDINGS_DIR", "")
+	got := recordingStorageDir()
+	if !filepath.IsAbs(got) || filepath.Base(got) != "recordings" {
+		t.Fatalf("default directory must be an absolute recordings directory, got %q", got)
+	}
+}
+
 func TestRecordingHTTPStatusBoundaries(t *testing.T) {
 	h := &Hub{}
 	h.recordings = &recordingManager{hub: h, entries: make(map[string]*recording), bySerial: make(map[string]string)}
