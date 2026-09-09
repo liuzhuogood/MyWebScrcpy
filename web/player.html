@@ -74,6 +74,13 @@
           <path d="M16 21v-3a2 2 0 0 1 2-2h3"/>
         </svg>
       </button>
+      <button id="btn-picture-in-picture" type="button" title="画中画" aria-label="画中画" disabled>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="16" rx="2"/>
+          <rect x="12" y="11" width="6" height="5" rx="1"/>
+        </svg>
+        <span>画中画</span>
+      </button>
       <button id="btn-display-size" title="调整显示尺寸" aria-haspopup="dialog" aria-expanded="false">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v4a1 1 0 0 0 1 1h4"/><path d="M16 21v-4a1 1 0 0 0-1-1h-4"/>
@@ -88,7 +95,10 @@
         <span>区域截图</span>
       </button>
       <button id="btn-inspector" title="检查画布与界面" aria-haspopup="dialog" aria-expanded="false">
-        <span aria-hidden="true">⌕</span><span>检查</span>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/><path d="M10.5 7.5v6M7.5 10.5h6"/>
+        </svg>
+        <span>检查</span>
       </button>
       <button id="btn-reboot" title="重启设备" class="danger-action">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
@@ -159,6 +169,7 @@
   <script src="/js/control.js"></script>
   <script src="/js/decoder.js"></script>
   <script src="/js/audio.js"></script>
+  <script src="/js/picture-in-picture.js"></script>
   <script src="/js/ui-inspector.js" defer></script>
   <script>
     const params = new URLSearchParams(location.search);

@@ -3,6 +3,11 @@
 .record-btn { gap: 5px; }
 .record-btn.is-recording { color: #d03050; }
 .player-toolbar #btn-audio.is-muted { color: #86909c; }
+.player-toolbar #btn-picture-in-picture { gap: 5px; line-height: 1; }
+.player-toolbar #btn-picture-in-picture span { line-height: 1; white-space: nowrap; }
+.player-toolbar #btn-picture-in-picture:disabled { opacity: .5; cursor: not-allowed; }
+.player-toolbar #btn-picture-in-picture.is-active { color: #165dff; background: #e8f3ff; }
+.picture-in-picture-source { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .audio-volume-panel[hidden] { display: none; }
 .audio-volume-panel { position: absolute; z-index: 40; top: 54px; right: 110px; display: flex; align-items: center; gap: 8px; width: 168px; padding: 9px 11px; border: 1px solid #e5e6eb; border-radius: 8px; background: #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, .14); }
 .audio-volume-panel input { flex: 1; accent-color: #165dff; }
