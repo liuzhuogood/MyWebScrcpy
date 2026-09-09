@@ -17,6 +17,7 @@ import (
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/scripts"
+	"mywebscrcpy/internal/uixml"
 	"mywebscrcpy/internal/ws"
 )
 
@@ -60,6 +61,7 @@ func main() {
 		log.Printf("警告: 初始化脚本目录失败: %v", err)
 	}
 	fileManager := files.NewManager(adbPath)
+	uiXML := uixml.New(adbPath)
 
 	mux := http.NewServeMux()
 
@@ -76,6 +78,15 @@ func main() {
 			devices = []device.Device{}
 		}
 		json.NewEncoder(w).Encode(devices)
+	})
+
+	// API: 获取当前设备的 Android UI XML 快照（只读，按请求执行）。
+	mux.Handle("/api/ui/xml", uixml.Handler{
+		Service: uiXML,
+		IsOnline: func(serial string) bool {
+			_, ok := dm.GetDevice(serial)
+			return ok
+		},
 	})
 
 	// API: 旋转设备 (GET /api/rotate?serial=xxx)
