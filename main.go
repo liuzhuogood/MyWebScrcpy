@@ -27,6 +27,9 @@ var serverJarFS []byte
 //go:embed all:web
 var webFS embed.FS
 
+//go:embed web/openapi.json
+var openAPISpec []byte
+
 //go:embed assets/certs/cert.pem
 var defaultCert []byte
 
@@ -64,6 +67,15 @@ func main() {
 	uiXML := uixml.New(adbPath)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/api/openapi.json", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Write(openAPISpec)
+	})
 
 	// 脚本管理 API
 	scripts.RegisterRoutes(mux)
