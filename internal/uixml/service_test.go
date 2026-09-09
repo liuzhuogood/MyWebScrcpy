@@ -3,6 +3,7 @@ package uixml
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -21,8 +22,23 @@ func TestFetchRunsDumpThenRead(t *testing.T) {
 	if err != nil || x == "" || captured.IsZero() {
 		t.Fatalf("fetch: %q %v %v", x, captured, err)
 	}
-	if len(calls) != 2 || calls[0][3] != "uiautomator" || calls[1][2] != "exec-out" {
+	if len(calls) != 3 || calls[0][3] != "uiautomator" || calls[1][2] != "exec-out" || calls[2][3] != "wm" {
 		t.Fatalf("calls: %#v", calls)
+	}
+}
+
+func TestParseDisplaySizePrefersOverride(t *testing.T) {
+	for _, tc := range []struct {
+		output string
+		want   *DisplaySize
+	}{
+		{"Physical size: 1080x2400\n", &DisplaySize{Width: 1080, Height: 2400}},
+		{"Physical size: 1080x2400\nOverride size: 720x1600\n", &DisplaySize{Width: 720, Height: 1600}},
+		{"unavailable", nil},
+	} {
+		if got := parseDisplaySize(tc.output); !reflect.DeepEqual(got, tc.want) {
+			t.Fatalf("parseDisplaySize(%q) = %#v, want %#v", tc.output, got, tc.want)
+		}
 	}
 }
 

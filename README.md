@@ -14,6 +14,10 @@
 
 ![投屏操控](screenshots/player.png)
 
+**播放器检查器**
+
+![播放器检查器](screenshots/ui-inspector.jpg)
+
 **大屏监控**
 
 ![大屏监控](screenshots/dashboard.png)
@@ -32,6 +36,7 @@
 - 触摸支持（移动端浏览器）
 - 一键旋转屏幕
 - 全屏模式（支持 iOS 伪全屏）
+- 播放器检查器：取色坐标、像素放大镜、XML 树、XPath 与元素定位联动
 - 受控 MP4 录屏：选择自动停止时长、提前停止与完成下载
 - 屏幕熄灭检测
 - 自动重连
@@ -111,6 +116,31 @@ go build -o mywebscrcpy .
 | `DELETE` | `/api/recordings/{recording_id}?serial=...` | 删除已结束的录制记录及文件。 |
 
 录制仅支持当前默认的 H.264 共享流；未完成文件不会开放下载。完成文件会在受控目录中保留到期，服务重启会清理未完成的临时文件。
+
+### 播放器检查器
+
+在投屏页面打开“更多”中的“检查”。检查器会和投屏并排显示：投屏保持靠左的原始显示宽度，检查面板自动占用剩余空间；拖动中间分隔线可调整面板宽度。窄屏设备会自动改为上下布局。
+
+#### 取色坐标
+
+- 鼠标移动时显示画布坐标、HEX、RGB、十字线和 13 × 13 像素放大镜。
+- 首次点击投屏画面会固定十字线与读数，便于复制；再次点击会解除固定并恢复跟随。
+- 检查器打开期间的取色操作不会发送到 Android 设备。
+
+#### XML 树与 XPath
+
+- 切换到“XML 树”会读取当前设备的只读 UI 快照；也可以用“刷新 XML”重新获取。
+- 树默认展开，标签、属性名、属性值和布尔值以轻量语法高亮显示；树区域有独立滚动条。
+- 点击树节点会在投屏上标出对应元素；点击标出的绿框也会反选树节点。XML 原始坐标会按视频 Canvas 尺寸换算，因此缩放投屏时绿框仍与元素对齐。
+- 选中树节点后，可勾选 `text`、`resource-id`、`bounds` 左侧的复选框，让对应属性组合为 XPath 条件并同步到输入框。默认优先选择非空 `resource-id`，没有时选择非空 `text`；`bounds` 默认不选，因为它更容易随布局或机型变化。
+- 输入 XPath 后点击“测试 XPath”，全部命中元素会显示绿框；“显示全部”可显示当前快照中所有带 bounds 的元素，再次点击可关闭。
+- “清除”会清空 XPath 命中和所有元素标记。
+
+XML 快照来自 Android 的 UI Automator，属于获取瞬间的静态状态，并不与视频逐帧同步。Canvas/WebView 等自绘内容可能没有可用节点；“显示全部”在元素密集的页面会产生较多重叠绿框。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `GET` | `/api/ui/xml?serial=...` | 获取指定在线设备的只读 XML 快照、时间戳和显示坐标基准 `display_size`。 |
 
 ### 受控 ADB 命令与组合键
 
@@ -234,6 +264,7 @@ MyWebScrcpy/
 ├── internal/
 │   ├── device/manager.go      # ADB 设备管理
 │   ├── files/                  # 文件管理 API、路径安全和回收站
+│   ├── uixml/                  # Android XML 快照服务与校验
 │   ├── scrcpy/
 │   │   ├── server.go          # scrcpy server 生命周期
 │   │   ├── connection.go      # TCP 连接 + 帧读取
@@ -245,12 +276,15 @@ MyWebScrcpy/
     ├── player.html            # 投屏播放器页
     ├── dashboard.html         # 大屏监控页
     ├── files.html              # 文件管理页
-    ├── css/style.css
+    ├── css/
+    │   ├── style.css            # 播放器与通用样式
+    │   └── ui-inspector.css     # 检查器样式
     └── js/
         ├── decoder.js         # WebCodecs H.264 解码器
         ├── control.js         # 浏览器端控制消息打包
         ├── dashboard.js        # 大屏监控逻辑
-        └── files.js            # 文件管理逻辑
+        ├── files.js            # 文件管理逻辑
+        └── ui-inspector.js     # 取色、XML 树和 XPath 检查器
 ```
 
 ## 技术栈

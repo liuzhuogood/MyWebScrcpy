@@ -27,7 +27,7 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "device_unavailable", "device is not online")
 		return
 	}
-	xmlText, capturedAt, err := h.Service.Fetch(r.Context(), serial)
+	snapshot, err := h.Service.FetchSnapshot(r.Context(), serial)
 	if err != nil {
 		status, code := http.StatusBadGateway, "ui_xml_failed"
 		switch {
@@ -43,10 +43,11 @@ func (h Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(struct {
-		Serial     string    `json:"serial"`
-		CapturedAt time.Time `json:"captured_at"`
-		XML        string    `json:"xml"`
-	}{serial, capturedAt, xmlText})
+		Serial      string       `json:"serial"`
+		CapturedAt  time.Time    `json:"captured_at"`
+		XML         string       `json:"xml"`
+		DisplaySize *DisplaySize `json:"display_size,omitempty"`
+	}{serial, snapshot.CapturedAt, snapshot.XML, snapshot.DisplaySize})
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {

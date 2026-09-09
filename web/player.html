@@ -350,7 +350,9 @@
       if (!cw || !ch) return;
 
       const padding = 24; // .player-main 的 padding*2
-      const availW = mainEl.clientWidth - padding;
+      const inspectorPanel = document.querySelector('.ui-inspector-panel:not([hidden])');
+      const inspectorReserved = inspectorPanel ? inspectorPanel.getBoundingClientRect().width + 8 : 0;
+      const availW = mainEl.clientWidth - padding - inspectorReserved;
       const availH = mainEl.clientHeight - padding;
       if (availW <= 0 || availH <= 0) return;
 
