@@ -27,3 +27,5 @@
 **代理（真机验收）**：在 `10.0.0.6` 的临时 `18080` 实例使用 Android 12（API 31，`9lmn897livkzprnf`）测试。WebSocket 返回 `audio_available: true` 与 AAC codec，且收到 1 个 AAC 配置包和至少 2 个媒体包；请求 `record_audio: true` 后录制完成。下载的 339185 字节 MP4 经 `ffprobe` 确认含 H.264 视频轨（3.077587 秒）和 AAC 音轨（3.074833 秒）。临时进程、二进制及录像已删除，生产 `mywebscrcpy.service` 保持 active。
 
 **代理（兼容性验收）**：同一临时实例验证 Android 10（API 29，`10.0.0.114:5555`）保持 H.264 视频可用且返回 `audio_available: false`、`audio_unsupported_android`；Android 13（API 33，`31040209940025Z`）返回 AAC 可用并收到 1 个配置包和 6 个媒体包。临时实例再次清理，未重启生产服务。
+
+**代理（生产部署验收）**：已将 v1.5.3 二进制部署至 `10.0.0.6:/opt/mywebscrcpy/mywebscrcpy-linux-amd64` 并重启 `mywebscrcpy.service`；服务为 active，部署后二进制 SHA-256 为 `8dc21d720266ade7a2c2e3241e9c987d882569400efeed4847d28dab5fa96d7a`。经线上 HTTPS WebSocket 再次收到 Android 12 的音频可用元数据、AAC 配置包、AAC 媒体包和视频包。线上有声录像主动停止后完成，下载的 630169 字节 MP4 含 H.264（8.898095 秒）与 AAC（8.870437 秒）双轨；该验收录像已通过接口删除。
