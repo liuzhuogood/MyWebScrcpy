@@ -4,7 +4,8 @@
   const more = document.getElementById('more-menu');
   const moreButton = document.getElementById('btn-more');
   const record = document.createElement('button');
-  record.id = 'btn-record'; record.className = 'record-btn'; record.title = '录制屏幕';
+  record.id = 'btn-record'; record.className = 'record-btn'; record.title = '录制'; record.type = 'button';
+  record.setAttribute('aria-label', '录制');
   record.setAttribute('aria-haspopup', 'dialog');
   record.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="7"/></svg><span class="record-label">录制</span>';
   tools.insertBefore(record, moreButton);
@@ -44,6 +45,7 @@
     return minutes ? `${minutes} 分${String(seconds % 60).padStart(2, '0')} 秒` : `${seconds} 秒`;
   };
   const recordingTime = entry => new Intl.DateTimeFormat('zh-CN', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(entry.started_at));
+  window.__recordingFmt = Object.assign(window.__recordingFmt || {}, { time: recordingTime, duration: recordingDuration });
   const close = () => { panel.hidden = true; record.setAttribute('aria-expanded', 'false'); };
 
   const render = () => {
@@ -73,6 +75,14 @@
           const download = document.createElement('a');
           download.href = `/api/recordings/download?serial=${encodeURIComponent(serial)}&recording_id=${encodeURIComponent(entry.recording_id)}`;
           download.download = ''; download.textContent = '下载'; actions.append(download);
+          const replay = document.createElement('button');
+          replay.type = 'button'; replay.textContent = '重放'; replay.className = 'recording-replay-btn';
+          replay.onclick = () => {
+            if (window.__isReplaying && window.__isReplaying()) { state.textContent = '已在重放中，请先停止当前重放。'; return; }
+            if (window.__replayStart) window.__replayStart(entry.recording_id, entry);
+            else state.textContent = '重放功能暂未就绪，请稍后重试。';
+          };
+          actions.append(replay);
         }
         if (!['recording', 'stopping'].includes(entry.status)) {
           const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '删除';
@@ -123,9 +133,13 @@
     }
     panel.hidden = !panel.hidden;
     record.setAttribute('aria-expanded', String(!panel.hidden));
-    if (!panel.hidden) loadHistory();
+    if (!panel.hidden) {
+      window.placeToolbarPopover(panel, record);
+      loadHistory();
+    }
   };
   start.onclick = async () => {
+    if (document.documentElement.dataset.replaying === '1') { state.textContent = '重放期间无法开始录制，请先停止重放。'; return; }
     start.disabled = true; state.textContent = '正在开始录制…';
     try {
       const response = await fetch(`/api/recordings?serial=${encodeURIComponent(serial)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ max_duration_ms: +range.value * 60000, record_audio: recordAudio.checked }) });
@@ -135,13 +149,27 @@
     finally { start.disabled = false; render(); poll(); }
   };
 
-  const all = ['btn-power', 'btn-recents', 'btn-rotate', 'btn-files', 'btn-fullscreen', 'btn-display-size', 'btn-capture', 'btn-reboot'].map(id => document.getElementById(id)).filter(Boolean);
-  const low = all.filter(button => !['btn-fullscreen', 'btn-capture'].includes(button.id));
+  document.addEventListener('replay:change', (event) => {
+    const replaying = !!event.detail?.replaying;
+    document.documentElement.dataset.replaying = replaying ? '1' : '';
+    start.disabled = replaying;
+    if (replaying) state.textContent = '重放期间无法开始录制，请先停止重放。';
+    else if (state.textContent === '重放期间无法开始录制，请先停止重放。') state.textContent = '';
+  });
+
+  // 工具栏最终顺序（静态 + 动态按钮统一在此排序）：
+  // 返回 → 主页 → 任务切换 → 音量 → 锁屏 → 录制 → 重放 → 文件管理 →
+  // 截图 → 区域截图 → 全屏 → 画中画 → 显示尺寸 → 横竖屏 → 检查 → 重启设备
+  const ORDER = ['btn-back', 'btn-home', 'btn-recents', 'btn-audio', 'btn-power', 'btn-record', 'btn-replay', 'btn-files', 'btn-screenshot', 'btn-capture', 'btn-fullscreen', 'btn-picture-in-picture', 'btn-display-size', 'btn-rotate', 'btn-inspector', 'btn-reboot'];
+  // 常驻工具栏、窄屏也不收进“更多”：返回/主页（导航）+ 全屏/区域截图（沿用原有行为）
+  const PINNED = new Set(['btn-back', 'btn-home', 'btn-fullscreen', 'btn-capture']);
   const layout = () => {
-    more.hidden = true; all.forEach(button => tools.insertBefore(button, moreButton)); moreButton.hidden = true;
-    for (const button of [...low].reverse()) {
+    const buttons = ORDER.map(id => document.getElementById(id)).filter(Boolean);
+    more.hidden = true; buttons.forEach(button => tools.insertBefore(button, moreButton)); moreButton.hidden = true;
+    for (const button of [...buttons].reverse()) {
+      if (PINNED.has(button.id)) continue;
       if (tools.scrollWidth <= tools.clientWidth) break;
-      more.append(button); moreButton.hidden = false;
+      more.prepend(button); moreButton.hidden = false;
     }
   };
   new ResizeObserver(() => requestAnimationFrame(layout)).observe(tools);

@@ -18,6 +18,7 @@ import (
 type managedSession struct {
 	sess            *session
 	meta            *handshakeMeta
+	replay          bool // true when serving an MP4 replay instead of live scrcpy
 	mu              sync.Mutex
 	refs            int
 	subs            map[chan sharedVideoFrame]struct{}
@@ -56,6 +57,12 @@ type sharedAudioPacket struct {
 }
 
 func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, func(), error) {
+	// An active MP4 replay shadows the live scrcpy session for this serial.
+	if h.replays != nil {
+		if ms, meta, release, ok := h.replays.acquire(serial); ok {
+			return ms, meta, release, nil
+		}
+	}
 	h.sessionMu.Lock()
 	if ms := h.sessions[serial]; ms != nil {
 		ms.mu.Lock()
@@ -94,6 +101,12 @@ func audioState(ms *managedSession) (bool, string) {
 }
 
 func (h *Hub) releaseSession(serial string, ms *managedSession) {
+	if ms.replay {
+		ms.mu.Lock()
+		ms.refs--
+		ms.mu.Unlock()
+		return
+	}
 	ms.mu.Lock()
 	ms.refs--
 	refs := ms.refs
@@ -392,6 +405,11 @@ func (e deviceActionExecutor) execute(ctx context.Context, r action.Request) err
 	case <-ctx.Done():
 		return ctx.Err()
 	default:
+	}
+	// Replay sessions have no control socket; reject input instead of
+	// dereferencing a nil connection.
+	if e.ms.sess == nil || e.ms.sess.conn == nil {
+		return errors.New("replay_mode")
 	}
 	e.ms.controlMu.Lock()
 	defer e.ms.controlMu.Unlock()

@@ -6,7 +6,7 @@
 
   const button = document.createElement('button');
   button.id = 'btn-audio'; button.type = 'button'; button.title = '设备声音不可用';
-  button.setAttribute('aria-label', '设备声音');
+  button.setAttribute('aria-label', '音量控制');
   button.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>';
   button.disabled = true;
   tools.insertBefore(button, moreButton);
@@ -27,6 +27,7 @@
     button.disabled = !ready;
     button.classList.toggle('is-muted', muted || !ready);
     button.title = ready ? (muted ? '点击播放设备声音' : '点击静音设备声音') : (reason || '设备声音不可用');
+    button.setAttribute('aria-label', button.title);
   };
   if (!supportsAudioDecoder) setStatus('decoder_error', '当前浏览器不支持设备音频播放');
   const parseASC = bytes => {
@@ -69,7 +70,12 @@
   button.addEventListener('click', async () => {
     if (status !== 'ready') return;
     muted = !muted;
-    try { await ensureContext(); setStatus('ready'); panel.hidden = false; } catch (_) { setStatus('decoder_error', '浏览器未允许播放设备声音'); }
+    try {
+      await ensureContext();
+      setStatus('ready');
+      panel.hidden = false;
+      window.placeToolbarPopover(panel, button);
+    } catch (_) { setStatus('decoder_error', '浏览器未允许播放设备声音'); }
   });
   volume.addEventListener('input', () => {
     level = Number(volume.value) / 100;

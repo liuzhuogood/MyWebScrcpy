@@ -8,6 +8,8 @@
   <link rel="stylesheet" href="/css/recording.css">
   <link rel="stylesheet" href="/css/ui-inspector.css">
   <script src="/js/recording.js" defer></script>
+  <script src="/js/replay.js" defer></script>
+  <script src="/js/screenshot.js" defer></script>
 </head>
 <body class="player-page">
   <div class="player-toolbar">
@@ -16,13 +18,13 @@
     <span class="status" id="status">连接中...</span>
     <span class="status fps-badge" id="fps" style="display:none">0 fps</span>
     <div class="tools">
-      <button id="btn-back" title="返回键">
+      <button id="btn-back" title="返回" aria-label="返回">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M19 12H5"/>
-          <polyline points="12 19 5 12 12 5"/>
+          <circle cx="12" cy="12" r="8.5"/>
+          <polyline points="14.5 8.5 11 12 14.5 15.5"/>
         </svg>
       </button>
-      <button id="btn-home" title="Home键">
+      <button id="btn-home" title="主页" aria-label="主页">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
           <polyline points="9 22 9 12 15 12 15 22"/>
@@ -34,32 +36,33 @@
         </svg>
       </button>
       <div id="more-menu" class="more-menu" hidden>
-      <button id="btn-power" title="锁屏（点亮/熄屏）">
+      <button id="btn-recents" title="任务切换" aria-label="任务切换">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="18" rx="1"/>
+          <rect x="14" y="3" width="7" height="18" rx="1"/>
+        </svg>
+        <span>任务切换</span>
+      </button>
+      <button id="btn-power" title="锁屏" aria-label="锁屏">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/>
         </svg>
         <span>锁屏</span>
       </button>
-      <button id="btn-recents" title="最近任务（切换任务）">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="18" rx="1"/>
-          <rect x="14" y="3" width="7" height="18" rx="1"/>
-        </svg>
-        <span>最近任务</span>
-      </button>
-      <button id="btn-rotate" title="横竖屏">
-        <svg width="20" height="20" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
-          <path d="M492 257.1c-2.6-2.6-6-4-9.6-4-3.6 0-7 1.4-9.6 4l-13 13c4.3-61.8-19.5-122.5-65.3-165C356.9 70.2 307.7 51 256.1 51c-26.7 0-52.8 5.1-77.4 15.1-25.5 10.4-48.3 25.6-67.7 45.3-13.2 13.4-24.6 28.5-33.6 44.8-1.9 3.4-2.3 7.4-1.2 11.1 1.1 3.7 3.8 6.8 7.2 8.5 2 1 4.2 1.5 6.4 1.5 5.2 0 9.9-2.8 12.4-7.3 7.9-14.3 17.8-27.5 29.4-39.1 16.8-16.8 36.3-29.8 58.1-38.7 21.1-8.6 43.4-12.9 66.2-12.9 22.9 0 45.2 4.3 66.3 12.9 21.8 8.9 41.4 21.9 58.2 38.8 20.3 20.4 35.4 45.6 43.8 73 7 22.9 9.2 47.3 6.6 71.2l-18.9-18.5c-2.5-2.4-5.8-3.8-9.3-3.8-3.5 0-6.9 1.4-9.4 3.9-5.2 5.2-5.2 13.6 0 18.8l42.8 42.9c1.9 1.9 4.4 2.9 7 2.9 2.6 0 5.1-1 7-2.9l42.1-42.2c5.2-5.3 5.2-13.9-.1-19.2zM428.6 335.9c-2-1-4.2-1.5-6.4-1.5-5.2 0-9.9 2.8-12.4 7.3-7.9 14.3-17.8 27.5-29.4 39.1-16.8 16.8-36.3 29.9-58.2 38.7-21.1 8.9-43.4 12.9-66.3 12.9s-45.2-4.3-66.2-12.9c-21.8-8.9-41.4-21.9-58.2-38.7-37.6-37.8-56-90.9-50.3-143.9l18.4 18.5c2.4 2.4 5.6 3.7 9 3.7 3.4 0 6.6-1.3 9-3.7l1.3-1.3c4.9-4.9 4.9-13 0-17.9l-42.9-43c-1.9-1.9-4.4-2.9-7-2.9-2.6 0-5.1 1-7 2.9l-42 42.3c-5.3 5.3-5.3 13.9 0 19.2 2.6 2.6 6 4 9.6 4 3.6 0 7-1.4 9.6-4l13-13.1c-1.8 25.8 1.3 52 9 76.5 9.9 31.4 26.8 59.3 50.3 82.8 19.5 19.6 42.2 34.7 67.6 45.1 24.5 10 50.4 15 76.9 15 26.5 0 52.4-5.1 76.9-15 25.4-10.3 48.1-25.5 67.6-45.1 13.5-13.5 25-28.8 34.2-45.4 1.9-3.4 2.3-7.4 1.2-11.1-1.2-3.7-3.8-6.8-7.3-8.5z"/>
-        </svg>
-        <span>横竖屏</span>
-      </button>
-      <button id="btn-files" title="文件管理">
+      <button id="btn-files" title="文件管理" aria-label="文件管理">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5Z"/>
         </svg>
         <span>文件管理</span>
       </button>
-      <button id="btn-fullscreen" title="全屏" class="fs-btn">
+      <button id="btn-capture" title="区域截图" aria-label="区域截图">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/>
+          <rect x="7" y="7" width="10" height="10" rx="1"/>
+        </svg>
+        <span>区域截图</span>
+      </button>
+      <button id="btn-fullscreen" title="全屏" aria-label="全屏" class="fs-btn">
         <svg class="fs-enter" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
           <path d="M21 8V5a2 2 0 0 0-2-2h-3"/>
@@ -81,26 +84,25 @@
         </svg>
         <span>画中画</span>
       </button>
-      <button id="btn-display-size" title="调整显示尺寸" aria-haspopup="dialog" aria-expanded="false">
+      <button id="btn-display-size" title="显示尺寸" aria-label="显示尺寸" aria-haspopup="dialog" aria-expanded="false">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v4a1 1 0 0 0 1 1h4"/><path d="M16 21v-4a1 1 0 0 0-1-1h-4"/>
         </svg>
         <span>显示尺寸</span>
       </button>
-      <button id="btn-capture" title="截取区域截图">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3"/>
-          <rect x="7" y="7" width="10" height="10" rx="1"/>
+      <button id="btn-rotate" title="横竖屏" aria-label="横竖屏">
+        <svg width="20" height="20" viewBox="0 0 512 512" fill="currentColor" aria-hidden="true">
+          <path d="M492 257.1c-2.6-2.6-6-4-9.6-4-3.6 0-7 1.4-9.6 4l-13 13c4.3-61.8-19.5-122.5-65.3-165C356.9 70.2 307.7 51 256.1 51c-26.7 0-52.8 5.1-77.4 15.1-25.5 10.4-48.3 25.6-67.7 45.3-13.2 13.4-24.6 28.5-33.6 44.8-1.9 3.4-2.3 7.4-1.2 11.1 1.1 3.7 3.8 6.8 7.2 8.5 2 1 4.2 1.5 6.4 1.5 5.2 0 9.9-2.8 12.4-7.3 7.9-14.3 17.8-27.5 29.4-39.1 16.8-16.8 36.3-29.8 58.1-38.7 21.1-8.6 43.4-12.9 66.2-12.9 22.9 0 45.2 4.3 66.3 12.9 21.8 8.9 41.4 21.9 58.2 38.8 20.3 20.4 35.4 45.6 43.8 73 7 22.9 9.2 47.3 6.6 71.2l-18.9-18.5c-2.5-2.4-5.8-3.8-9.3-3.8-3.5 0-6.9 1.4-9.4 3.9-5.2 5.2-5.2 13.6 0 18.8l42.8 42.9c1.9 1.9 4.4 2.9 7 2.9 2.6 0 5.1-1 7-2.9l42.1-42.2c5.2-5.3 5.2-13.9-.1-19.2zM428.6 335.9c-2-1-4.2-1.5-6.4-1.5-5.2 0-9.9 2.8-12.4 7.3-7.9 14.3-17.8 27.5-29.4 39.1-16.8 16.8-36.3 29.9-58.2 38.7-21.1 8.9-43.4 12.9-66.3 12.9s-45.2-4.3-66.2-12.9c-21.8-8.9-41.4-21.9-58.2-38.7-37.6-37.8-56-90.9-50.3-143.9l18.4 18.5c2.4 2.4 5.6 3.7 9 3.7 3.4 0 6.6-1.3 9-3.7l1.3-1.3c4.9-4.9 4.9-13 0-17.9l-42.9-43c-1.9-1.9-4.4-2.9-7-2.9-2.6 0-5.1 1-7 2.9l-42 42.3c-5.3 5.3-5.3 13.9 0 19.2 2.6 2.6 6 4 9.6 4 3.6 0 7-1.4 9.6-4l13-13.1c-1.8 25.8 1.3 52 9 76.5 9.9 31.4 26.8 59.3 50.3 82.8 19.5 19.6 42.2 34.7 67.6 45.1 24.5 10 50.4 15 76.9 15 26.5 0 52.4-5.1 76.9-15 25.4-10.3 48.1-25.5 67.6-45.1 13.5-13.5 25-28.8 34.2-45.4 1.9-3.4 2.3-7.4 1.2-11.1-1.2-3.7-3.8-6.8-7.3-8.5z"/>
         </svg>
-        <span>区域截图</span>
+        <span>横竖屏</span>
       </button>
-      <button id="btn-inspector" title="检查画布与界面" aria-haspopup="dialog" aria-expanded="false">
+      <button id="btn-inspector" title="检查画布与界面" aria-label="检查" aria-haspopup="dialog" aria-expanded="false">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/><path d="M10.5 7.5v6M7.5 10.5h6"/>
         </svg>
         <span>检查</span>
       </button>
-      <button id="btn-reboot" title="重启设备" class="danger-action">
+      <button id="btn-reboot" title="重启设备" aria-label="重启设备" class="danger-action">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
         <span>重启设备</span>
       </button>
@@ -153,7 +155,9 @@
       <div class="capture-layer" id="capture-layer" hidden>
         <div class="capture-actions">
           <span class="capture-hint">拖动边框选择区域</span>
-          <button id="capture-save" type="button">下载截图</button>
+          <button id="capture-save" type="button">下载</button>
+          <button id="capture-copy" type="button">复制</button>
+          <button id="capture-copy-bbox" type="button">复制 BBOX</button>
           <button id="capture-cancel" type="button">取消</button>
         </div>
         <div class="capture-selection" id="capture-selection">
@@ -166,6 +170,7 @@
     </div>
   </div>
 
+  <script src="/js/toolbar-popover.js"></script>
   <script src="/js/control.js"></script>
   <script src="/js/decoder.js"></script>
   <script src="/js/audio.js"></script>
@@ -221,15 +226,25 @@
     let captureDrag = null;
     const CAPTURE_MIN = 24;
 
+    function captureBounds() {
+      if (!captureRect || !canvas.width || !canvas.height) return;
+      const scaleX = canvas.width / Math.max(1, canvas.clientWidth);
+      const scaleY = canvas.height / Math.max(1, canvas.clientHeight);
+      const x = Math.max(0, Math.round(captureRect.x * scaleX));
+      const y = Math.max(0, Math.round(captureRect.y * scaleY));
+      const width = Math.min(canvas.width - x, Math.max(1, Math.round(captureRect.w * scaleX)));
+      const height = Math.min(canvas.height - y, Math.max(1, Math.round(captureRect.h * scaleY)));
+      return { x, y, width, height };
+    }
+
     function updateCaptureSelection() {
       if (!captureRect) return;
       captureSelection.style.left = `${captureRect.x}px`;
       captureSelection.style.top = `${captureRect.y}px`;
       captureSelection.style.width = `${captureRect.w}px`;
       captureSelection.style.height = `${captureRect.h}px`;
-      const scaleX = canvas.width / Math.max(1, canvas.clientWidth);
-      const scaleY = canvas.height / Math.max(1, canvas.clientHeight);
-      captureSize.textContent = `${Math.round(captureRect.w * scaleX)} × ${Math.round(captureRect.h * scaleY)}`;
+      const bounds = captureBounds();
+      captureSize.textContent = `坐标 ${bounds.x}, ${bounds.y} · ${bounds.width} × ${bounds.height}`;
     }
 
     function openCapture() {
@@ -319,26 +334,60 @@
       if (event.key === 'Escape' && !captureLayer.hidden) closeCapture();
     });
     document.getElementById('capture-cancel').addEventListener('click', closeCapture);
-    document.getElementById('capture-save').addEventListener('click', () => {
-      if (!captureRect || !canvas.width || !canvas.height) return;
-      const scaleX = canvas.width / Math.max(1, canvas.clientWidth);
-      const scaleY = canvas.height / Math.max(1, canvas.clientHeight);
-      const sx = Math.max(0, Math.round(captureRect.x * scaleX));
-      const sy = Math.max(0, Math.round(captureRect.y * scaleY));
-      const sw = Math.min(canvas.width - sx, Math.max(1, Math.round(captureRect.w * scaleX)));
-      const sh = Math.min(canvas.height - sy, Math.max(1, Math.round(captureRect.h * scaleY)));
+    function createCaptureCanvas() {
+      const bounds = captureBounds();
+      if (!bounds) return;
       const output = document.createElement('canvas');
-      output.width = sw; output.height = sh;
-      output.getContext('2d').drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
-      output.toBlob((blob) => {
-        if (!blob) { alert('截图生成失败，请重试。'); return; }
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `mywebscrcpy-${serial || 'screen'}-${sw}x${sh}.png`;
-        link.click();
-        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-        closeCapture();
-      }, 'image/png');
+      output.width = bounds.width; output.height = bounds.height;
+      output.getContext('2d').drawImage(canvas, bounds.x, bounds.y, bounds.width, bounds.height, 0, 0, bounds.width, bounds.height);
+      return { output, sw: bounds.width, sh: bounds.height };
+    }
+
+    function captureCanvasToBlob(output) {
+      return new Promise((resolve) => output.toBlob(resolve, 'image/png'));
+    }
+
+    document.getElementById('capture-save').addEventListener('click', async () => {
+      const capture = createCaptureCanvas();
+      if (!capture) return;
+      const blob = await captureCanvasToBlob(capture.output);
+      if (!blob) { alert('截图生成失败，请重试。'); return; }
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `mywebscrcpy-${serial || 'screen'}-${capture.sw}x${capture.sh}.png`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      closeCapture();
+    });
+
+    document.getElementById('capture-copy').addEventListener('click', async () => {
+      if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') {
+        alert('当前浏览器不支持复制图片到剪贴板。');
+        return;
+      }
+      const capture = createCaptureCanvas();
+      if (!capture) return;
+      try {
+        const pngBlob = captureCanvasToBlob(capture.output);
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngBlob })]);
+      } catch (error) {
+        console.warn('复制截图失败:', error);
+        alert('复制截图失败，请确认浏览器已允许剪贴板访问。');
+      }
+    });
+    document.getElementById('capture-copy-bbox').addEventListener('click', async () => {
+      const bounds = captureBounds();
+      if (!bounds) return;
+      if (!navigator.clipboard?.writeText) {
+        alert('当前浏览器不支持复制 BBOX。');
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(bounds));
+      } catch (error) {
+        console.warn('复制 BBOX 失败:', error);
+        alert('复制 BBOX 失败，请确认浏览器已允许剪贴板访问。');
+      }
     });
     document.getElementById('files-dialog-close').addEventListener('click', () => filesDialog.close());
     filesDialog.addEventListener('click', (event) => { if (event.target === filesDialog) filesDialog.close(); });
@@ -364,7 +413,9 @@
       const padding = 24; // .player-main 的 padding*2
       const inspectorPanel = document.querySelector('.ui-inspector-panel:not([hidden])');
       const inspectorReserved = inspectorPanel ? inspectorPanel.getBoundingClientRect().width + 8 : 0;
-      const availW = mainEl.clientWidth - padding - inspectorReserved;
+      const replayPanel = document.querySelector('.replay-panel:not([hidden])');
+      const replayReserved = replayPanel ? replayPanel.getBoundingClientRect().width + 12 : 0;
+      const availW = mainEl.clientWidth - padding - inspectorReserved - replayReserved;
       const availH = mainEl.clientHeight - padding;
       if (availW <= 0 || availH <= 0) return;
 
@@ -408,7 +459,8 @@
     displaySizeButton.addEventListener('click', () => {
       displaySizePanel.hidden = !displaySizePanel.hidden;
       displaySizeButton.setAttribute('aria-expanded', String(!displaySizePanel.hidden));
-      setMoreMenu(false);
+      if (!displaySizePanel.hidden) window.placeToolbarPopover(displaySizePanel, displaySizeButton);
+      if (!moreMenu.contains(displaySizeButton)) setMoreMenu(false);
     });
     displaySizeRange.addEventListener('input', () => updateDisplaySize(Number(displaySizeRange.value)));
     document.getElementById('display-size-fit').addEventListener('click', () => {
@@ -541,8 +593,7 @@
     }
 
     function handleStreamLoss(message) {
-      if (!connected && reconnectTimer) return;
-      connected = false;
+      if (!connected && reconnectTimer) return;      connected = false;
       activeSessionID = '';
       clearDetections();
       if (resultWs) {
@@ -555,6 +606,11 @@
       setStatus(message || '视频流已中断，正在重连', false);
       reconnect();
     }
+
+    // 供重放/截图等模块切换视频源：关闭当前 /ws 并重连（新订阅拿到重放源或回到实时流）
+    window.addEventListener('player:switch-stream', (e) => {
+      handleStreamLoss((e && e.detail) || '正在切换视频源…');
+    });
 
     function startConnectTimeout() {
       clearConnectTimeout();
@@ -927,6 +983,7 @@
       fsEnter.style.display = inFs ? 'none' : '';
       fsExit.style.display = inFs ? '' : 'none';
       fsBtn.title = inFs ? '退出全屏' : '全屏';
+      fsBtn.setAttribute('aria-label', fsBtn.title);
       setTimeout(fitCanvas, 100);
     }
     function toggleFullscreen() {

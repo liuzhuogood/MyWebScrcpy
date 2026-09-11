@@ -9,11 +9,11 @@
 .player-toolbar #btn-picture-in-picture.is-active { color: #165dff; background: #e8f3ff; }
 .picture-in-picture-source { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .audio-volume-panel[hidden] { display: none; }
-.audio-volume-panel { position: absolute; z-index: 40; top: 54px; right: 110px; display: flex; align-items: center; gap: 8px; width: 168px; padding: 9px 11px; border: 1px solid #e5e6eb; border-radius: 8px; background: #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, .14); }
+.audio-volume-panel { position: fixed; z-index: 40; display: flex; align-items: center; gap: 8px; width: 168px; padding: 9px 11px; border: 1px solid #e5e6eb; border-radius: 8px; background: #fff; box-shadow: 0 8px 22px rgba(0, 0, 0, .14); }
 .audio-volume-panel input { flex: 1; accent-color: #165dff; }
 .audio-volume-panel output { min-width: 34px; color: #4e5969; font-size: 12px; text-align: right; }
 .recording-panel[hidden] { display: none; }
-.recording-panel { position: absolute; z-index: 40; top: calc(100% - 4px); right: 24px; width: min(320px, calc(100vw - 24px)); padding: 14px; border: 1px solid #e5e6eb; border-radius: 10px; background: #fff; box-shadow: 0 10px 28px rgba(0, 0, 0, .16); font-size: 13px; line-height: 1.5; }
+.recording-panel { position: fixed; z-index: 40; box-sizing: border-box; width: min(320px, calc(100vw - 24px)); padding: 14px; border: 1px solid #e5e6eb; border-radius: 10px; background: #fff; box-shadow: 0 10px 28px rgba(0, 0, 0, .16); font-size: 13px; line-height: 1.5; }
 .recording-panel label { display: flex; justify-content: space-between; color: #4e5969; }
 .recording-panel output { font-weight: 600; color: #1f2329; }
 .recording-panel input { width: 100%; margin: 10px 0; accent-color: #165dff; }
@@ -36,5 +36,71 @@
 .recording-history-actions { display: flex; gap: 4px; flex-shrink: 0; }
 .recording-history-actions a { color: #165dff; background: #e8f3ff; }
 .recording-history-actions button { color: #c83d3d; background: #fff1f0; }
-@media (max-width: 768px) { .record-label { display: none; } .recording-panel { right: 12px; } }
-@media (max-width: 768px) { .audio-volume-panel { right: 58px; } }
+.recording-history-actions .recording-replay-btn { color: #0e6228; background: #e8f7ee; }
+/* 重放入口按钮（工具栏） */
+.replay-entry-btn { gap: 5px; }
+.replay-entry-label { font-size: 13px; line-height: 1; white-space: nowrap; }
+.replay-entry-btn.is-active { color: #d03050; }
+/* 重放控制面板：右侧边栏，位于 .player-main 内画布右侧，不遮挡画布主体 */
+.player-main.replay-open { justify-content: center; align-items: center; gap: 12px; }
+.replay-panel { box-sizing: border-box; flex: 0 0 280px; width: 280px; max-height: 100%; overflow: auto; padding: 14px; border: 1px solid #e5e6eb; border-radius: 10px; background: #fff; box-shadow: 0 10px 28px rgba(0, 0, 0, .12); font-size: 13px; line-height: 1.5; }
+.replay-panel[hidden] { display: none; }
+.replay-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.replay-head strong { font-size: 14px; color: #1f2329; }
+.replay-head button { border: 0; border-radius: 6px; width: 26px; height: 26px; color: #4e5969; background: #f2f3f5; cursor: pointer; font-size: 16px; line-height: 1; }
+.replay-status-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.replay-loop-tag { padding: 2px 8px; border-radius: 999px; font-size: 12px; color: #0e6228; background: #e8f7ee; white-space: nowrap; }
+.replay-loop-tag[hidden] { display: none; }
+.replay-name { margin-bottom: 10px; color: #1f2329; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.replay-progress { height: 8px; border-radius: 999px; background: #f2f3f5; overflow: hidden; }
+.replay-progress i { display: block; height: 100%; width: 0; border-radius: inherit; background: #165dff; transition: width .4s linear; }
+.replay-times { display: flex; justify-content: space-between; gap: 8px; margin: 8px 0 10px; color: #86909c; font-size: 12px; white-space: nowrap; }
+.replay-times b { color: #1f2329; font-weight: 600; }
+.replay-loop { display: flex; align-items: center; gap: 8px; color: #4e5969; cursor: pointer; }
+.replay-loop input { width: auto; margin: 0; accent-color: #165dff; }
+.replay-loop input:disabled { cursor: not-allowed; }
+.replay-loop-hint { min-height: 18px; margin: 4px 0 0; color: #86909c; font-size: 12px; }
+.replay-stop-inline { margin-left: auto; border: 1px solid #f3c2cc; border-radius: 6px; padding: 4px 10px; color: #d03050; background: #fff1f0; cursor: pointer; font: inherit; font-size: 12px; line-height: 1.6; white-space: nowrap; }
+.replay-stop-inline:disabled { opacity: .45; cursor: not-allowed; }
+.replay-msg { min-height: 20px; margin: 10px 0 0; color: #4e5969; }
+.replay-list-wrap { margin-top: 14px; padding-top: 12px; border-top: 1px solid #f2f3f5; }
+.replay-list-wrap h2 { margin: 0 0 8px; font-size: 14px; color: #1f2329; }
+.replay-list-empty { margin: 0; color: #86909c; }
+.replay-list { max-height: 220px; margin: 8px 0 0; padding: 0; overflow: auto; list-style: none; }
+.replay-list li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid #f7f8fa; }
+.replay-list li:first-child { border-top: 0; }
+.replay-list-details { min-width: 0; }
+.replay-list-details strong, .replay-list-details span { display: block; }
+.replay-list-details strong { color: #1f2329; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.replay-list-details span { color: #86909c; font-size: 12px; }
+.replay-list-actions { display: flex; gap: 4px; flex-shrink: 0; }
+.replay-list-actions a, .replay-list-actions button { border: 0; border-radius: 6px; padding: 7px 10px; cursor: pointer; text-decoration: none; font: inherit; }
+.replay-list-actions a { color: #165dff; background: #e8f3ff; }
+.replay-list-actions .replay-play-btn { color: #0e6228; background: #e8f7ee; }
+.replay-list-actions .replay-del-btn { color: #c83d3d; background: #fff1f0; }
+.replay-list-actions .replay-del-btn:disabled { opacity: .45; cursor: not-allowed; }
+.replay-list li.is-playing { background: #fff1f0; border-radius: 8px; padding-left: 8px; padding-right: 8px; }
+.replay-list-msg { min-height: 18px; margin: 6px 0 0; color: #86909c; font-size: 12px; }
+@media (max-width: 820px) {
+  .player-main.replay-open { flex-direction: column; align-items: center; overflow: auto; }
+  .replay-panel { flex: none; width: min(420px, 100%); }
+  .replay-entry-label { display: none; }
+}
+/* 截图按钮 */
+.screenshot-btn { gap: 5px; }
+/* 截图面板 */
+.screenshot-panel ul { max-height: 240px; }
+.screenshot-thumb { width: 72px; height: 48px; flex-shrink: 0; border-radius: 6px; border: 1px solid #e5e6eb; object-fit: cover; background: #f2f3f5; }
+.screenshot-panel li { align-items: center; }
+#screenshot-close { color: #4e5969; background: #f2f3f5; }
+/* 截图大图 */
+.screenshot-modal[hidden] { display: none; }
+.screenshot-modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .55); }
+.screenshot-modal-body { box-sizing: border-box; max-width: min(880px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; padding: 12px; border-radius: 10px; background: #fff; }
+.screenshot-modal-body img { display: block; max-width: 100%; height: auto; border-radius: 6px; }
+.screenshot-modal-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+.screenshot-modal-actions button { border: 0; border-radius: 6px; padding: 7px 14px; color: #4e5969; background: #f2f3f5; cursor: pointer; }
+/* 通用 toast */
+.app-toast { position: fixed; left: 50%; bottom: 28px; z-index: 80; transform: translateX(-50%) translateY(8px); max-width: min(480px, calc(100vw - 32px)); padding: 9px 16px; border-radius: 8px; color: #fff; background: rgba(31, 35, 41, .92); font-size: 13px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; }
+.app-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+@media (max-width: 768px) { .record-label { display: none; } }

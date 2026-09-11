@@ -46,6 +46,7 @@ type Hub struct {
 	sessionMu  sync.Mutex
 	sessions   map[string]*managedSession
 	recordings *recordingManager
+	replays    *replayManager
 	gates      map[string]*devicegate.Gate
 	gateMu     sync.Mutex
 	commands   *adbcommand.Manager
@@ -54,6 +55,7 @@ type Hub struct {
 func NewHub(adbPath, jarPath string) *Hub {
 	h := &Hub{adbPath: adbPath, jarPath: jarPath, nextPort: 27183, results: make(map[string]map[chan vision.Message]string), lastResult: make(map[string]vision.Message), sessions: make(map[string]*managedSession), gates: make(map[string]*devicegate.Gate), events: debuglog.New(512)}
 	h.recordings = newRecordingManager(h)
+	h.replays = newReplayManager(h)
 	h.commands = adbcommand.New(adbPath, h.gateFor)
 	return h
 }

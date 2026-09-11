@@ -54,7 +54,9 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer cancelSession()
-	width, height := ms.sess.conn.Size()
+	// Replay sessions have no scrcpy connection; dimensions come from the
+	// handshake meta in both live and replay modes.
+	width, height := meta.Width, meta.Height
 	_ = writeJSON(map[string]interface{}{"type": "hello", "protocol_version": "1", "device_id": serial, "session_id": meta.SessionID, "format": "scrcpy-frame", "codec": meta.Codec, "width": meta.Width, "height": meta.Height})
 	done := make(chan struct{})
 	var stopOnce sync.Once
