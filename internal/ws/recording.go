@@ -97,8 +97,104 @@ func newRecordingManager(h *Hub) *recordingManager {
 	retention := time.Duration(envPositiveInt64("RECORDINGS_RETENTION_HOURS", int64(defaultRecordingRetention/time.Hour))) * time.Hour
 	m := &recordingManager{hub: h, dir: dir, quota: quota, retention: retention, entries: make(map[string]*recording), bySerial: make(map[string]string)}
 	m.removeIncompleteFiles()
+	m.loadPersisted()
+	m.cleanupExpired(time.Now())
 	go m.cleanupLoop()
 	return m
+}
+
+// persist 把已完成录制元数据写成 <id>.json sidecar，供重启后重建索引。
+func (m *recordingManager) persist(rec *recording) {
+	rec.mu.Lock()
+	id, serial, st, et, maxD, recAudio, audioStatus, bytesW := rec.id, rec.serial, rec.startedAt, rec.endedAt, rec.maxDuration, rec.recordAudio, rec.audioStatus, rec.bytesWritten
+	rec.mu.Unlock()
+	if id == "" || serial == "" || st.IsZero() || et.IsZero() {
+		return
+	}
+	data, err := json.Marshal(map[string]any{
+		"recording_id":    id,
+		"serial":          serial,
+		"started_at":      st.UTC().Format(time.RFC3339Nano),
+		"ended_at":        et.UTC().Format(time.RFC3339Nano),
+		"max_duration_ms": maxD.Milliseconds(),
+		"record_audio":    recAudio,
+		"audio_status":    audioStatus,
+		"bytes_written":   bytesW,
+	})
+	if err != nil {
+		return
+	}
+	tmp := filepath.Join(m.dir, rec.id+".json.tmp")
+	if err := os.WriteFile(tmp, data, 0o640); err != nil {
+		return
+	}
+	_ = os.Rename(tmp, filepath.Join(m.dir, rec.id+".json"))
+}
+
+// loadPersisted 扫描存储目录下的 <id>.json，重建已完成录制的内存索引。
+// 仅重建 status=completed 且对应 .mp4 存在的记录；不写 bySerial（bySerial 只记录活动录制）。
+func (m *recordingManager) loadPersisted() {
+	entries, err := os.ReadDir(m.dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.Type().IsRegular() || !strings.HasSuffix(e.Name(), ".json") || strings.HasSuffix(e.Name(), ".json.tmp") {
+			continue
+		}
+		base := strings.TrimSuffix(e.Name(), ".json")
+		mp4 := filepath.Join(m.dir, base+".mp4")
+		if _, err := os.Stat(mp4); err != nil {
+			continue // mp4 不存在则忽略该 sidecar
+		}
+		data, err := os.ReadFile(filepath.Join(m.dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		var meta struct {
+			RecordingID   string `json:"recording_id"`
+			Serial        string `json:"serial"`
+			StartedAt     string `json:"started_at"`
+			EndedAt       string `json:"ended_at"`
+			MaxDurationMS int64  `json:"max_duration_ms"`
+			RecordAudio   bool   `json:"record_audio"`
+			AudioStatus   string `json:"audio_status"`
+			BytesWritten  int64  `json:"bytes_written"`
+		}
+		if err := json.Unmarshal(data, &meta); err != nil {
+			continue
+		}
+		if meta.RecordingID == "" || meta.Serial == "" {
+			continue
+		}
+		st, err1 := time.Parse(time.RFC3339Nano, meta.StartedAt)
+		et, err2 := time.Parse(time.RFC3339Nano, meta.EndedAt)
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		rec := &recording{
+			id:           meta.RecordingID,
+			serial:       meta.Serial,
+			status:       recordingComplete,
+			startedAt:    st,
+			endedAt:      et,
+			maxDuration:  time.Duration(meta.MaxDurationMS) * time.Millisecond,
+			recordAudio:  meta.RecordAudio,
+			audioStatus:  meta.AudioStatus,
+			bytesWritten: meta.BytesWritten,
+			path:         mp4,
+		}
+		if rec.bytesWritten <= 0 {
+			if info, err := os.Stat(mp4); err == nil {
+				rec.bytesWritten = info.Size()
+			}
+		}
+		m.mu.Lock()
+		if _, exists := m.entries[rec.id]; !exists {
+			m.entries[rec.id] = rec
+		}
+		m.mu.Unlock()
+	}
 }
 
 // recordingStorageDir keeps the default recording location writable when the
@@ -341,6 +437,9 @@ func (m *recordingManager) finish(rec *recording, status recordingStatus, reason
 		delete(m.bySerial, rec.serial)
 	}
 	m.mu.Unlock()
+	if keepFile && status == recordingComplete {
+		m.persist(rec)
+	}
 }
 
 func (m *recordingManager) stopRecording(id, serial string) (*recording, error) {
@@ -405,6 +504,7 @@ func (m *recordingManager) deleteRecording(id, serial string) error {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 			return recordingServiceUnavailable("recording file cannot be deleted")
 		}
+		_ = os.Remove(filepath.Join(m.dir, rec.id+".json"))
 	}
 	m.mu.Lock()
 	if m.entries[id] == rec {
@@ -444,6 +544,7 @@ func (m *recordingManager) cleanupExpired(now time.Time) {
 		rec.mu.Unlock()
 		if expire {
 			_ = os.Remove(path)
+			_ = os.Remove(filepath.Join(m.dir, rec.id+".json"))
 		}
 	}
 }
@@ -462,8 +563,11 @@ func (m *recordingManager) removeIncompleteFiles() {
 		return
 	}
 	for _, entry := range entries {
-		if entry.Type().IsRegular() && strings.HasSuffix(entry.Name(), ".mp4.partial") {
-			_ = os.Remove(filepath.Join(m.dir, entry.Name()))
+		if entry.Type().IsRegular() {
+			name := entry.Name()
+			if strings.HasSuffix(name, ".mp4.partial") || strings.HasSuffix(name, ".json.tmp") {
+				_ = os.Remove(filepath.Join(m.dir, name))
+			}
 		}
 	}
 }

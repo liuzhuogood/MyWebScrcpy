@@ -20,6 +20,11 @@
   let lastLoop = false; // 后端/本次的 loop 值
   let pendingLoop = false; // 工具栏入口打开面板前的循环选择（默认 false）
   let totalFixTried = false; // 总时长未知时只补查一次录制信息，避免每轮 poll 都请求
+  let paused = false; // 是否处于暂停
+  let pausedTotalMs = 0; // 已累计的暂停墙钟时长
+  let pausedElapsedMs = null; // 暂停时冻结的已播值
+  let pausedAtMs = null; // 本次暂停开始的时间戳
+  let dragging = false;
 
   // ===== 工具栏入口按钮（面板开关，不再放徽标/停止按钮）=====
   const entryBtn = document.createElement('button');
@@ -42,7 +47,7 @@
   panel.setAttribute('aria-label', '重放控制面板');
   panel.innerHTML = `
     <div class="replay-head"><strong>重放控制</strong><button id="replay-close" type="button" title="关闭" aria-label="关闭">×</button></div>
-    <div class="replay-status-row"><span class="replay-loop-tag" hidden>循环</span><button id="replay-stop" class="replay-stop-inline" type="button" disabled>停止重放</button></div>
+    <div class="replay-status-row"><span class="replay-loop-tag" hidden>循环</span><span class="replay-actions"><button id="replay-pause" class="replay-stop-inline" type="button" disabled>暂停</button><button id="replay-stop" class="replay-stop-inline" type="button" disabled>停止重放</button></span></div>
     <div class="replay-name" title="">--</div>
     <div class="replay-progress" role="progressbar" aria-label="重放进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
     <div class="replay-times">
@@ -77,6 +82,7 @@
   const loopBox = panel.querySelector('#replay-loop');
   const loopHint = panel.querySelector('.replay-loop-hint');
   const stopBtn = panel.querySelector('#replay-stop');
+  const pauseBtn = panel.querySelector('#replay-pause');
   const closeBtn = panel.querySelector('#replay-close');
   const msgEl = panel.querySelector('.replay-msg');
   const listWrap = panel.querySelector('.replay-list-wrap');
@@ -240,6 +246,7 @@
     entryBtn.setAttribute('aria-expanded', String(open));
     entryBtn.classList.toggle('is-active', open || replaying);
     if (open) {
+      if (!replaying) restoreFromServer();
       render(); loadReplayList();
       // 面板关闭再打开不杀计时；若 tick/poll 意外丢失（如异常分支清掉），重放中则重建，保证时间继续走
       if (replaying) {
@@ -256,7 +263,8 @@
   // loop_count 变化仍在 poll 里对齐 baseStartMs 防漂移，显示以这里取模为准。
   const currentElapsed = () => {
     if (!replaying || !baseStartMs) return null;
-    let ms = Date.now() - baseStartMs;
+    if (paused && pausedElapsedMs != null) return pausedElapsedMs;
+    let ms = Date.now() - baseStartMs - pausedTotalMs;
     if (ms < 0) ms = 0;
     if (totalMs) {
       if (lastLoop) ms = ms % totalMs;
@@ -286,6 +294,8 @@
     bar.setAttribute('aria-valuenow', String(Math.round(pct)));
 
     stopBtn.disabled = !replaying;
+    pauseBtn.disabled = !replaying;
+    pauseBtn.textContent = paused ? '继续' : '暂停';
     // 重放进行中：循环开关禁用，下次重放生效
     loopBox.disabled = replaying;
     loopHint.textContent = replaying ? '重放进行中，循环设置下次重放生效' : '';
@@ -362,6 +372,11 @@
     baseStartMs = 0;
     lastLoopCount = null;
     lastLoop = false;
+    paused = false;
+    pausedTotalMs = 0;
+    pausedElapsedMs = null;
+    pausedAtMs = null;
+    dragging = false;
     render(); emit(); paintPlaying();
     entryBtn.classList.toggle('is-active', !panel.hidden);
     switchStream('正在回到实时流…');
@@ -375,6 +390,104 @@
       const { recordings = [] } = await res.json();
       return recordings.find((e) => e.recording_id === recordingId) || null;
     } catch (_) { return null; }
+  }
+
+  async function togglePause() {
+    if (!replaying) return;
+    const target = !paused;
+    try {
+      const res = await fetch(`/api/replay/pause?serial=${encodeURIComponent(serial)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paused: target }),
+      });
+      if (!res.ok) throw Error();
+      if (target) {
+        pausedElapsedMs = currentElapsed();
+        pausedAtMs = Date.now();
+      } else {
+        if (pausedAtMs != null) pausedTotalMs += Date.now() - pausedAtMs;
+        pausedAtMs = null;
+        pausedElapsedMs = null;
+      }
+      paused = target;
+      render(); emit();
+    } catch (_) { toast('暂停操作失败，请重试'); }
+  }
+
+  async function seekReplay(positionMs) {
+    if (!replaying || !totalMs) return;
+    try {
+      const res = await fetch(`/api/replay/seek?serial=${encodeURIComponent(serial)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position_ms: Math.round(positionMs) }),
+      });
+      if (!res.ok) throw Error();
+      // 重校准本地计时：已播 = positionMs（loop 时取模）
+      paused = false;
+      pausedElapsedMs = null;
+      pausedAtMs = null;
+      pausedTotalMs = 0;
+      let pos = positionMs;
+      if (lastLoop && totalMs) pos = positionMs % totalMs;
+      baseStartMs = Date.now() - pos;
+      render(); emit();
+    } catch (_) { toast('跳转失败，请重试'); }
+  }
+
+  const positionFromPointer = (e) => {
+    const rect = bar.getBoundingClientRect();
+    const frac = rect.width > 0 ? Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)) : 0;
+    return totalMs ? frac * totalMs : 0;
+  };
+  const applySeekFromEvent = (e) => {
+    const pos = positionFromPointer(e);
+    if (totalMs) seekReplay(pos);
+  };
+  const onSeekDown = (e) => {
+    if (!replaying || !totalMs) return;
+    e.preventDefault();
+    dragging = true;
+    applySeekFromEvent(e);
+    const onMove = (ev) => { if (dragging) applySeekFromEvent(ev); };
+    const onUp = () => {
+      dragging = false;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  // 新页面/重开面板时恢复后端仍活动的重放：让停止/暂停可用，不再出现“无法停止”的孤儿状态。
+  async function restoreFromServer() {
+    if (replaying) return; // 本页已有会话，不覆盖
+    try {
+      const res = await fetch(`/api/replay?serial=${encodeURIComponent(serial)}`);
+      if (!res.ok) return;
+      const { replay } = await res.json();
+      if (!replay || !replay.recording_id) return; // 后端无活动重放
+      replaying = true;
+      sessionSeq++; // 使任何旧轮 poll 失效
+      currentId = replay.recording_id;
+      lastLoop = typeof replay.loop === 'boolean' ? replay.loop : false;
+      lastLoopCount = typeof replay.loop_count === 'number' ? replay.loop_count : null;
+      totalMs = null;
+      totalFixTried = false;
+      paused = !!replay.paused;
+      let t = Date.parse(replay.started_at);
+      baseStartMs = Number.isFinite(t) ? t : Date.now();
+      if (baseStartMs > Date.now() || Math.abs(Date.now() - baseStartMs) > 3600 * 1000) baseStartMs = Date.now();
+      // 暂停态也要恢复：冻结已播
+      if (paused) {
+        pausedElapsedMs = currentElapsed();
+        pausedAtMs = Date.now();
+      }
+      // 补查录制信息拿总时长
+      currentEntry = await lookupEntry(currentId) || null;
+      if (currentEntry) totalMs = totalFromEntry(currentEntry);
+      render(); emit(); paintPlaying();
+      startTick(); poll();
+    } catch (_) { /* 网络抖动：保持现状，不强行进入重放态 */ }
   }
 
   async function startReplay(recordingId, entry) {
@@ -432,6 +545,9 @@
   entryBtn.addEventListener('click', () => setPanelOpen(panel.hidden));
   closeBtn.addEventListener('click', () => setPanelOpen(false));
   stopBtn.addEventListener('click', () => stopReplay(true));
+  pauseBtn.addEventListener('click', () => togglePause());
+  bar.addEventListener('pointerdown', onSeekDown);
+  bar.addEventListener('click', (e) => { if (!dragging) applySeekFromEvent(e); });
   // 页签切后台时浏览器会节流 setInterval，回来后按墙钟（Date.now 差值）立即追齐显示
   document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
   window.addEventListener('pageshow', () => render());
@@ -445,6 +561,7 @@
   });
 
   render();
+  restoreFromServer();
   window.__replayStart = startReplay;
   window.__replayStop = () => stopReplay(true);
   window.__isReplaying = () => replaying;

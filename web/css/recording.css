@@ -52,7 +52,7 @@
 .replay-loop-tag { padding: 2px 8px; border-radius: 999px; font-size: 12px; color: #0e6228; background: #e8f7ee; white-space: nowrap; }
 .replay-loop-tag[hidden] { display: none; }
 .replay-name { margin-bottom: 10px; color: #1f2329; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.replay-progress { height: 8px; border-radius: 999px; background: #f2f3f5; overflow: hidden; }
+.replay-progress { height: 8px; border-radius: 999px; background: #f2f3f5; overflow: hidden; cursor: pointer; }
 .replay-progress i { display: block; height: 100%; width: 0; border-radius: inherit; background: #165dff; transition: width .4s linear; }
 .replay-times { display: flex; justify-content: space-between; gap: 8px; margin: 8px 0 10px; color: #86909c; font-size: 12px; white-space: nowrap; }
 .replay-times b { color: #1f2329; font-weight: 600; }
@@ -60,7 +60,8 @@
 .replay-loop input { width: auto; margin: 0; accent-color: #165dff; }
 .replay-loop input:disabled { cursor: not-allowed; }
 .replay-loop-hint { min-height: 18px; margin: 4px 0 0; color: #86909c; font-size: 12px; }
-.replay-stop-inline { margin-left: auto; border: 1px solid #f3c2cc; border-radius: 6px; padding: 4px 10px; color: #d03050; background: #fff1f0; cursor: pointer; font: inherit; font-size: 12px; line-height: 1.6; white-space: nowrap; }
+.replay-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.replay-stop-inline { border: 1px solid #f3c2cc; border-radius: 6px; padding: 4px 10px; color: #d03050; background: #fff1f0; cursor: pointer; font: inherit; font-size: 12px; line-height: 1.6; white-space: nowrap; }
 .replay-stop-inline:disabled { opacity: .45; cursor: not-allowed; }
 .replay-msg { min-height: 20px; margin: 10px 0 0; color: #4e5969; }
 .replay-list-wrap { margin-top: 14px; padding-top: 12px; border-top: 1px solid #f2f3f5; }

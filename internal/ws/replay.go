@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -41,6 +42,16 @@ type replay struct {
 	stop        chan struct{}
 	stopOnce    sync.Once
 	done        chan struct{}
+
+	paused      bool
+	pauseMu     sync.Mutex
+	pauseAccum  time.Duration // 已完成暂停的累计墙钟时长
+	pausedSince time.Time     // 当前暂停的起点；未暂停时为零值
+	pauseNotify chan struct{} // 每次暂停状态变化时投递一次，用于唤醒节拍等待
+
+	media  *replayMedia
+	seek   chan int // 缓冲1：待跳转的样本下标
+	seekMu sync.Mutex
 }
 
 func (r *replay) isLoop() bool { return r.loop }
@@ -58,6 +69,102 @@ func (r *replay) incLoopCount() int {
 	return r.loopCount
 }
 
+func (r *replay) isPaused() bool {
+	r.pauseMu.Lock()
+	defer r.pauseMu.Unlock()
+	return r.paused
+}
+
+// pausedDuration 返回已完成暂停的累计时长（当前正在进行的暂停不计入）
+func (r *replay) pausedDuration() time.Duration {
+	r.pauseMu.Lock()
+	defer r.pauseMu.Unlock()
+	return r.pauseAccum
+}
+
+// setPaused 设置暂停状态；返回是否发生了状态变化。
+func (r *replay) setPaused(p bool) bool {
+	r.pauseMu.Lock()
+	if r.paused == p {
+		r.pauseMu.Unlock()
+		return false
+	}
+	r.paused = p
+	if p {
+		r.pausedSince = time.Now()
+	} else {
+		if !r.pausedSince.IsZero() {
+			r.pauseAccum += time.Since(r.pausedSince)
+		}
+		r.pausedSince = time.Time{}
+	}
+	r.pauseMu.Unlock()
+	select {
+	case r.pauseNotify <- struct{}{}:
+	default:
+	}
+	return true
+}
+
+// waitResume 阻塞直到恢复或停止；返回 false 表示应退出整个 run 循环（停止）。
+func (r *replay) waitResume() bool {
+	for r.isPaused() {
+		select {
+		case <-r.stop:
+			return false
+		case <-r.pauseNotify:
+		}
+	}
+	return true
+}
+
+// resetPausedAccum 节拍重校准后重置暂停累计
+func (r *replay) resetPausedAccum() {
+	r.pauseMu.Lock()
+	r.pauseAccum = 0
+	if r.paused {
+		r.pausedSince = time.Now()
+	}
+	r.pauseMu.Unlock()
+}
+
+// seekToElapsed 按毫秒跳转，落到关键帧后投递
+func (r *replay) seekToElapsed(ms int64) {
+	r.seekMu.Lock()
+	defer r.seekMu.Unlock()
+	if r.media == nil || len(r.media.samples) == 0 {
+		return
+	}
+	samples := r.media.samples
+	first := samples[0].pts
+	last := samples[len(samples)-1].pts
+	span := uint64(0)
+	if last >= first {
+		span = last - first
+	}
+	var targetPTS uint64
+	switch {
+	case ms <= 0:
+		targetPTS = first
+	case span == 0 || uint64(ms*1000) >= span:
+		targetPTS = last
+	default:
+		targetPTS = first + uint64(ms*1000)
+	}
+	idx := sort.Search(len(samples), func(i int) bool { return samples[i].pts >= targetPTS })
+	if idx >= len(samples) {
+		idx = len(samples) - 1
+	}
+	// 回退到最近的关键帧，保证 reframe 后能立即解码
+	for idx > 0 && !samples[idx].key {
+		idx--
+	}
+	select {
+	case r.seek <- idx:
+	default:
+	}
+}
+
 type replayView struct {
 	ReplayID    string    `json:"replay_id"`
 	Serial      string    `json:"serial"`
@@ -66,10 +173,11 @@ type replayView struct {
 	StartedAt   time.Time `json:"started_at"`
 	Loop        bool      `json:"loop"`
 	LoopCount   int       `json:"loop_count"`
+	Paused      bool      `json:"paused"`
 }
 
 func (r *replay) view() replayView {
-	return replayView{ReplayID: r.id, Serial: r.serial, RecordingID: r.recordingID, Status: "replaying", StartedAt: r.startedAt.UTC(), Loop: r.loop, LoopCount: r.completedLoops()}
+	return replayView{ReplayID: r.id, Serial: r.serial, RecordingID: r.recordingID, Status: "replaying", StartedAt: r.startedAt.UTC(), Loop: r.loop, LoopCount: r.completedLoops(), Paused: r.isPaused()}
 }
 
 type replayManager struct {
@@ -155,7 +263,7 @@ func (m *replayManager) start(serial, recordingID string, loop bool) (*replay, e
 	meta := &handshakeMeta{Type: "meta", Codec: "h264", Width: media.width, Height: media.height, Serial: serial, SessionID: newSessionID()}
 	ms := &managedSession{replay: true, meta: meta, refs: 1, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), width: media.width, height: media.height}
 	ms.actions = action.New(deviceActionExecutor{ms: ms}, 64)
-	rp := &replay{id: newRecordingID(), serial: serial, recordingID: recordingID, startedAt: time.Now(), loop: loop, ms: ms, stop: make(chan struct{}), done: make(chan struct{})}
+	rp := &replay{id: newRecordingID(), serial: serial, recordingID: recordingID, startedAt: time.Now(), loop: loop, ms: ms, stop: make(chan struct{}), done: make(chan struct{}), pauseNotify: make(chan struct{}, 1), media: media, seek: make(chan int, 1)}
 
 	m.mu.Lock()
 	if _, exists := m.bySerial[serial]; exists {
@@ -191,8 +299,6 @@ func (m *replayManager) run(rp *replay, media *replayMedia) {
 	ms := rp.ms
 	sessionFrame := &scrcpy.Frame{Kind: scrcpy.FrameSession, Width: media.width, Height: media.height}
 	configFrame := &scrcpy.Frame{Kind: scrcpy.FrameConfig, Payload: media.config}
-	broadcastReplayFrame(ms, sessionFrame, encodeFrame(sessionFrame))
-	broadcastReplayFrame(ms, configFrame, encodeFrame(configFrame))
 	if len(media.samples) == 0 {
 		if !rp.isLoop() {
 			return
@@ -217,32 +323,64 @@ func (m *replayManager) run(rp *replay, media *replayMedia) {
 		span = lastPTS - firstPTS
 	}
 	var ptsOffset uint64
-	for lap := 0; ; lap++ {
-		if lap > 0 {
-			select {
-			case <-rp.stop:
+	startIdx := 0
+reframe:
+	for {
+		if rp.isPaused() {
+			if !rp.waitResume() {
 				return
-			default:
 			}
-			broadcastReplayFrame(ms, sessionFrame, encodeFrame(sessionFrame))
-			broadcastReplayFrame(ms, configFrame, encodeFrame(configFrame))
 		}
-		t0 := firstPTS
+		select {
+		case <-rp.stop:
+			return
+		default:
+		}
+		broadcastReplayFrame(ms, sessionFrame, encodeFrame(sessionFrame))
+		broadcastReplayFrame(ms, configFrame, encodeFrame(configFrame))
+		t0 := media.samples[startIdx].pts
 		start := time.Now()
-		for i, s := range media.samples {
+		rp.resetPausedAccum()
+		for i := startIdx; i < len(media.samples); i++ {
+			s := media.samples[i]
 			select {
-			case <-rp.stop:
-				return
+			case idx := <-rp.seek:
+				startIdx = idx
+				continue reframe
 			default:
 			}
 			if i > 0 && s.pts >= t0 {
-				if wait := time.Duration(s.pts-t0)*time.Microsecond - time.Since(start); wait > 0 {
+				for {
+					wait := time.Duration(s.pts-t0)*time.Microsecond - (time.Since(start) - rp.pausedDuration())
+					if wait <= 0 {
+						break
+					}
+					if rp.isPaused() {
+						if !rp.waitResume() {
+							return
+						}
+						continue
+					}
 					select {
 					case <-rp.stop:
 						return
+					case idx := <-rp.seek:
+						startIdx = idx
+						continue reframe
+					case <-rp.pauseNotify:
 					case <-time.After(wait):
 					}
 				}
+			}
+			if rp.isPaused() {
+				if !rp.waitResume() {
+					return
+				}
+			}
+			select {
+			case <-rp.stop:
+				return
+			default:
 			}
 			kind := scrcpy.FrameDelta
 			if s.key {
@@ -256,6 +394,7 @@ func (m *replayManager) run(rp *replay, media *replayMedia) {
 		}
 		rp.incLoopCount()
 		ptsOffset += span + gap
+		startIdx = 0
 	}
 }
 
@@ -650,6 +789,8 @@ func unescapeRBSP(data []byte) []byte {
 func (h *Hub) RegisterReplayRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/replay/start", h.startReplay)
 	mux.HandleFunc("POST /api/replay/stop", h.stopReplay)
+	mux.HandleFunc("POST /api/replay/pause", h.pauseReplay)
+	mux.HandleFunc("POST /api/replay/seek", h.seekReplay)
 	mux.HandleFunc("GET /api/replay", h.getReplay)
 }
 
@@ -684,6 +825,58 @@ func (h *Hub) stopReplay(w http.ResponseWriter, r *http.Request) {
 		writeRecordingError(w, err)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(rp.view())
+}
+
+func (h *Hub) pauseReplay(w http.ResponseWriter, r *http.Request) {
+	serial := r.URL.Query().Get("serial")
+	var body struct {
+		Paused *bool `json:"paused"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeRecordingError(w, &recordingHTTPError{status: http.StatusBadRequest, code: "invalid_request", msg: "paused is required"})
+		return
+	}
+	rp := h.replayMgr().get(serial)
+	if rp == nil {
+		writeRecordingError(w, &recordingHTTPError{status: http.StatusNotFound, code: "replay_not_found", msg: "no active replay for this device"})
+		return
+	}
+	if body.Paused != nil {
+		rp.setPaused(*body.Paused)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(rp.view())
+}
+
+func (h *Hub) seekReplay(w http.ResponseWriter, r *http.Request) {
+	serial := r.URL.Query().Get("serial")
+	var body struct {
+		PositionMS *int64 `json:"position_ms"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeRecordingError(w, &recordingHTTPError{status: http.StatusBadRequest, code: "invalid_request", msg: "position_ms is required"})
+		return
+	}
+	rp := h.replayMgr().get(serial)
+	if rp == nil {
+		writeRecordingError(w, &recordingHTTPError{status: http.StatusNotFound, code: "replay_not_found", msg: "no active replay for this device"})
+		return
+	}
+	if body.PositionMS == nil {
+		writeRecordingError(w, &recordingHTTPError{status: http.StatusBadRequest, code: "invalid_request", msg: "position_ms is required"})
+		return
+	}
+	// seek 语义：跳到该位置并继续播放（若暂停则解除暂停），保证 waitResume 阻塞的 goroutine 能醒来消费 seek
+	rp.setPaused(false)
+	rp.seekToElapsed(*body.PositionMS)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(rp.view())
