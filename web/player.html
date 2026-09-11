@@ -593,7 +593,8 @@
     }
 
     function handleStreamLoss(message) {
-      if (!connected && reconnectTimer) return;      connected = false;
+      if (!connected && reconnectTimer) return;
+      connected = false;
       activeSessionID = '';
       clearDetections();
       if (resultWs) {
