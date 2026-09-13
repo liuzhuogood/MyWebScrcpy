@@ -17,6 +17,7 @@ import (
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/scripts"
+	"mywebscrcpy/internal/uipage"
 	"mywebscrcpy/internal/uixml"
 	"mywebscrcpy/internal/ws"
 )
@@ -65,6 +66,7 @@ func main() {
 	}
 	fileManager := files.NewManager(adbPath)
 	uiXML := uixml.New(adbPath)
+	uiPage := uipage.New(adbPath)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/openapi.json", func(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +97,15 @@ func main() {
 	// API: 获取当前设备的 Android UI XML 快照（只读，按请求执行）。
 	mux.Handle("/api/ui/xml", uixml.Handler{
 		Service: uiXML,
+		IsOnline: func(serial string) bool {
+			_, ok := dm.GetDevice(serial)
+			return ok
+		},
+	})
+
+	// API: 获取当前设备的前台页面信息及屏幕指标 (只读，按请求执行)
+	mux.Handle("/api/ui/page-info", uipage.Handler{
+		Service: uiPage,
 		IsOnline: func(serial string) bool {
 			_, ok := dm.GetDevice(serial)
 			return ok

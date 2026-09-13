@@ -22,7 +22,7 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"/api/devices", "/api/rotate", "/api/screen-state", "/api/reboot", "/ws",
 		"/api/recordings", "/api/recordings/{recording_id}", "/api/recordings/{recording_id}/stop",
 		"/api/adb/commands", "/api/sendkey", "/api/files", "/api/files/upload",
-		"/api/ui/xml", "/api/vision/stream", "/api/vision/results", "/api/vision/stats", "/api/vision/debug",
+		"/api/ui/xml", "/api/ui/page-info", "/api/vision/stream", "/api/vision/results", "/api/vision/stats", "/api/vision/debug",
 	} {
 		if _, ok := spec.Paths[path]; !ok {
 			t.Errorf("registered API %s is missing from the OpenAPI spec", path)

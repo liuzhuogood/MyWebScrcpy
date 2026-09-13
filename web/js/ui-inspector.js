@@ -7,7 +7,8 @@
   const playerMain = document.querySelector('.player-main');
   if (!canvas || !overlay || !button) return;
 
-  let panel, resizer, tabColor, tabXML, readout, normalizedReadout, tree, props, xpath, xpathResult, message, showAllButton;
+  let panel, resizer, tabColor, tabXML, tabPackage, readout, normalizedReadout, tree, props, xpath, xpathResult, message, showAllButton;
+  let pageInfoFetched = false, pageInfoMessage, pageInfoGrid;
   let xmlDoc = null, xmlBoundsSize = null, xmlDisplaySize = null, selected = null, xpathNodes = [], locatorAttributes = new Set(), showAllNodes = false, lastPoint = null, crosshairPinned = false, raf = 0, magnifier;
   const nodeRows = new WeakMap();
 
@@ -20,14 +21,17 @@
   function build() {
     panel = el('section', null, 'ui-inspector-panel'); panel.hidden = true; panel.setAttribute('role', 'dialog');
     const head = el('div', null, 'ui-inspector-head'); head.append(el('strong', '检查')); const close = el('button', '关闭'); close.onclick = closePanel; head.append(close); panel.append(head);
-    const tabs = el('div', null, 'ui-inspector-tabs'); const colorBtn = el('button', '取色坐标'); const xmlBtn = el('button', 'XML 树'); colorBtn.classList.add('active'); tabs.append(colorBtn, xmlBtn); panel.append(tabs);
+    const tabs = el('div', null, 'ui-inspector-tabs'); const colorBtn = el('button', '取色坐标'); const xmlBtn = el('button', 'XML 树'); const packageBtn = el('button', '页面信息'); colorBtn.classList.add('active'); tabs.append(colorBtn, xmlBtn, packageBtn); panel.append(tabs);
     tabColor = el('div', null, 'ui-inspector-tab active'); readout = el('div', null, 'ui-inspector-readout'); normalizedReadout = el('span', '—'); readout.append(el('span', '坐标'), el('span', '移动鼠标到画面上'), el('span', '归一化'), normalizedReadout, el('span', '颜色'), el('span', '—')); tabColor.append(readout); magnifier = document.createElement('canvas'); magnifier.width = magnifier.height = 156; magnifier.className = 'ui-inspector-magnifier'; tabColor.append(magnifier); panel.append(tabColor);
     tabXML = el('div', null, 'ui-inspector-tab'); const refresh = el('button', '刷新 XML'); refresh.onclick = fetchXML; xpath = document.createElement('input'); xpath.className = 'ui-inspector-xpath'; xpath.placeholder = "例如 //*[@resource-id='app:id/login']"; xpath.onkeydown = event => { if (event.key === 'Enter') testXPath(); }; const test = el('button', '测试 XPath'); test.onclick = testXPath; showAllButton = el('button', '显示全部'); showAllButton.onclick = toggleShowAll; const clear = el('button', '清除'); clear.onclick = clearXPath; const controls = el('div', null, 'ui-inspector-controls'); controls.append(refresh, xpath, test, showAllButton, clear); xpathResult = el('div', '尚未测试', 'ui-inspector-message'); message = el('div', '', 'ui-inspector-message'); tree = el('ul', null, 'ui-inspector-tree'); props = el('div', null, 'ui-inspector-props'); tabXML.append(controls, xpathResult, message, tree, props); panel.append(tabXML);
+    tabPackage = el('div', null, 'ui-inspector-tab'); const refreshPkg = el('button', '刷新信息'); refreshPkg.onclick = fetchPageInfo; const pkgControls = el('div', null, 'ui-inspector-controls'); pkgControls.append(refreshPkg); pageInfoMessage = el('div', '', 'ui-inspector-message'); pageInfoGrid = el('div', '', 'ui-inspector-page-grid'); tabPackage.append(pkgControls, pageInfoMessage, pageInfoGrid); panel.append(tabPackage);
     resizer = el('div', null, 'ui-inspector-resizer'); resizer.setAttribute('aria-hidden', 'true'); playerMain.append(resizer, panel); setupResizer();
-    colorBtn.onclick = () => switchTab(colorBtn, xmlBtn, tabColor, tabXML); xmlBtn.onclick = () => { switchTab(xmlBtn, colorBtn, tabXML, tabColor); if (!xmlDoc) fetchXML(); };
+    colorBtn.onclick = () => switchTab(colorBtn, [xmlBtn, packageBtn], tabColor, [tabXML, tabPackage]);
+    xmlBtn.onclick = () => { switchTab(xmlBtn, [colorBtn, packageBtn], tabXML, [tabColor, tabPackage]); if (!xmlDoc) fetchXML(); };
+    packageBtn.onclick = () => { switchTab(packageBtn, [colorBtn, xmlBtn], tabPackage, [tabColor, tabXML]); if (!pageInfoFetched) fetchPageInfo(); };
     button.onclick = () => { panel.hidden = !panel.hidden; const opened = !panel.hidden; playerMain.classList.toggle('inspector-open', opened); if (opened) { playerMain.classList.remove('inspector-resized'); playerMain.style.removeProperty('--inspector-width'); setMoreMenuClosed(); syncOverlay(); drawBoxes(); } else clearOverlay(); button.setAttribute('aria-expanded', String(opened)); window.dispatchEvent(new Event('resize')); };
   }
-  function switchTab(active, other, pane, otherPane) { active.classList.add('active'); other.classList.remove('active'); pane.classList.add('active'); otherPane.classList.remove('active'); drawBoxes(); }
+  function switchTab(active, others, pane, otherPanes) { active.classList.add('active'); others.forEach(btn => btn.classList.remove('active')); pane.classList.add('active'); otherPanes.forEach(p => p.classList.remove('active')); drawBoxes(); }
   function setMoreMenuClosed() { const menu = document.getElementById('more-menu'); if (menu) menu.hidden = true; }
   function clearOverlay() { overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height); }
   function closePanel() { panel.hidden = true; playerMain.classList.remove('inspector-open'); button.setAttribute('aria-expanded', 'false'); if (selected) selected.row.classList.remove('selected'); selected = null; locatorAttributes.clear(); xpathNodes = []; showAllNodes = false; clearOverlay(); window.dispatchEvent(new Event('resize')); }

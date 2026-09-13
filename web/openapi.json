@@ -30,6 +30,7 @@
     "/api/scripts/{cat}":{"post":{"tags":["脚本"],"summary":"创建脚本","x-side-effect":true}},
     "/api/scripts/{cat}/{name}":{"get":{"tags":["脚本"],"summary":"读取脚本"},"put":{"tags":["脚本"],"summary":"更新脚本","x-side-effect":true},"delete":{"tags":["脚本"],"summary":"删除脚本","x-side-effect":true}},
     "/api/ui/xml":{"get":{"tags":["UI 检查"],"summary":"读取 Android UI XML","parameters":[{"$ref":"#/components/parameters/serial"}]}},
+    "/api/ui/page-info":{"get":{"tags":["UI 检查"],"summary":"读取前台应用与屏幕信息","parameters":[{"$ref":"#/components/parameters/serial"}]}},
     "/api/vision/stream":{"get":{"tags":["Vision"],"summary":"Vision WebSocket 双向帧/动作通道","description":"建立与目标设备的 Vision 双向 WebSocket 通道。连接后服务端先发送 hello（含 protocol_version、device_id、session_id、width、height、codec），随后持续推送二进制视频帧；客户端通过文本 JSON 上行消息。\n\n上行文本消息（客户端→服务端）：\n- hello：携带 max_fps（可选），服务端回 hello.ack。\n- action.request：请求执行设备动作（tap/swipe/key/text），字段定义见 components.schemas.VisionActionRequest，其中 humanize=true 启用拟人化触摸。\n- detection.result：回传识别结果，服务端校验后广播。\n- heartbeat：保活，服务端回 heartbeat。\n\n下行文本消息（服务端→客户端）：\n- hello / hello.ack / action.result / heartbeat / error。\n\naction.request 返回 action.result：{\"type\":\"action.result\",\"request_id\":\"...\",\"accepted\":true,\"executed\":true,\"error_code\":\"...\"}。\n\n动作会与浏览器控制消息共用同一设备级队列；坐标越界返回 invalid_coordinate，队列满返回 queue_full，超时返回 expired。","parameters":[{"$ref":"#/components/parameters/serial"}]}},
     "/api/vision/results":{"get":{"tags":["Vision"],"summary":"读取 Vision 结果"}},
     "/api/vision/stats":{"get":{"tags":["Vision"],"summary":"读取 Vision 统计"}},
