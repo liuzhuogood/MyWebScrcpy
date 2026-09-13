@@ -30,10 +30,35 @@
     "/api/scripts/{cat}":{"post":{"tags":["脚本"],"summary":"创建脚本","x-side-effect":true}},
     "/api/scripts/{cat}/{name}":{"get":{"tags":["脚本"],"summary":"读取脚本"},"put":{"tags":["脚本"],"summary":"更新脚本","x-side-effect":true},"delete":{"tags":["脚本"],"summary":"删除脚本","x-side-effect":true}},
     "/api/ui/xml":{"get":{"tags":["UI 检查"],"summary":"读取 Android UI XML","parameters":[{"$ref":"#/components/parameters/serial"}]}},
-    "/api/vision/stream":{"get":{"tags":["Vision"],"summary":"Vision WebSocket 帧与结果通道"}},
+    "/api/vision/stream":{"get":{"tags":["Vision"],"summary":"Vision WebSocket 双向帧/动作通道","description":"建立与目标设备的 Vision 双向 WebSocket 通道。连接后服务端先发送 hello（含 protocol_version、device_id、session_id、width、height、codec），随后持续推送二进制视频帧；客户端通过文本 JSON 上行消息。\n\n上行文本消息（客户端→服务端）：\n- hello：携带 max_fps（可选），服务端回 hello.ack。\n- action.request：请求执行设备动作（tap/swipe/key/text），字段定义见 components.schemas.VisionActionRequest，其中 humanize=true 启用拟人化触摸。\n- detection.result：回传识别结果，服务端校验后广播。\n- heartbeat：保活，服务端回 heartbeat。\n\n下行文本消息（服务端→客户端）：\n- hello / hello.ack / action.result / heartbeat / error。\n\naction.request 返回 action.result：{\"type\":\"action.result\",\"request_id\":\"...\",\"accepted\":true,\"executed\":true,\"error_code\":\"...\"}。\n\n动作会与浏览器控制消息共用同一设备级队列；坐标越界返回 invalid_coordinate，队列满返回 queue_full，超时返回 expired。","parameters":[{"$ref":"#/components/parameters/serial"}]}},
     "/api/vision/results":{"get":{"tags":["Vision"],"summary":"读取 Vision 结果"}},
     "/api/vision/stats":{"get":{"tags":["Vision"],"summary":"读取 Vision 统计"}},
     "/api/vision/debug":{"get":{"tags":["Vision"],"summary":"读取 Vision 调试信息"}}
   },
-  "components":{"parameters":{"serial":{"name":"serial","in":"query","required":true,"schema":{"type":"string"},"description":"ADB 设备 serial"}}}
+  "components":{
+    "parameters":{"serial":{"name":"serial","in":"query","required":true,"schema":{"type":"string"},"description":"ADB 设备 serial"}},
+    "schemas":{
+      "VisionActionRequest":{
+        "type":"object",
+        "description":"Vision 通道上行动作请求消息（WebSocket 文本 JSON，发送到 /api/vision/stream）。",
+        "properties":{
+          "type":{"type":"string","enum":["action.request"],"description":"消息类型"},
+          "request_id":{"type":"string","description":"请求标识，action.result 中回显"},
+          "device_id":{"type":"string","description":"目标设备 serial；缺省时用连接绑定的 serial"},
+          "session_id":{"type":"string","description":"会话标识（可选），用于校验"},
+          "action":{"type":"string","enum":["tap","swipe","key","text"],"description":"动作类型"},
+          "x":{"type":"number","minimum":0,"maximum":1,"description":"归一化 X 坐标 0~1；tap 落点 / swipe 起点"},
+          "y":{"type":"number","minimum":0,"maximum":1,"description":"归一化 Y 坐标 0~1"},
+          "x2":{"type":"number","minimum":0,"maximum":1,"description":"swipe 终点归一化 X 坐标"},
+          "y2":{"type":"number","minimum":0,"maximum":1,"description":"swipe 终点归一化 Y 坐标"},
+          "keycode":{"type":"integer","description":"Android keycode（action=key 时必填）"},
+          "text":{"type":"string","description":"注入的 UTF-8 文本（action=text 时必填）"},
+          "frame_id":{"type":"integer","description":"关联的视频帧 ID（可选）"},
+          "expires_ms":{"type":"integer","description":"动作执行超时毫秒（可选）"},
+          "humanize":{"type":"boolean","default":false,"description":"拟人化触摸，仅对 tap/swipe 生效。tap：落点高斯随机偏移、压力随机、按下到抬起加入随机按压时长；swipe：起止点间生成多个中间点、走带随机抖动的曲线路径并模拟起慢中快收慢变速。默认关闭，行为与精确注入一致，便于自动化复现。注意 scrcpy 协议无按压面积字段，拟人仅以落点偏移+压力近似。"}
+        },
+        "required":["type","action"]
+      }
+    }
+  }
 }

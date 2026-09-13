@@ -25,6 +25,9 @@ type Request struct {
 	Raw       []byte  `json:"-"`
 	FrameID   uint64  `json:"frame_id,omitempty"`
 	ExpiresMS int64   `json:"expires_ms,omitempty"`
+	// Humanize 启用拟人化触摸（默认关闭）：落点随机偏移、按压时长、
+	// 拖动走带抖动/变速的曲线路径。仅对 tap / swipe 生效。
+	Humanize bool `json:"humanize,omitempty"`
 }
 
 type Result struct {

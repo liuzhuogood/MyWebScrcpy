@@ -422,6 +422,9 @@ func (e deviceActionExecutor) execute(ctx context.Context, r action.Request) err
 	if r.Action == "tap" {
 		x, y := int32(r.X*float64(width)), int32(r.Y*float64(height))
 		w, h := uint16(width), uint16(height)
+		if r.Humanize {
+			return e.humanizeTap(x, y, w, h)
+		}
 		if err := e.ms.sess.conn.WriteControl(scrcpy.TouchEvent(scrcpy.ActionDown, scrcpy.PointerIDMouse, x, y, w, h, 1, scrcpy.ButtonPrimary, scrcpy.ButtonPrimary)); err != nil {
 			return err
 		}
@@ -431,6 +434,9 @@ func (e deviceActionExecutor) execute(ctx context.Context, r action.Request) err
 		x1, y1 := int32(r.X*float64(width)), int32(r.Y*float64(height))
 		x2, y2 := int32(r.X2*float64(width)), int32(r.Y2*float64(height))
 		w, h := uint16(width), uint16(height)
+		if r.Humanize {
+			return e.humanizeSwipe(x1, y1, x2, y2, w, h)
+		}
 		if err := e.ms.sess.conn.WriteControl(scrcpy.TouchEvent(scrcpy.ActionDown, scrcpy.PointerIDMouse, x1, y1, w, h, 1, scrcpy.ButtonPrimary, scrcpy.ButtonPrimary)); err != nil {
 			return err
 		}

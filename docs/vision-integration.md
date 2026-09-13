@@ -137,12 +137,19 @@ Go 返回：
 
 当前有效自动动作支持 `tap`、`swipe`、`key` 和 `text`；`swipe` 使用 `x/y` 到 `x2/y2` 的归一化起止坐标，`key` 需要 Android keycode，`text` 注入 UTF-8 文本。坐标越界返回 `invalid_coordinate`；队列满返回 `queue_full`；过期返回 `expired`。动作会与浏览器控制消息共用同一设备级队列。
 
+可选参数 `humanize`（布尔，默认 `false`）启用拟人化触摸，仅对 `tap` / `swipe` 生效：
+- `tap`：落点做高斯随机偏移（近似手指按压区域而非精确单点）、压力随机，并在按下与抬起之间加入随机按压时长。
+- `swipe`：在起止点之间生成多个中间点，走带随机抖动的曲线路径，并模拟人手"起慢—中快—收慢"的变速节奏。
+
+默认关闭，行为与精确注入一致，便于自动化复现。注意：scrcpy 协议没有按压面积（contact area）字段，拟人仅通过落点偏移与压力近似手指按压，无法真正上报接触面积。
+
 示例：
 
 ```json
 {"type":"action.request","request_id":"swipe-001","action":"swipe","x":0.8,"y":0.8,"x2":0.2,"y2":0.8,"expires_ms":1000}
 {"type":"action.request","request_id":"back-001","action":"key","keycode":4,"expires_ms":1000}
 {"type":"action.request","request_id":"text-001","action":"text","text":"你好","expires_ms":1000}
+{"type":"action.request","request_id":"tap-human-001","action":"tap","x":0.5,"y":0.4,"humanize":true,"expires_ms":1000}
 ```
 
 ## 6. Python 核心循环：直接处理视频流帧

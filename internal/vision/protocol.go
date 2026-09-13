@@ -30,6 +30,8 @@ type Message struct {
 	Keycode   uint32   `json:"keycode,omitempty"`
 	MetaState uint32   `json:"meta_state,omitempty"`
 	ExpiresMS int64    `json:"expires_ms,omitempty"`
+	// Humanize 启用拟人化触摸，仅对 action= tap / swipe 生效。
+	Humanize bool `json:"humanize,omitempty"`
 }
 
 type Object struct {
