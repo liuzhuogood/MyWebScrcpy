@@ -18,15 +18,15 @@ func TestHandlerServeHTTP(t *testing.T) {
 	inputDump := `SurfaceOrientation: 0`
 
 	s := NewWithRunner(func(_ context.Context, args ...string) ([]byte, error) {
-		cmd := stringsJoin(args)
+		cmd := strings.Join(args, " ")
 		switch {
-		case contains(cmd, "window"):
+		case strings.Contains(cmd, "window"):
 			return []byte(windowDump), nil
-		case contains(cmd, "size"):
+		case strings.Contains(cmd, "size"):
 			return []byte(wmSize), nil
-		case contains(cmd, "density"):
+		case strings.Contains(cmd, "density"):
 			return []byte(wmDensity), nil
-		case contains(cmd, "input"):
+		case strings.Contains(cmd, "input"):
 			return []byte(inputDump), nil
 		default:
 			return nil, nil

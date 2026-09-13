@@ -83,7 +83,7 @@ func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, fu
 		return nil, nil, nil, err
 	}
 	ms := &managedSession{sess: sess, meta: meta, refs: 1, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), audioAvailable: meta.AudioAvailable, audioReason: meta.AudioReason, width: meta.Width, height: meta.Height}
-	ms.actions = action.New(deviceActionExecutor{ms: ms, gate: h.gateFor(serial)}, 64)
+	ms.actions = action.New(deviceActionExecutor{ms: ms, gate: h.gateFor(serial), touch: touchPublisher{h: h, serial: serial, sessionID: meta.SessionID}}, 64)
 	h.sessions[serial] = ms
 	h.sessionMu.Unlock()
 	h.recordEvent(debuglog.Event{Type: "session.started", DeviceID: serial, SessionID: meta.SessionID, Fields: map[string]interface{}{"codec": meta.Codec, "width": meta.Width, "height": meta.Height}})
@@ -389,8 +389,9 @@ func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan
 func timeNow() time.Time { return time.Now().Add(3 * time.Second) }
 
 type deviceActionExecutor struct {
-	ms   *managedSession
-	gate *devicegate.Gate
+	ms    *managedSession
+	gate  *devicegate.Gate
+	touch touchPublisher
 }
 
 func (e deviceActionExecutor) Execute(ctx context.Context, r action.Request) error {
@@ -414,7 +415,14 @@ func (e deviceActionExecutor) execute(ctx context.Context, r action.Request) err
 	e.ms.controlMu.Lock()
 	defer e.ms.controlMu.Unlock()
 	if r.Action == "raw" {
-		return e.ms.sess.conn.WriteControl(r.Raw)
+		err := e.ms.sess.conn.WriteControl(r.Raw)
+		if err == nil {
+			// 浏览器透传的原始控制消息里解析触摸事件，用于投屏上的触摸可视化。
+			if ev, ok := parseRawTouch(r.Raw); ok {
+				e.touch.emit(ev.kind, ev.x, ev.y, 0, 0, r.Source)
+			}
+		}
+		return err
 	}
 	e.ms.mu.Lock()
 	width, height := e.ms.width, e.ms.height
@@ -423,19 +431,31 @@ func (e deviceActionExecutor) execute(ctx context.Context, r action.Request) err
 		x, y := int32(r.X*float64(width)), int32(r.Y*float64(height))
 		w, h := uint16(width), uint16(height)
 		if r.Humanize {
-			return e.humanizeTap(x, y, w, h)
+			if err := e.humanizeTap(x, y, w, h); err != nil {
+				return err
+			}
+			e.touch.emit("tap", float64(x)/float64(w), float64(y)/float64(h), 0, 0, r.Source)
+			return nil
 		}
 		if err := e.ms.sess.conn.WriteControl(scrcpy.TouchEvent(scrcpy.ActionDown, scrcpy.PointerIDMouse, x, y, w, h, 1, scrcpy.ButtonPrimary, scrcpy.ButtonPrimary)); err != nil {
 			return err
 		}
-		return e.ms.sess.conn.WriteControl(scrcpy.TouchEvent(scrcpy.ActionUp, scrcpy.PointerIDMouse, x, y, w, h, 0, 0, 0))
+		if err := e.ms.sess.conn.WriteControl(scrcpy.TouchEvent(scrcpy.ActionUp, scrcpy.PointerIDMouse, x, y, w, h, 0, 0, 0)); err != nil {
+			return err
+		}
+		e.touch.emit("tap", r.X, r.Y, 0, 0, r.Source)
+		return nil
 	}
 	if r.Action == "swipe" {
 		x1, y1 := int32(r.X*float64(width)), int32(r.Y*float64(height))
 		x2, y2 := int32(r.X2*float64(width)), int32(r.Y2*float64(height))
 		w, h := uint16(width), uint16(height)
 		if r.Humanize {
-			return e.humanizeSwipe(x1, y1, x2, y2, w, h)
+			if err := e.humanizeSwipe(x1, y1, x2, y2, w, h); err != nil {
+				return err
+			}
+			e.touch.emit("swipe", r.X, r.Y, r.X2, r.Y2, r.Source)
+			return nil
 		}
 		if err := e.ms.sess.conn.WriteControl(scrcpy.TouchEvent(scrcpy.ActionDown, scrcpy.PointerIDMouse, x1, y1, w, h, 1, scrcpy.ButtonPrimary, scrcpy.ButtonPrimary)); err != nil {
 			return err
@@ -443,7 +463,11 @@ func (e deviceActionExecutor) execute(ctx context.Context, r action.Request) err
 		if err := e.ms.sess.conn.WriteControl(scrcpy.TouchEvent(scrcpy.ActionMove, scrcpy.PointerIDMouse, x2, y2, w, h, 1, scrcpy.ButtonPrimary, scrcpy.ButtonPrimary)); err != nil {
 			return err
 		}
-		return e.ms.sess.conn.WriteControl(scrcpy.TouchEvent(scrcpy.ActionUp, scrcpy.PointerIDMouse, x2, y2, w, h, 0, 0, 0))
+		if err := e.ms.sess.conn.WriteControl(scrcpy.TouchEvent(scrcpy.ActionUp, scrcpy.PointerIDMouse, x2, y2, w, h, 0, 0, 0)); err != nil {
+			return err
+		}
+		e.touch.emit("swipe", r.X, r.Y, r.X2, r.Y2, r.Source)
+		return nil
 	}
 	if r.Action == "key" {
 		if err := e.ms.sess.conn.WriteControl(scrcpy.KeyCodeEvent(scrcpy.KeyActionDown, r.Keycode, 0, r.MetaState)); err != nil {

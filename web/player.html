@@ -113,6 +113,16 @@
           <span class="slider"></span>
         </div>
       </label>
+      <label class="menu-item-switch" title="隐藏/显示触摸轨迹" aria-label="触摸可视化开关">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3"></circle><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"></circle>
+        </svg>
+        <span>触摸</span>
+        <div class="toggle-switch-ui">
+          <input type="checkbox" id="btn-toggle-touch" checked>
+          <span class="slider"></span>
+        </div>
+      </label>
       <button id="btn-reboot" title="重启设备" aria-label="重启设备" class="danger-action">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
         <span>重启设备</span>
@@ -150,6 +160,7 @@
       <canvas id="screen"></canvas>
       <canvas id="detection-overlay" aria-hidden="true"></canvas>
       <canvas id="ui-inspector-overlay" aria-hidden="true"></canvas>
+      <canvas id="touch-overlay" aria-hidden="true"></canvas>
       <div class="loading-overlay" id="loading">
         <div class="spinner"></div>
         <div>正在连接设备...</div>
@@ -166,6 +177,8 @@
       <div class="capture-layer" id="capture-layer" hidden>
         <div class="capture-actions" id="capture-actions">
           <span class="capture-hint">拖动边框选择区域</span>
+          <label>形状 <select id="capture-shape"><option value="square">正方形</option><option value="circle">圆形</option></select></label>
+          <label>线宽 <input id="capture-stroke-width" type="number" min="1" max="10" step="1" value="2" aria-label="圆形线条宽度"> px</label>
           <input id="capture-bbox-input" class="capture-bbox-input" type="text" spellcheck="false" placeholder='{"x":152,"y":434,"width":48,"height":68}' aria-label="输入 BBOX">
           <button id="capture-apply-bbox" type="button">应用 BBOX</button>
           <button id="capture-save" type="button">下载</button>
@@ -185,7 +198,8 @@
   </div>
 
   <script src="/js/toolbar-popover.js"></script>
-  <script src="/js/toggle-green-boxes.js"></script>
+    <script src="/js/toggle-green-boxes.js"></script>
+    <script src="/js/touch-visualizer.js"></script>
   <script src="/js/control.js"></script>
   <script src="/js/decoder.js"></script>
   <script src="/js/audio.js"></script>
@@ -239,11 +253,15 @@
     const captureSelection = document.getElementById('capture-selection');
     const captureSize = document.getElementById('capture-size');
     const captureBboxInput = document.getElementById('capture-bbox-input');
+    const captureShapeInput = document.getElementById('capture-shape');
+    const captureStrokeWidthInput = document.getElementById('capture-stroke-width');
     const captureMagnifier = document.getElementById('capture-magnifier');
     const captureMagnifierCtx = captureMagnifier.getContext('2d');
     let captureRect = null;
     let captureDrag = null;
     let capturePointer = null;
+    let captureShape = 'square';
+    let captureStrokeWidth = 2;
     const CAPTURE_MIN = 10;
     const MAG_SIZE = 240;      // 放大镜尺寸（px）
     const MAG_ZOOM = 8;        // 放大倍数
@@ -339,6 +357,18 @@
       return { x, y, width, height };
     }
 
+    function captureCircleCoordinates() {
+      const bounds = captureBounds();
+      if (!bounds) return;
+      return {
+        shape: 'circle',
+        center_x: Math.round(bounds.x + bounds.width / 2),
+        center_y: Math.round(bounds.y + bounds.height / 2),
+        radius: Math.round(Math.min(bounds.width, bounds.height) / 2),
+        stroke_width: captureStrokeWidth,
+      };
+    }
+
     function applyCaptureBbox() {
       if (!canvas.width || !canvas.height) return;
       let bbox;
@@ -347,6 +377,22 @@
       } catch (_) {
         alert('BBOX 格式无效，请输入 JSON。');
         return;
+      }
+      if (bbox?.shape === 'circle') {
+        if (![bbox.center_x, bbox.center_y, bbox.radius].every(Number.isFinite) || bbox.radius <= 0) {
+          alert('圆形必须包含有效的 center_x、center_y、radius。'); return;
+        }
+        captureShape = 'circle';
+        captureStrokeWidth = Math.min(10, Math.max(1, Math.round(Number(bbox.stroke_width) || 2)));
+        captureShapeInput.value = captureShape;
+        captureStrokeWidthInput.value = String(captureStrokeWidth);
+        const diameter = Math.min(canvas.width, canvas.height, Math.max(1, Math.round(bbox.radius * 2)));
+        const x = Math.min(canvas.width - diameter, Math.max(0, Math.round(bbox.center_x - bbox.radius)));
+        const y = Math.min(canvas.height - diameter, Math.max(0, Math.round(bbox.center_y - bbox.radius)));
+        const scaleX = canvas.clientWidth / canvas.width;
+        const scaleY = canvas.clientHeight / canvas.height;
+        captureRect = { x: x * scaleX, y: y * scaleY, w: diameter * scaleX, h: diameter * scaleY };
+        updateCaptureSelection(); captureSelection.focus({ preventScroll: true }); return;
       }
       const values = ['x', 'y', 'width', 'height'].map(key => bbox?.[key]);
       if (values.some(value => !Number.isFinite(value)) || bbox.x < 0 || bbox.y < 0 || bbox.width <= 0 || bbox.height <= 0) {
@@ -371,7 +417,11 @@
       captureSelection.style.width = `${captureRect.w}px`;
       captureSelection.style.height = `${captureRect.h}px`;
       const bounds = captureBounds();
-      captureSize.textContent = `坐标 ${bounds.x}, ${bounds.y} · ${bounds.width} × ${bounds.height}`;
+      captureSize.textContent = captureShape === 'circle'
+        ? `圆心 ${captureCircleCoordinates().center_x}, ${captureCircleCoordinates().center_y} · 半径 ${captureCircleCoordinates().radius}`
+        : `坐标 ${bounds.x}, ${bounds.y} · ${bounds.width} × ${bounds.height}`;
+      captureSelection.classList.toggle('circle', captureShape === 'circle');
+      captureSelection.style.borderWidth = `${captureStrokeWidth}px`;
     }
 
     function adjustCaptureByKeyboard(event) {
@@ -419,6 +469,8 @@
         x: Math.max(0, Math.round((canvas.clientWidth - w) / 2)),
         y: Math.max(0, Math.round((canvas.clientHeight - h) / 2)), w, h,
       };
+      captureShape = 'square';
+      captureShapeInput.value = captureShape;
       captureLayer.hidden = false;
       updateCaptureSelection();
       positionCaptureActions();
@@ -468,6 +520,13 @@
       if (captureDrag.mode === 'move') {
         next.x = Math.max(0, Math.min(maxW - start.w, start.x + dx));
         next.y = Math.max(0, Math.min(maxH - start.h, start.y + dy));
+      } else if (captureShape === 'circle') {
+        const delta = Math.max(Math.abs(dx), Math.abs(dy)) * (dx + dy >= 0 ? 1 : -1);
+        const size = Math.max(CAPTURE_MIN, Math.min(Math.min(maxW, maxH), start.w + delta));
+        const cx = start.x + start.w / 2; const cy = start.y + start.h / 2;
+        next.w = next.h = size;
+        next.x = Math.max(0, Math.min(maxW - size, cx - size / 2));
+        next.y = Math.max(0, Math.min(maxH - size, cy - size / 2));
       } else {
         const dir = captureDrag.dir;
         if (dir.includes('e')) next.w = Math.max(CAPTURE_MIN, Math.min(maxW - start.x, start.w + dx));
@@ -497,6 +556,18 @@
     });
     captureLayer.addEventListener('pointerleave', hideCaptureMagnifier);
     captureSelection.addEventListener('keydown', adjustCaptureByKeyboard);
+    captureShapeInput.addEventListener('change', () => {
+      captureShape = captureShapeInput.value;
+      if (captureShape === 'circle') {
+        const size = Math.min(captureRect.w, captureRect.h); captureRect.w = captureRect.h = size;
+      }
+      updateCaptureSelection();
+    });
+    captureStrokeWidthInput.addEventListener('input', () => {
+      captureStrokeWidth = Math.min(10, Math.max(1, Number(captureStrokeWidthInput.value) || 1));
+      captureStrokeWidthInput.value = String(captureStrokeWidth);
+      updateCaptureSelection();
+    });
     window.addEventListener('resize', positionCaptureActions);
 
     document.getElementById('btn-capture').addEventListener('click', () => {
@@ -519,7 +590,11 @@
       if (!bounds) return;
       const output = document.createElement('canvas');
       output.width = bounds.width; output.height = bounds.height;
-      output.getContext('2d').drawImage(canvas, bounds.x, bounds.y, bounds.width, bounds.height, 0, 0, bounds.width, bounds.height);
+      const ctx = output.getContext('2d');
+      if (captureShape === 'circle') {
+        ctx.beginPath(); ctx.arc(bounds.width / 2, bounds.height / 2, Math.min(bounds.width, bounds.height) / 2, 0, Math.PI * 2); ctx.clip();
+      }
+      ctx.drawImage(canvas, bounds.x, bounds.y, bounds.width, bounds.height, 0, 0, bounds.width, bounds.height);
       return { output, sw: bounds.width, sh: bounds.height };
     }
 
@@ -563,7 +638,7 @@
         return;
       }
       try {
-        await navigator.clipboard.writeText(JSON.stringify(bounds));
+      await navigator.clipboard.writeText(JSON.stringify(captureShape === 'circle' ? captureCircleCoordinates() : bounds));
       } catch (error) {
         console.warn('复制 BBOX 失败:', error);
         alert('复制 BBOX 失败，请确认浏览器已允许剪贴板访问。');
@@ -619,6 +694,13 @@
       detectionOverlay.height = canvas.height;
       detectionOverlay.style.width = canvas.style.width;
       detectionOverlay.style.height = canvas.style.height;
+      const touchOverlay = document.getElementById('touch-overlay');
+      if (touchOverlay) {
+        touchOverlay.width = canvas.width;
+        touchOverlay.height = canvas.height;
+        touchOverlay.style.width = canvas.style.width;
+        touchOverlay.style.height = canvas.style.height;
+      }
     }
 
     function updateDisplaySize(scale) {
@@ -714,7 +796,16 @@
       const socket = new WebSocket(`${proto}//${location.host}/api/vision/results?serial=${encodeURIComponent(serial)}&session_id=${encodeURIComponent(activeSessionID)}`);
       socket.sessionID = activeSessionID;
       resultWs = socket;
-      socket.onmessage = (event) => { try { drawDetections(JSON.parse(event.data)); } catch (_) {} };
+      socket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg && msg.type === 'touch.event') {
+            if (window.TouchViz) window.TouchViz.handle(msg);
+          } else {
+            drawDetections(msg);
+          }
+        } catch (_) {}
+      };
       socket.onclose = () => {
         if (resultWs !== socket) return;
         resultWs = null;

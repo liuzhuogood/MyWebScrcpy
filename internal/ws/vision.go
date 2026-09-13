@@ -238,10 +238,24 @@ func (h *Hub) ServeVisionResults(w http.ResponseWriter, r *http.Request) {
 	defer c.Close()
 	ch, unsubscribe := h.subscribeResults(serial, sessionID)
 	defer unsubscribe()
-	for msg := range ch {
-		c.SetWriteDeadline(time.Now().Add(3 * time.Second))
-		if err := c.WriteJSON(msg); err != nil {
-			return
+	// 复用同一通道转发触摸可视化事件；两类消息用 type 字段区分。
+	touchCh, unsubscribeTouch := h.subscribeTouch(serial, sessionID)
+	defer unsubscribeTouch()
+	for {
+		select {
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			c.SetWriteDeadline(time.Now().Add(3 * time.Second))
+			if err := c.WriteJSON(msg); err != nil {
+				return
+			}
+		case msg := <-touchCh:
+			c.SetWriteDeadline(time.Now().Add(3 * time.Second))
+			if err := c.WriteJSON(msg); err != nil {
+				return
+			}
 		}
 	}
 }

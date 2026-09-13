@@ -194,6 +194,17 @@ func (r *replay) seekToElapsed(ms int64) {
 	if last >= first {
 		span = last - first
 	}
+	// Keep the conversion in the recording's timeline.  In particular, do not
+	// let a negative value wrap when it is converted to uint64.
+	if ms < 0 {
+		ms = 0
+	}
+	// When a small-loop window is active, seeking must move that window too;
+	// otherwise reframe would immediately put playback back at the old segment
+	// start and make the progress bar appear to have no effect.
+	if _, segLen, on := r.segmentWindow(); on {
+		r.setSegment(true, ms, segLen)
+	}
 	var targetPTS uint64
 	switch {
 	case ms <= 0:
@@ -210,6 +221,11 @@ func (r *replay) seekToElapsed(ms int64) {
 	// 回退到最近的关键帧，保证 reframe 后能立即解码
 	for idx > 0 && !samples[idx].key {
 		idx--
+	}
+	// drain old seek to keep the latest one
+	select {
+	case <-r.seek:
+	default:
 	}
 	select {
 	case r.seek <- idx:
@@ -318,7 +334,7 @@ func (m *replayManager) start(serial, recordingID string, loop bool) (*replay, e
 
 	meta := &handshakeMeta{Type: "meta", Codec: "h264", Width: media.width, Height: media.height, Serial: serial, SessionID: newSessionID()}
 	ms := &managedSession{replay: true, meta: meta, refs: 1, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), width: media.width, height: media.height}
-	ms.actions = action.New(deviceActionExecutor{ms: ms}, 64)
+	ms.actions = action.New(deviceActionExecutor{ms: ms, touch: touchPublisher{h: m.hub, serial: serial, sessionID: meta.SessionID}}, 64)
 	rp := &replay{id: newRecordingID(), serial: serial, recordingID: recordingID, startedAt: time.Now(), loop: loop, ms: ms, stop: make(chan struct{}), done: make(chan struct{}), pauseNotify: make(chan struct{}, 1), segmentNotify: make(chan struct{}, 1), media: media, seek: make(chan int, 1)}
 
 	m.mu.Lock()
@@ -381,6 +397,11 @@ func (m *replayManager) run(rp *replay, media *replayMedia) {
 	var ptsOffset uint64
 	startIdx := 0
 	endIdx := len(media.samples)
+	// A seek is a reframe request, not a new playback window.  Keep it
+	// separate from startIdx: the old code assigned startIdx and then entered
+	// reframe, whose "full recording" normalisation reset every non-zero seek
+	// back to zero.
+	pendingSeekIdx := -1
 	// 当前窗口的 PTS 跨度；用于段循环边界向前推进 offset 保持 PTS 单调
 	windowSpan := func() uint64 {
 		if endIdx > startIdx {
@@ -397,6 +418,11 @@ reframe:
 		// 小段循环开启时以窗口覆盖播放范围；关闭则恢复整段
 		if sMs, lMs, on := rp.segmentWindow(); on {
 			sIdx := rp.sampleIdxAtOrAfter(sMs)
+			// A seek or a stale UI position can be past the final sample. Keep
+			// the window valid instead of indexing samples[len(samples)].
+			if sIdx >= len(media.samples) {
+				sIdx = len(media.samples) - 1
+			}
 			for sIdx > 0 && !media.samples[sIdx].key {
 				sIdx--
 			}
@@ -408,7 +434,10 @@ reframe:
 				eIdx = min(sIdx+1, len(media.samples))
 			}
 			startIdx, endIdx = sIdx, eIdx
-		} else if startIdx != 0 || endIdx != len(media.samples) {
+		} else if pendingSeekIdx >= 0 {
+			startIdx, endIdx = pendingSeekIdx, len(media.samples)
+			pendingSeekIdx = -1
+		} else {
 			startIdx, endIdx = 0, len(media.samples)
 		}
 
@@ -431,7 +460,7 @@ reframe:
 			s := media.samples[i]
 			select {
 			case idx := <-rp.seek:
-				startIdx = idx
+				pendingSeekIdx = idx
 				continue reframe
 			case <-rp.segmentNotify:
 				continue reframe
@@ -453,7 +482,7 @@ reframe:
 					case <-rp.stop:
 						return
 					case idx := <-rp.seek:
-						startIdx = idx
+						pendingSeekIdx = idx
 						continue reframe
 					case <-rp.segmentNotify:
 						continue reframe

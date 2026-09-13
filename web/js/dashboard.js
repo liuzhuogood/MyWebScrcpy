@@ -81,6 +81,7 @@ class DeviceClient {
   }
 
   drawDetections(msg) {
+    if (msg && msg.type === 'touch.event') return; // 触摸可视化事件与检测框无关
     if (msg && msg.session_id && this.sessionId && msg.session_id !== this.sessionId) return;
     if (!msg || !this.detectionCanvas.width) return;
     // Older Vision senders omitted objects for an empty detection result.

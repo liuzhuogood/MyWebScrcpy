@@ -26,6 +26,8 @@
   let pausedAtMs = null; // 本次暂停开始的时间戳
   let dragging = false;
   let segmentOn = false; // 是否处于小段循环
+  let segmentStartMs = 0;
+  let segmentLenMs = 0;
 
   // ===== 工具栏入口按钮（面板开关，不再放徽标/停止按钮）=====
   const entryBtn = document.createElement('button');
@@ -62,6 +64,8 @@
       <div class="replay-segment-head"><span>小段循环</span><button id="replay-seg-toggle" class="replay-stop-inline" type="button" disabled>开启</button></div>
       <div class="replay-segment-opts">
         <select id="replay-seg-len" aria-label="小段时长">
+          <option value="1000">1 秒</option>
+          <option value="2000">2 秒</option>
           <option value="3000">3 秒</option>
           <option value="5000">5 秒</option>
           <option value="10000">10 秒</option>
@@ -283,12 +287,19 @@
   // loop_count 变化仍在 poll 里对齐 baseStartMs 防漂移，显示以这里取模为准。
   const currentElapsed = () => {
     if (!replaying || !baseStartMs) return null;
+    if (dragging && dragPosMs != null) return dragPosMs;
     if (paused && pausedElapsedMs != null) return pausedElapsedMs;
     let ms = Date.now() - baseStartMs - pausedTotalMs;
     if (ms < 0) ms = 0;
     if (totalMs) {
       if (lastLoop) ms = ms % totalMs;
       else if (ms > totalMs) ms = totalMs;
+    }
+    if (segmentOn && segmentLenMs > 0) {
+      const start = Math.max(0, Math.min(segmentStartMs, totalMs || segmentStartMs));
+      const windowLen = totalMs ? Math.min(segmentLenMs, Math.max(1, totalMs - start)) : segmentLenMs;
+      ms = start + Math.max(0, ms - start) % windowLen;
+      if (totalMs) ms = Math.min(ms, totalMs);
     }
     return ms;
   };
@@ -356,6 +367,9 @@
         }
         // 后端契约：replay 带 loop，可选 loop_count
         if (typeof replay.loop === 'boolean') lastLoop = replay.loop;
+        if (typeof replay.segment_on === 'boolean') segmentOn = replay.segment_on;
+        if (typeof replay.segment_start_ms === 'number') segmentStartMs = Math.max(0, replay.segment_start_ms);
+        if (typeof replay.segment_len_ms === 'number') segmentLenMs = Math.max(0, replay.segment_len_ms);
         const n = replay.loop_count;
         if (typeof n === 'number') {
           if (lastLoopCount == null) lastLoopCount = n;
@@ -405,6 +419,8 @@
     pausedAtMs = null;
     dragging = false;
     segmentOn = false;
+    segmentStartMs = 0;
+    segmentLenMs = 0;
     render(); emit(); paintPlaying();
     entryBtn.classList.toggle('is-active', !panel.hidden);
     switchStream('正在回到实时流…');
@@ -457,6 +473,7 @@
       pausedTotalMs = 0;
       let pos = positionMs;
       if (lastLoop && totalMs) pos = positionMs % totalMs;
+      if (segmentOn && segmentLenMs > 0) segmentStartMs = Math.max(0, positionMs);
       baseStartMs = Date.now() - pos;
       render(); emit();
     } catch (_) { toast('跳转失败，请重试'); }
@@ -481,6 +498,8 @@
         });
         if (!res.ok) throw Error();
         segmentOn = false;
+        segmentStartMs = 0;
+        segmentLenMs = 0;
         render(); emit();
         toast('已停止小段循环，回到整体重放');
       } catch (_) { toast('停止小段循环失败，请重试'); }
@@ -497,33 +516,65 @@
       });
       if (!res.ok) throw Error();
       segmentOn = true;
+      segmentStartMs = Math.max(0, start);
+      segmentLenMs = len;
       render(); emit();
       toast(`已开启小段循环（${Math.round(len / 1000)} 秒）`);
     } catch (_) { toast('开启小段循环失败，请重试'); }
   }
+
+  let dragPosMs = null;
 
   const positionFromPointer = (e) => {
     const rect = bar.getBoundingClientRect();
     const frac = rect.width > 0 ? Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)) : 0;
     return totalMs ? frac * totalMs : 0;
   };
-  const applySeekFromEvent = (e) => {
+  const applySeekFromEvent = (e, finalSeek = true) => {
     const pos = positionFromPointer(e);
-    if (totalMs) seekReplay(pos);
+    if (totalMs) {
+      if (finalSeek) {
+        seekReplay(pos);
+      } else {
+        dragPosMs = pos;
+        render();
+      }
+    }
   };
   const onSeekDown = (e) => {
     if (!replaying || !totalMs) return;
     e.preventDefault();
     dragging = true;
-    applySeekFromEvent(e);
-    const onMove = (ev) => { if (dragging) applySeekFromEvent(ev); };
-    const onUp = () => {
+    // Keep receiving the pointer even when the user drags outside the narrow
+    // 8px bar. Without capture, browsers may omit pointerup and leave the
+    // visual drag state stuck (and never send the final seek).
+    if (bar.setPointerCapture && e.pointerId != null) {
+      try { bar.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+    applySeekFromEvent(e, false);
+    const onMove = (ev) => { if (dragging) applySeekFromEvent(ev, false); };
+    const onUp = (ev) => {
       dragging = false;
+      applySeekFromEvent(ev, true);
+      dragPosMs = null;
+      if (bar.releasePointerCapture && ev.pointerId != null) {
+        try { bar.releasePointerCapture(ev.pointerId); } catch (_) {}
+      }
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+    };
+    const onCancel = () => {
+      dragging = false;
+      dragPosMs = null;
+      render();
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onCancel);
   };
 
   // 新页面/重开面板时恢复后端仍活动的重放：让停止/暂停可用，不再出现“无法停止”的孤儿状态。
@@ -543,6 +594,8 @@
       totalFixTried = false;
       paused = !!replay.paused;
       segmentOn = !!replay.segment_on;
+      segmentStartMs = typeof replay.segment_start_ms === 'number' ? Math.max(0, replay.segment_start_ms) : 0;
+      segmentLenMs = typeof replay.segment_len_ms === 'number' ? Math.max(0, replay.segment_len_ms) : 0;
       let t = Date.parse(replay.started_at);
       baseStartMs = Number.isFinite(t) ? t : Date.now();
       if (baseStartMs > Date.now() || Math.abs(Date.now() - baseStartMs) > 3600 * 1000) baseStartMs = Date.now();
@@ -584,6 +637,9 @@
       totalFixTried = false;
       lastLoop = view && typeof view.loop === 'boolean' ? view.loop : loop;
       lastLoopCount = view && typeof view.loop_count === 'number' ? view.loop_count : null;
+      segmentOn = !!(view && view.segment_on);
+      segmentStartMs = view && typeof view.segment_start_ms === 'number' ? Math.max(0, view.segment_start_ms) : 0;
+      segmentLenMs = view && typeof view.segment_len_ms === 'number' ? Math.max(0, view.segment_len_ms) : 0;
       // 已播计时起点：优先后端 started_at，否则本地 now
       let t = Date.parse(view && view.started_at);
       baseStartMs = Number.isFinite(t) ? t : Date.now();
@@ -616,7 +672,6 @@
   stopBtn.addEventListener('click', () => stopReplay(true));
   pauseBtn.addEventListener('click', () => togglePause());
   bar.addEventListener('pointerdown', onSeekDown);
-  bar.addEventListener('click', (e) => { if (!dragging) applySeekFromEvent(e); });
   // 页签切后台时浏览器会节流 setInterval，回来后按墙钟（Date.now 差值）立即追齐显示
   document.addEventListener('visibilitychange', () => { if (!document.hidden) render(); });
   window.addEventListener('pageshow', () => render());

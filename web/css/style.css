@@ -260,6 +260,11 @@ body {
   pointer-events: none;
   z-index: 2;
 }
+#touch-overlay {
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
 .display-size-panel[hidden] { display: none; }
 .display-size-panel {
   position: fixed; z-index: 40;
@@ -317,6 +322,9 @@ body {
   border: 0; border-radius: 5px; padding: 6px 9px;
   color: #1f2329; background: #fff; cursor: pointer; font-size: 12px;
 }
+.capture-actions label { display:inline-flex; align-items:center; gap:4px; font-size:12px; color:#445; }
+.capture-actions select, .capture-actions input[type="number"] { height:26px; border:1px solid #ccd5e0; border-radius:5px; background:#fff; color:#223; }
+.capture-actions input[type="number"] { width:48px; }
 .capture-actions button:hover { background: #e8f3ff; color: #165dff; }
 .capture-bbox-input {
   width: 100%; box-sizing: border-box; border: 0; border-radius: 5px; padding: 6px 8px;
@@ -329,6 +337,7 @@ body {
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, .3);
   cursor: move;
 }
+.capture-selection.circle { border-radius:50%; }
 .capture-selection:focus { outline: 2px solid #ffcc00; outline-offset: 3px; }
 .capture-size {
   position: absolute; left: 4px; top: 4px; padding: 2px 4px;

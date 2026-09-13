@@ -42,6 +42,8 @@ type Hub struct {
 	resultMu   sync.Mutex
 	results    map[string]map[chan vision.Message]string
 	lastResult map[string]vision.Message
+	touchMu    sync.Mutex
+	touchSubs  map[string]map[chan TouchEventMessage]string
 	events     *debuglog.Ring
 	sessionMu  sync.Mutex
 	sessions   map[string]*managedSession
