@@ -25,6 +25,7 @@
   let pausedElapsedMs = null; // 暂停时冻结的已播值
   let pausedAtMs = null; // 本次暂停开始的时间戳
   let dragging = false;
+  let segmentOn = false; // 是否处于小段循环
 
   // ===== 工具栏入口按钮（面板开关，不再放徽标/停止按钮）=====
   const entryBtn = document.createElement('button');
@@ -57,6 +58,21 @@
     </div>
     <label class="replay-loop"><input id="replay-loop" type="checkbox"><span>循环播放</span></label>
     <p class="replay-loop-hint" aria-live="polite"></p>
+    <section class="replay-segment">
+      <div class="replay-segment-head"><span>小段循环</span><button id="replay-seg-toggle" class="replay-stop-inline" type="button" disabled>开启</button></div>
+      <div class="replay-segment-opts">
+        <select id="replay-seg-len" aria-label="小段时长">
+          <option value="3000">3 秒</option>
+          <option value="5000">5 秒</option>
+          <option value="10000">10 秒</option>
+          <option value="15000">15 秒</option>
+          <option value="30000">30 秒</option>
+          <option value="0">自定义…</option>
+        </select>
+        <input id="replay-seg-custom" type="number" min="1" step="1" inputmode="numeric" placeholder="秒" hidden>
+      </div>
+      <p class="replay-seg-hint" aria-live="polite"></p>
+    </section>
     <p class="replay-msg" aria-live="polite"></p>
     <section class="replay-list-wrap" aria-live="polite"><h2>录制列表</h2><p class="replay-list-empty">暂无录制记录</p><ul class="replay-list"></ul><p class="replay-list-msg" aria-live="polite"></p></section>`;
   if (screenWrap && screenWrap.parentNode === mainEl) screenWrap.after(panel);
@@ -81,6 +97,10 @@
   };
   const loopBox = panel.querySelector('#replay-loop');
   const loopHint = panel.querySelector('.replay-loop-hint');
+  const segToggleBtn = panel.querySelector('#replay-seg-toggle');
+  const segLenSelect = panel.querySelector('#replay-seg-len');
+  const segCustomInput = panel.querySelector('#replay-seg-custom');
+  const segHint = panel.querySelector('.replay-seg-hint');
   const stopBtn = panel.querySelector('#replay-stop');
   const pauseBtn = panel.querySelector('#replay-pause');
   const closeBtn = panel.querySelector('#replay-close');
@@ -229,7 +249,7 @@
 
   const emit = () => {
     document.dispatchEvent(new CustomEvent('replay:change', {
-      detail: { replaying, recording_id: currentId, entry: currentEntry, loop: replaying ? lastLoop : loopBox.checked },
+      detail: { replaying, recording_id: currentId, entry: currentEntry, loop: replaying ? lastLoop : loopBox.checked, segment: segmentOn },
     }));
   };
   const switchStream = (msg) => {
@@ -299,6 +319,13 @@
     // 重放进行中：循环开关禁用，下次重放生效
     loopBox.disabled = replaying;
     loopHint.textContent = replaying ? '重放进行中，循环设置下次重放生效' : '';
+    // 小段循环：仅重放中可操作；开启后选中项禁用
+    segToggleBtn.disabled = !replaying;
+    segToggleBtn.classList.toggle('is-active', segmentOn);
+    segToggleBtn.textContent = segmentOn ? '停止' : '开启';
+    segLenSelect.disabled = segmentOn;
+    segCustomInput.disabled = segmentOn;
+    segHint.textContent = segmentOn ? '正在循环重放当前小段，点击「停止」返回整体重放' : '';
   }
 
   const startTick = () => {
@@ -377,6 +404,7 @@
     pausedElapsedMs = null;
     pausedAtMs = null;
     dragging = false;
+    segmentOn = false;
     render(); emit(); paintPlaying();
     entryBtn.classList.toggle('is-active', !panel.hidden);
     switchStream('正在回到实时流…');
@@ -434,6 +462,46 @@
     } catch (_) { toast('跳转失败，请重试'); }
   }
 
+  const currentSegLenMs = () => {
+    if (segLenSelect.value === '0') {
+      const sec = parseFloat(segCustomInput.value);
+      if (!Number.isFinite(sec) || sec <= 0) return 0;
+      return Math.round(sec * 1000);
+    }
+    return parseInt(segLenSelect.value, 10) || 0;
+  };
+
+  async function toggleSegment() {
+    if (!replaying) return;
+    if (segmentOn) {
+      try {
+        const res = await fetch(`/api/replay/segment?serial=${encodeURIComponent(serial)}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: false }),
+        });
+        if (!res.ok) throw Error();
+        segmentOn = false;
+        render(); emit();
+        toast('已停止小段循环，回到整体重放');
+      } catch (_) { toast('停止小段循环失败，请重试'); }
+      return;
+    }
+    const len = currentSegLenMs();
+    if (!len) { toast('请选择有效的时长'); return; }
+    const start = currentElapsed();
+    if (start == null) { toast('暂无播放位置，无法开启小段循环'); return; }
+    try {
+      const res = await fetch(`/api/replay/segment?serial=${encodeURIComponent(serial)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: true, start_ms: Math.round(start), len_ms: len }),
+      });
+      if (!res.ok) throw Error();
+      segmentOn = true;
+      render(); emit();
+      toast(`已开启小段循环（${Math.round(len / 1000)} 秒）`);
+    } catch (_) { toast('开启小段循环失败，请重试'); }
+  }
+
   const positionFromPointer = (e) => {
     const rect = bar.getBoundingClientRect();
     const frac = rect.width > 0 ? Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)) : 0;
@@ -474,6 +542,7 @@
       totalMs = null;
       totalFixTried = false;
       paused = !!replay.paused;
+      segmentOn = !!replay.segment_on;
       let t = Date.parse(replay.started_at);
       baseStartMs = Number.isFinite(t) ? t : Date.now();
       if (baseStartMs > Date.now() || Math.abs(Date.now() - baseStartMs) > 3600 * 1000) baseStartMs = Date.now();
@@ -555,6 +624,13 @@
   loopBox.addEventListener('change', () => {
     pendingLoop = loopBox.checked;
     render(); emit();
+  });
+  segToggleBtn.addEventListener('click', () => toggleSegment());
+  segLenSelect.addEventListener('change', () => {
+    const custom = segLenSelect.value === '0';
+    segCustomInput.hidden = !custom;
+    if (custom) segCustomInput.focus();
+    render();
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !panel.hidden) setPanelOpen(false);

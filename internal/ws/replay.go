@@ -49,6 +49,14 @@ type replay struct {
 	pausedSince time.Time     // 当前暂停的起点；未暂停时为零值
 	pauseNotify chan struct{} // 每次暂停状态变化时投递一次，用于唤醒节拍等待
 
+	// segment 小段循环：在 [segmentStartMs, segmentStartMs+segmentLenMs) 窗口内循环播放，
+	// 优先级高于 loop；关闭后恢复整段重放。start_ms 为相对录像首样本的绝对毫秒。
+	segmentOn      bool
+	segmentStartMs int64
+	segmentLenMs   int64
+	segmentMu      sync.Mutex
+	segmentNotify  chan struct{} // 每次段配置变化时投递一次，用于唤醒节拍等待
+
 	media  *replayMedia
 	seek   chan int // 缓冲1：待跳转的样本下标
 	seekMu sync.Mutex
@@ -128,6 +136,50 @@ func (r *replay) resetPausedAccum() {
 	r.pauseMu.Unlock()
 }
 
+// isSegment 返回小段循环是否开启
+func (r *replay) isSegment() bool {
+	r.segmentMu.Lock()
+	defer r.segmentMu.Unlock()
+	return r.segmentOn
+}
+
+// segmentWindow 返回当前小段循环窗口（startMS、lenMS、是否开启）
+func (r *replay) segmentWindow() (startMs, lenMs int64, on bool) {
+	r.segmentMu.Lock()
+	defer r.segmentMu.Unlock()
+	return r.segmentStartMs, r.segmentLenMs, r.segmentOn
+}
+
+// setSegment 设置小段循环状态并唤醒节拍等待
+func (r *replay) setSegment(on bool, startMs, lenMs int64) {
+	r.segmentMu.Lock()
+	r.segmentOn = on
+	r.segmentStartMs = startMs
+	r.segmentLenMs = lenMs
+	r.segmentMu.Unlock()
+	select {
+	case r.segmentNotify <- struct{}{}:
+	default:
+	}
+}
+
+// sampleIdxAtOrAfter 返回首个 PTS >= 目标毫秒（相对首样本）的样本下标；
+// 超出末尾返回 len(samples)。用于计算窗口起止边界。
+func (r *replay) sampleIdxAtOrAfter(ms int64) int {
+	samples := r.media.samples
+	if len(samples) == 0 {
+		return 0
+	}
+	first := samples[0].pts
+	var targetPTS uint64
+	if ms <= 0 {
+		targetPTS = first
+	} else {
+		targetPTS = first + uint64(ms)*1000
+	}
+	return sort.Search(len(samples), func(i int) bool { return samples[i].pts >= targetPTS })
+}
+
 // seekToElapsed 按毫秒跳转，落到关键帧后投递
 func (r *replay) seekToElapsed(ms int64) {
 	r.seekMu.Lock()
@@ -166,18 +218,22 @@ func (r *replay) seekToElapsed(ms int64) {
 }
 
 type replayView struct {
-	ReplayID    string    `json:"replay_id"`
-	Serial      string    `json:"serial"`
-	RecordingID string    `json:"recording_id"`
-	Status      string    `json:"status"`
-	StartedAt   time.Time `json:"started_at"`
-	Loop        bool      `json:"loop"`
-	LoopCount   int       `json:"loop_count"`
-	Paused      bool      `json:"paused"`
+	ReplayID       string    `json:"replay_id"`
+	Serial         string    `json:"serial"`
+	RecordingID    string    `json:"recording_id"`
+	Status         string    `json:"status"`
+	StartedAt      time.Time `json:"started_at"`
+	Loop           bool      `json:"loop"`
+	LoopCount      int       `json:"loop_count"`
+	Paused         bool      `json:"paused"`
+	SegmentOn      bool      `json:"segment_on"`
+	SegmentStartMs int64     `json:"segment_start_ms"`
+	SegmentLenMs   int64     `json:"segment_len_ms"`
 }
 
 func (r *replay) view() replayView {
-	return replayView{ReplayID: r.id, Serial: r.serial, RecordingID: r.recordingID, Status: "replaying", StartedAt: r.startedAt.UTC(), Loop: r.loop, LoopCount: r.completedLoops(), Paused: r.isPaused()}
+	sStart, sLen, sOn := r.segmentWindow()
+	return replayView{ReplayID: r.id, Serial: r.serial, RecordingID: r.recordingID, Status: "replaying", StartedAt: r.startedAt.UTC(), Loop: r.loop, LoopCount: r.completedLoops(), Paused: r.isPaused(), SegmentOn: sOn, SegmentStartMs: sStart, SegmentLenMs: sLen}
 }
 
 type replayManager struct {
@@ -263,7 +319,7 @@ func (m *replayManager) start(serial, recordingID string, loop bool) (*replay, e
 	meta := &handshakeMeta{Type: "meta", Codec: "h264", Width: media.width, Height: media.height, Serial: serial, SessionID: newSessionID()}
 	ms := &managedSession{replay: true, meta: meta, refs: 1, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), width: media.width, height: media.height}
 	ms.actions = action.New(deviceActionExecutor{ms: ms}, 64)
-	rp := &replay{id: newRecordingID(), serial: serial, recordingID: recordingID, startedAt: time.Now(), loop: loop, ms: ms, stop: make(chan struct{}), done: make(chan struct{}), pauseNotify: make(chan struct{}, 1), media: media, seek: make(chan int, 1)}
+	rp := &replay{id: newRecordingID(), serial: serial, recordingID: recordingID, startedAt: time.Now(), loop: loop, ms: ms, stop: make(chan struct{}), done: make(chan struct{}), pauseNotify: make(chan struct{}, 1), segmentNotify: make(chan struct{}, 1), media: media, seek: make(chan int, 1)}
 
 	m.mu.Lock()
 	if _, exists := m.bySerial[serial]; exists {
@@ -324,8 +380,38 @@ func (m *replayManager) run(rp *replay, media *replayMedia) {
 	}
 	var ptsOffset uint64
 	startIdx := 0
+	endIdx := len(media.samples)
+	// 当前窗口的 PTS 跨度；用于段循环边界向前推进 offset 保持 PTS 单调
+	windowSpan := func() uint64 {
+		if endIdx > startIdx {
+			l := media.samples[endIdx-1].pts
+			f := media.samples[startIdx].pts
+			if l >= f {
+				return l - f
+			}
+		}
+		return 0
+	}
 reframe:
 	for {
+		// 小段循环开启时以窗口覆盖播放范围；关闭则恢复整段
+		if sMs, lMs, on := rp.segmentWindow(); on {
+			sIdx := rp.sampleIdxAtOrAfter(sMs)
+			for sIdx > 0 && !media.samples[sIdx].key {
+				sIdx--
+			}
+			eIdx := len(media.samples)
+			if lMs > 0 {
+				eIdx = rp.sampleIdxAtOrAfter(sMs + lMs)
+			}
+			if eIdx <= sIdx {
+				eIdx = min(sIdx+1, len(media.samples))
+			}
+			startIdx, endIdx = sIdx, eIdx
+		} else if startIdx != 0 || endIdx != len(media.samples) {
+			startIdx, endIdx = 0, len(media.samples)
+		}
+
 		if rp.isPaused() {
 			if !rp.waitResume() {
 				return
@@ -341,11 +427,13 @@ reframe:
 		t0 := media.samples[startIdx].pts
 		start := time.Now()
 		rp.resetPausedAccum()
-		for i := startIdx; i < len(media.samples); i++ {
+		for i := startIdx; i < endIdx; i++ {
 			s := media.samples[i]
 			select {
 			case idx := <-rp.seek:
 				startIdx = idx
+				continue reframe
+			case <-rp.segmentNotify:
 				continue reframe
 			default:
 			}
@@ -366,6 +454,8 @@ reframe:
 						return
 					case idx := <-rp.seek:
 						startIdx = idx
+						continue reframe
+					case <-rp.segmentNotify:
 						continue reframe
 					case <-rp.pauseNotify:
 					case <-time.After(wait):
@@ -389,12 +479,19 @@ reframe:
 			f := &scrcpy.Frame{Kind: kind, PTS: s.pts + ptsOffset, Payload: s.data}
 			broadcastReplayFrame(ms, f, encodeFrame(f))
 		}
+		// 小段循环：播完窗口回到窗口起点继续循环
+		if rp.isSegment() {
+			rp.incLoopCount()
+			ptsOffset += windowSpan() + gap
+			continue reframe
+		}
 		if !rp.isLoop() {
 			return
 		}
 		rp.incLoopCount()
 		ptsOffset += span + gap
 		startIdx = 0
+		endIdx = len(media.samples)
 	}
 }
 
@@ -791,6 +888,7 @@ func (h *Hub) RegisterReplayRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/replay/stop", h.stopReplay)
 	mux.HandleFunc("POST /api/replay/pause", h.pauseReplay)
 	mux.HandleFunc("POST /api/replay/seek", h.seekReplay)
+	mux.HandleFunc("POST /api/replay/segment", h.segmentReplay)
 	mux.HandleFunc("GET /api/replay", h.getReplay)
 }
 
@@ -877,6 +975,45 @@ func (h *Hub) seekReplay(w http.ResponseWriter, r *http.Request) {
 	// seek 语义：跳到该位置并继续播放（若暂停则解除暂停），保证 waitResume 阻塞的 goroutine 能醒来消费 seek
 	rp.setPaused(false)
 	rp.seekToElapsed(*body.PositionMS)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(rp.view())
+}
+
+func (h *Hub) segmentReplay(w http.ResponseWriter, r *http.Request) {
+	serial := r.URL.Query().Get("serial")
+	var body struct {
+		Enabled *bool  `json:"enabled"`
+		StartMS *int64 `json:"start_ms"`
+		LenMS   *int64 `json:"len_ms"`
+	}
+	decoder := json.NewDecoder(io.LimitReader(r.Body, 4096))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil {
+		writeRecordingError(w, &recordingHTTPError{status: http.StatusBadRequest, code: "invalid_request", msg: "enabled is required"})
+		return
+	}
+	rp := h.replayMgr().get(serial)
+	if rp == nil {
+		writeRecordingError(w, &recordingHTTPError{status: http.StatusNotFound, code: "replay_not_found", msg: "no active replay for this device"})
+		return
+	}
+	if body.Enabled == nil {
+		writeRecordingError(w, &recordingHTTPError{status: http.StatusBadRequest, code: "invalid_request", msg: "enabled is required"})
+		return
+	}
+	startMs, lenMs := int64(0), int64(0)
+	if body.StartMS != nil {
+		startMs = *body.StartMS
+	}
+	if body.LenMS != nil {
+		lenMs = *body.LenMS
+	}
+	if *body.Enabled && lenMs <= 0 {
+		writeRecordingError(w, &recordingHTTPError{status: http.StatusBadRequest, code: "invalid_request", msg: "len_ms must be positive"})
+		return
+	}
+	rp.setSegment(*body.Enabled, startMs, lenMs)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(rp.view())

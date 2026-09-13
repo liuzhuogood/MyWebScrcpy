@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -399,4 +400,84 @@ func TestReplayedFramesFanOut(t *testing.T) {
 			t.Fatal("replay fan-out timed out")
 		}
 	}
+}
+
+func TestReplaySegmentLoop(t *testing.T) {
+	dir := t.TempDir()
+	mp4Path := filepath.Join(dir, "rec_seg.mp4")
+	_, mux := replayTestHub(t, mp4Path, recordingComplete)
+
+	start := serveReplay(t, mux, http.MethodPost, "/api/replay/start?serial=phone-a", `{"recording_id":"rec_replay","loop":true}`)
+	if start.Code != http.StatusAccepted {
+		t.Fatalf("start status=%d body=%s", start.Code, start.Body.String())
+	}
+
+	// len_ms<=0 应被拒绝
+	if w := serveReplay(t, mux, http.MethodPost, "/api/replay/segment?serial=phone-a", `{"enabled":true,"start_ms":0,"len_ms":0}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("zero len_ms status=%d, want 400", w.Code)
+	}
+
+	// 开启小段循环：起点 0ms、长 1ms（fixture 样本 PTS 0/1000/2000µs，仅覆盖首个关键帧）
+	seg := serveReplay(t, mux, http.MethodPost, "/api/replay/segment?serial=phone-a", `{"enabled":true,"start_ms":0,"len_ms":1}`)
+	if seg.Code != http.StatusAccepted {
+		t.Fatalf("segment status=%d body=%s", seg.Code, seg.Body.String())
+	}
+	var sv struct {
+		SegmentOn    bool  `json:"segment_on"`
+		SegmentLenMs int64 `json:"segment_len_ms"`
+		LoopCount    int   `json:"loop_count"`
+	}
+	if err := json.Unmarshal(seg.Body.Bytes(), &sv); err != nil {
+		t.Fatalf("segment body: %v", err)
+	}
+	if !sv.SegmentOn || sv.SegmentLenMs != 1 {
+		t.Fatalf("segment view = %+v body=%s", sv, seg.Body.String())
+	}
+
+	// 等待段循环发生：loop_count 递增且 segment_on 保持
+	deadline := time.Now().Add(2 * time.Second)
+	looped := false
+	for time.Now().Before(deadline) {
+		w := serveReplay(t, mux, http.MethodGet, "/api/replay?serial=phone-a", "")
+		var v struct {
+			Replay struct {
+				SegmentOn bool `json:"segment_on"`
+				LoopCount int  `json:"loop_count"`
+			} `json:"replay"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &v); err != nil {
+			t.Fatalf("get body: %v", err)
+		}
+		if v.Replay.LoopCount > sv.LoopCount {
+			looped = true
+			if !v.Replay.SegmentOn {
+				t.Fatalf("segment_on should remain true: %+v", v.Replay)
+			}
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !looped {
+		t.Fatal("segment loop did not advance loop_count")
+	}
+
+	// 停止小段循环
+	off := serveReplay(t, mux, http.MethodPost, "/api/replay/segment?serial=phone-a", `{"enabled":false}`)
+	if off.Code != http.StatusAccepted {
+		t.Fatalf("segment off status=%d body=%s", off.Code, off.Body.String())
+	}
+	var ov struct {
+		SegmentOn bool `json:"segment_on"`
+	}
+	if err := json.Unmarshal(off.Body.Bytes(), &ov); err != nil {
+		t.Fatalf("off body: %v", err)
+	}
+	if ov.SegmentOn {
+		t.Fatalf("segment_on should be false after disable")
+	}
+
+	if w := serveReplay(t, mux, http.MethodPost, "/api/replay/stop?serial=phone-a", ""); w.Code != http.StatusAccepted {
+		t.Fatalf("stop status=%d body=%s", w.Code, w.Body.String())
+	}
+	waitForReplayGone(t, mux)
 }
