@@ -153,19 +153,22 @@
       </div>
       <div class="error-overlay" id="error" style="display:none"></div>
       <div class="capture-layer" id="capture-layer" hidden>
-        <div class="capture-actions">
+        <div class="capture-actions" id="capture-actions">
           <span class="capture-hint">拖动边框选择区域</span>
+          <input id="capture-bbox-input" class="capture-bbox-input" type="text" spellcheck="false" placeholder='{"x":152,"y":434,"width":48,"height":68}' aria-label="输入 BBOX">
+          <button id="capture-apply-bbox" type="button">应用 BBOX</button>
           <button id="capture-save" type="button">下载</button>
           <button id="capture-copy" type="button">复制</button>
           <button id="capture-copy-bbox" type="button">复制 BBOX</button>
           <button id="capture-cancel" type="button">取消</button>
         </div>
-        <div class="capture-selection" id="capture-selection">
+        <div class="capture-selection" id="capture-selection" tabindex="0" role="application" aria-label="区域截图选择框，方向键移动，Shift 加方向键调整大小">
           <span class="capture-size" id="capture-size"></span>
           <i class="capture-handle nw" data-dir="nw"></i><i class="capture-handle n" data-dir="n"></i><i class="capture-handle ne" data-dir="ne"></i>
           <i class="capture-handle e" data-dir="e"></i><i class="capture-handle se" data-dir="se"></i><i class="capture-handle s" data-dir="s"></i>
           <i class="capture-handle sw" data-dir="sw"></i><i class="capture-handle w" data-dir="w"></i>
         </div>
+        <canvas class="capture-magnifier" id="capture-magnifier" width="240" height="240" aria-hidden="true"></canvas>
       </div>
     </div>
   </div>
@@ -220,11 +223,98 @@
     });
     // ===== 区域截图 =====
     const captureLayer = document.getElementById('capture-layer');
+    const captureActions = document.getElementById('capture-actions');
     const captureSelection = document.getElementById('capture-selection');
     const captureSize = document.getElementById('capture-size');
+    const captureBboxInput = document.getElementById('capture-bbox-input');
+    const captureMagnifier = document.getElementById('capture-magnifier');
+    const captureMagnifierCtx = captureMagnifier.getContext('2d');
     let captureRect = null;
     let captureDrag = null;
+    let capturePointer = null;
     const CAPTURE_MIN = 24;
+    const MAG_SIZE = 240;      // 放大镜尺寸（px）
+    const MAG_ZOOM = 8;        // 放大倍数
+    const MAG_VIEW = MAG_SIZE / MAG_ZOOM; // 覆盖的源像素边长
+    const MAG_OFFSET = 20;     // 与光标的间距
+
+    function positionCaptureActions() {
+      if (captureLayer.hidden) return;
+      const layerRect = captureLayer.getBoundingClientRect();
+      const panelWidth = Math.min(280, window.innerWidth - 24);
+      const gap = 12;
+      let left = layerRect.right + gap;
+      if (left + panelWidth > window.innerWidth - 12) left = layerRect.left - panelWidth - gap;
+      left = Math.max(12, Math.min(left, window.innerWidth - panelWidth - 12));
+      captureActions.style.left = `${left}px`;
+      captureActions.style.right = 'auto';
+      captureActions.style.top = `${Math.max(12, layerRect.top + 10)}px`;
+    }
+
+    function updateCaptureMagnifier(clientX, clientY) {
+      if (captureLayer.hidden || !canvas.width || !canvas.height) { hideCaptureMagnifier(); return; }
+      const layerRect = captureLayer.getBoundingClientRect();
+      const px = clientX - layerRect.left;
+      const py = clientY - layerRect.top;
+      const scaleX = canvas.width / Math.max(1, canvas.clientWidth);
+      const scaleY = canvas.height / Math.max(1, canvas.clientHeight);
+      const sx = px * scaleX;
+      const sy = py * scaleY;
+      const half = MAG_VIEW / 2;
+      const srcX = Math.max(0, Math.min(Math.max(0, canvas.width - MAG_VIEW), sx - half));
+      const srcY = Math.max(0, Math.min(Math.max(0, canvas.height - MAG_VIEW), sy - half));
+      const srcW = Math.min(MAG_VIEW, canvas.width - srcX);
+      const srcH = Math.min(MAG_VIEW, canvas.height - srcY);
+      const ctx = captureMagnifierCtx;
+      ctx.clearRect(0, 0, MAG_SIZE, MAG_SIZE);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(canvas, srcX, srcY, srcW, srcH, 0, 0, srcW * MAG_ZOOM, srcH * MAG_ZOOM);
+      // 像素网格
+      ctx.strokeStyle = 'rgba(255,255,255,.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let i = 1; i < MAG_VIEW; i++) {
+        const g = i * MAG_ZOOM + 0.5;
+        ctx.moveTo(g, 0); ctx.lineTo(g, MAG_SIZE);
+        ctx.moveTo(0, g); ctx.lineTo(MAG_SIZE, g);
+      }
+      ctx.stroke();
+      // 显示当前截图选择框在放大视图中的真实边界
+      if (captureRect) {
+        const selection = captureBounds();
+        const selectionLeft = (selection.x - srcX) * MAG_ZOOM;
+        const selectionTop = (selection.y - srcY) * MAG_ZOOM;
+        const selectionRight = (selection.x + selection.width - srcX) * MAG_ZOOM;
+        const selectionBottom = (selection.y + selection.height - srcY) * MAG_ZOOM;
+        const left = Math.max(0, selectionLeft);
+        const top = Math.max(0, selectionTop);
+        const right = Math.min(MAG_SIZE, selectionRight);
+        const bottom = Math.min(MAG_SIZE, selectionBottom);
+        if (right > left && bottom > top) {
+          ctx.strokeStyle = '#ffcc00';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(left + 0.5, top + 0.5, right - left - 1, bottom - top - 1);
+        }
+      }
+      // 中心十字线
+      const cx = (sx - srcX) * MAG_ZOOM;
+      const cy = (sy - srcY) * MAG_ZOOM;
+      ctx.strokeStyle = 'rgba(22,93,255,.9)';
+      ctx.beginPath();
+      ctx.moveTo(cx, 0); ctx.lineTo(cx, MAG_SIZE);
+      ctx.moveTo(0, cy); ctx.lineTo(MAG_SIZE, cy);
+      ctx.stroke();
+      // 定位到光标旁边，靠近右/下边缘时翻转
+      let left = px + MAG_OFFSET;
+      let top = py + MAG_OFFSET;
+      if (left + MAG_SIZE > layerRect.width) left = px - MAG_SIZE - MAG_OFFSET;
+      if (top + MAG_SIZE > layerRect.height) top = py - MAG_SIZE - MAG_OFFSET;
+      captureMagnifier.style.left = `${left}px`;
+      captureMagnifier.style.top = `${top}px`;
+      captureMagnifier.classList.add('on');
+    }
+
+    function hideCaptureMagnifier() { captureMagnifier.classList.remove('on'); }
 
     function captureBounds() {
       if (!captureRect || !canvas.width || !canvas.height) return;
@@ -237,6 +327,31 @@
       return { x, y, width, height };
     }
 
+    function applyCaptureBbox() {
+      if (!canvas.width || !canvas.height) return;
+      let bbox;
+      try {
+        bbox = JSON.parse(captureBboxInput.value);
+      } catch (_) {
+        alert('BBOX 格式无效，请输入 JSON。');
+        return;
+      }
+      const values = ['x', 'y', 'width', 'height'].map(key => bbox?.[key]);
+      if (values.some(value => !Number.isFinite(value)) || bbox.x < 0 || bbox.y < 0 || bbox.width <= 0 || bbox.height <= 0) {
+        alert('BBOX 必须包含有效的 x、y、width、height。');
+        return;
+      }
+      const x = Math.min(canvas.width - 1, Math.max(0, Math.round(bbox.x)));
+      const y = Math.min(canvas.height - 1, Math.max(0, Math.round(bbox.y)));
+      const width = Math.min(canvas.width - x, Math.max(1, Math.round(bbox.width)));
+      const height = Math.min(canvas.height - y, Math.max(1, Math.round(bbox.height)));
+      const scaleX = canvas.clientWidth / canvas.width;
+      const scaleY = canvas.clientHeight / canvas.height;
+      captureRect = { x: x * scaleX, y: y * scaleY, w: width * scaleX, h: height * scaleY };
+      updateCaptureSelection();
+      captureSelection.focus({ preventScroll: true });
+    }
+
     function updateCaptureSelection() {
       if (!captureRect) return;
       captureSelection.style.left = `${captureRect.x}px`;
@@ -245,6 +360,40 @@
       captureSelection.style.height = `${captureRect.h}px`;
       const bounds = captureBounds();
       captureSize.textContent = `坐标 ${bounds.x}, ${bounds.y} · ${bounds.width} × ${bounds.height}`;
+    }
+
+    function adjustCaptureByKeyboard(event) {
+      if (!captureRect || !canvas.width || !canvas.height) return;
+      const scaleX = canvas.width / Math.max(1, canvas.clientWidth);
+      const scaleY = canvas.height / Math.max(1, canvas.clientHeight);
+      const stepX = 1 / scaleX;
+      const stepY = 1 / scaleY;
+      const maxW = captureLayer.clientWidth;
+      const maxH = captureLayer.clientHeight;
+      const next = { ...captureRect };
+      const resize = event.shiftKey;
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+
+      if (resize) {
+        if (event.key === 'ArrowLeft') next.w = Math.max(CAPTURE_MIN, next.w - stepX);
+        if (event.key === 'ArrowRight') next.w = Math.min(maxW - next.x, next.w + stepX);
+        if (event.key === 'ArrowUp') next.h = Math.max(CAPTURE_MIN, next.h - stepY);
+        if (event.key === 'ArrowDown') next.h = Math.min(maxH - next.y, next.h + stepY);
+      } else {
+        if (event.key === 'ArrowLeft') next.x = Math.max(0, next.x - stepX);
+        if (event.key === 'ArrowRight') next.x = Math.min(maxW - next.w, next.x + stepX);
+        if (event.key === 'ArrowUp') next.y = Math.max(0, next.y - stepY);
+        if (event.key === 'ArrowDown') next.y = Math.min(maxH - next.h, next.y + stepY);
+      }
+      captureRect = next;
+      updateCaptureSelection();
+      const layerRect = captureLayer.getBoundingClientRect();
+      const pointer = capturePointer || {
+        clientX: layerRect.left + captureRect.x + captureRect.w / 2,
+        clientY: layerRect.top + captureRect.y + captureRect.h / 2,
+      };
+      updateCaptureMagnifier(pointer.clientX, pointer.clientY);
+      event.preventDefault();
     }
 
     function openCapture() {
@@ -260,12 +409,16 @@
       };
       captureLayer.hidden = false;
       updateCaptureSelection();
+      positionCaptureActions();
+      captureSelection.focus({ preventScroll: true });
     }
 
     function closeCapture() {
       captureLayer.hidden = true;
       captureRect = null;
       captureDrag = null;
+      capturePointer = null;
+      hideCaptureMagnifier();
     }
 
     function capturePoint(event) {
@@ -279,15 +432,19 @@
       const inside = event.target.closest('.capture-selection');
       if (!inside) return;
       const point = capturePoint(event);
+      capturePointer = { clientX: event.clientX, clientY: event.clientY };
       captureDrag = {
         mode: handle ? 'resize' : 'move', dir: handle && handle.dataset.dir,
         startX: point.x, startY: point.y, rect: { ...captureRect },
       };
+      captureSelection.focus({ preventScroll: true });
       captureLayer.setPointerCapture(event.pointerId);
       event.preventDefault();
     });
 
     captureLayer.addEventListener('pointermove', (event) => {
+      capturePointer = { clientX: event.clientX, clientY: event.clientY };
+      updateCaptureMagnifier(event.clientX, event.clientY);
       if (!captureDrag) return;
       const point = capturePoint(event);
       const dx = point.x - captureDrag.startX;
@@ -322,9 +479,13 @@
     captureLayer.addEventListener('pointerup', (event) => {
       if (captureDrag) {
         captureDrag = null;
+        captureSelection.focus({ preventScroll: true });
         if (captureLayer.hasPointerCapture(event.pointerId)) captureLayer.releasePointerCapture(event.pointerId);
       }
     });
+    captureLayer.addEventListener('pointerleave', hideCaptureMagnifier);
+    captureSelection.addEventListener('keydown', adjustCaptureByKeyboard);
+    window.addEventListener('resize', positionCaptureActions);
 
     document.getElementById('btn-capture').addEventListener('click', () => {
       setMoreMenu(false);
@@ -334,6 +495,13 @@
       if (event.key === 'Escape' && !captureLayer.hidden) closeCapture();
     });
     document.getElementById('capture-cancel').addEventListener('click', closeCapture);
+    document.getElementById('capture-apply-bbox').addEventListener('click', applyCaptureBbox);
+    captureBboxInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        applyCaptureBbox();
+        event.preventDefault();
+      }
+    });
     function createCaptureCanvas() {
       const bounds = captureBounds();
       if (!bounds) return;
@@ -492,14 +660,27 @@
       cancelDetectionClearTimer();
       overlayCtx.clearRect(0, 0, detectionOverlay.width, detectionOverlay.height);
       overlayCtx.lineWidth = Math.max(2, canvas.width / 500);
-      overlayCtx.font = `${Math.max(12, canvas.width / 60)}px sans-serif`;
+      const displayScale = canvas.width / Math.max(1, canvas.clientWidth);
+      const labelFontSize = 13 * displayScale;
+      const labelPadding = 3 * displayScale;
       for (const obj of objects) {
         const x = obj.x * canvas.width, y = obj.y * canvas.height;
         const w = obj.w * canvas.width, h = obj.h * canvas.height;
         overlayCtx.strokeStyle = '#00e676'; overlayCtx.fillStyle = '#00e676';
         overlayCtx.strokeRect(x, y, w, h);
         const label = `${obj.label || '对象'} ${Math.round((obj.confidence || 0) * 100)}%`;
-        overlayCtx.fillText(label, x, Math.max(14, y - 5));
+        overlayCtx.save();
+        overlayCtx.font = `normal ${labelFontSize}px "PingFang SC", "Noto Sans SC", "Noto Sans Symbols 2", "Segoe UI Symbol", sans-serif`;
+        const labelWidth = overlayCtx.measureText(label).width;
+        const labelHeight = labelFontSize + labelPadding * 2;
+        const labelX = Math.min(Math.max(0, x), Math.max(0, canvas.width - labelWidth - labelPadding * 2));
+        const labelY = y >= labelHeight ? y - labelHeight : Math.min(canvas.height - labelHeight, y);
+        overlayCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        overlayCtx.fillRect(labelX, labelY, labelWidth + labelPadding * 2, labelHeight);
+        overlayCtx.fillStyle = '#ffffff';
+        overlayCtx.textBaseline = 'alphabetic';
+        overlayCtx.fillText(label, labelX + labelPadding, labelY + labelPadding + labelFontSize * 0.82);
+        overlayCtx.restore();
       }
       if (msg.expires_ms > 0) {
         const createdAt = Number(msg.timestamp) || Date.now();

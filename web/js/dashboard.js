@@ -93,12 +93,26 @@ class DeviceClient {
     const ctx = this.detectionCtx;
     ctx.clearRect(0, 0, this.detectionCanvas.width, this.detectionCanvas.height);
     ctx.lineWidth = Math.max(1, this.detectionCanvas.width / 400);
-    ctx.font = `${Math.max(10, this.detectionCanvas.width / 50)}px sans-serif`;
+    const displayScale = this.detectionCanvas.width / Math.max(1, this.detectionCanvas.clientWidth);
+    const labelFontSize = 13 * displayScale;
+    const labelPadding = 3 * displayScale;
     for (const obj of objects) {
       const x = obj.x * this.detectionCanvas.width, y = obj.y * this.detectionCanvas.height;
       const w = obj.w * this.detectionCanvas.width, h = obj.h * this.detectionCanvas.height;
       ctx.strokeStyle = '#00e676'; ctx.fillStyle = '#00e676'; ctx.strokeRect(x, y, w, h);
-      ctx.fillText(`${obj.label || '对象'} ${Math.round((obj.confidence || 0) * 100)}%`, x, Math.max(12, y - 4));
+      const label = `${obj.label || '对象'} ${Math.round((obj.confidence || 0) * 100)}%`;
+      ctx.save();
+      ctx.font = `normal ${labelFontSize}px "PingFang SC", "Noto Sans SC", "Noto Sans Symbols 2", "Segoe UI Symbol", sans-serif`;
+      const labelWidth = ctx.measureText(label).width;
+      const labelHeight = labelFontSize + labelPadding * 2;
+      const labelX = Math.min(Math.max(0, x), Math.max(0, this.detectionCanvas.width - labelWidth - labelPadding * 2));
+      const labelY = y >= labelHeight ? y - labelHeight : Math.min(this.detectionCanvas.height - labelHeight, y);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+      ctx.fillRect(labelX, labelY, labelWidth + labelPadding * 2, labelHeight);
+      ctx.fillStyle = '#ffffff';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(label, labelX + labelPadding, labelY + labelPadding + labelFontSize * 0.82);
+      ctx.restore();
     }
     if (msg.expires_ms > 0) {
       const createdAt = Number(msg.timestamp) || Date.now();

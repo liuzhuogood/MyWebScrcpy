@@ -306,8 +306,9 @@ body {
   background: transparent;
 }
 .capture-actions {
-  position: absolute; top: 10px; left: 10px; z-index: 3;
-  display: flex; align-items: center; gap: 8px;
+  position: fixed; z-index: 30;
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  width: min(280px, calc(100vw - 24px)); box-sizing: border-box;
   padding: 6px 8px; border-radius: 7px;
   background: rgba(31, 35, 41, .9); color: #fff;
   font-size: 12px; line-height: 1;
@@ -317,12 +318,18 @@ body {
   color: #1f2329; background: #fff; cursor: pointer; font-size: 12px;
 }
 .capture-actions button:hover { background: #e8f3ff; color: #165dff; }
+.capture-bbox-input {
+  width: 100%; box-sizing: border-box; border: 0; border-radius: 5px; padding: 6px 8px;
+  color: #1f2329; background: #fff; font: 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.capture-bbox-input:focus { outline: 2px solid #66a3ff; outline-offset: 1px; }
 .capture-selection {
-  position: absolute; min-width: 24px; min-height: 24px;
+  position: absolute;
   border: 2px solid #165dff; background: rgba(22, 93, 255, .12);
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, .3);
   cursor: move;
 }
+.capture-selection:focus { outline: 2px solid #ffcc00; outline-offset: 3px; }
 .capture-size {
   position: absolute; left: 4px; top: 4px; padding: 2px 4px;
   border-radius: 3px; color: #fff; background: rgba(0, 0, 0, .65);
@@ -341,6 +348,14 @@ body {
 .capture-handle.s { left: 50%; bottom: -6px; transform: translateX(-50%); cursor: ns-resize; }
 .capture-handle.sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
 .capture-handle.w { left: -6px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+.capture-magnifier {
+  position: absolute; z-index: 4; pointer-events: none;
+  width: 240px; height: 240px; border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, .85);
+  background: #000; box-shadow: 0 4px 16px rgba(0, 0, 0, .5);
+  display: none; image-rendering: pixelated;
+}
+.capture-magnifier.on { display: block; }
 
 .screen-off-overlay {
   position: absolute; inset: 0;
