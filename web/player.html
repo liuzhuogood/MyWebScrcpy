@@ -102,6 +102,17 @@
         </svg>
         <span>检查</span>
       </button>
+      <label class="menu-item-switch" title="隐藏/显示绿框" aria-label="绿框开关">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <path d="M3 9h18M9 21V9"></path>
+        </svg>
+        <span>绿框</span>
+        <div class="toggle-switch-ui">
+          <input type="checkbox" id="btn-toggle-green-boxes" checked>
+          <span class="slider"></span>
+        </div>
+      </label>
       <button id="btn-reboot" title="重启设备" aria-label="重启设备" class="danger-action">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
         <span>重启设备</span>
@@ -174,6 +185,7 @@
   </div>
 
   <script src="/js/toolbar-popover.js"></script>
+  <script src="/js/toggle-green-boxes.js"></script>
   <script src="/js/control.js"></script>
   <script src="/js/decoder.js"></script>
   <script src="/js/audio.js"></script>
