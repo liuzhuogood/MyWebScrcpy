@@ -3,7 +3,7 @@ package uipage
 import (
 	"context"
 	"errors"
-	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -11,12 +11,12 @@ import (
 
 func TestParseComponent(t *testing.T) {
 	tests := []struct {
-		name      string
-		raw       string
-		wantPkg   string
-		wantAct   string
-		wantComp  string
-		wantOk    bool
+		name     string
+		raw      string
+		wantPkg  string
+		wantAct  string
+		wantComp string
+		wantOk   bool
 	}{
 		{
 			name:     "standard package and activity",
@@ -35,14 +35,14 @@ func TestParseComponent(t *testing.T) {
 			wantOk:   true,
 		},
 		{
-			name:     "invalid single word",
-			raw:      "invalid_component",
-			wantOk:   false,
+			name:   "invalid single word",
+			raw:    "invalid_component",
+			wantOk: false,
 		},
 		{
-			name:     "null string",
-			raw:      "null",
-			wantOk:   false,
+			name:   "null string",
+			raw:    "null",
+			wantOk: false,
 		},
 	}
 
@@ -77,15 +77,15 @@ Input Dispatcher State:
 `
 
 	s := NewWithRunner(func(_ context.Context, args ...string) ([]byte, error) {
-		cmd := stringsJoin(args)
+		cmd := strings.Join(args, " ")
 		switch {
-		case containsAll(cmd, "dumpsys", "window"):
+		case strings.Contains(cmd, "dumpsys window"):
 			return []byte(windowDump), nil
-		case containsAll(cmd, "wm", "size"):
+		case strings.Contains(cmd, "wm size"):
 			return []byte(wmSize), nil
-		case containsAll(cmd, "wm", "density"):
+		case strings.Contains(cmd, "wm density"):
 			return []byte(wmDensity), nil
-		case containsAll(cmd, "dumpsys", "input"):
+		case strings.Contains(cmd, "dumpsys input"):
 			return []byte(inputDump), nil
 		default:
 			return nil, errors.New("unknown command")
@@ -143,19 +143,19 @@ WINDOW MANAGER DISPLAY
 `
 
 	s := NewWithRunner(func(_ context.Context, args ...string) ([]byte, error) {
-		cmd := stringsJoin(args)
+		cmd := strings.Join(args, " ")
 		switch {
-		case containsAll(cmd, "dumpsys", "window", "displays"):
+		case strings.Contains(cmd, "dumpsys window displays"):
 			return []byte(winDisplaysDump), nil
-		case containsAll(cmd, "dumpsys", "window"):
+		case strings.Contains(cmd, "dumpsys window"):
 			return []byte(windowDump), nil
-		case containsAll(cmd, "dumpsys", "activity", "activities"):
+		case strings.Contains(cmd, "dumpsys activity activities"):
 			return []byte(actDump), nil
-		case containsAll(cmd, "wm", "size"):
+		case strings.Contains(cmd, "wm size"):
 			return []byte(wmSize), nil
-		case containsAll(cmd, "wm", "density"):
+		case strings.Contains(cmd, "wm density"):
 			return []byte(wmDensity), nil
-		case containsAll(cmd, "dumpsys", "input"):
+		case strings.Contains(cmd, "dumpsys input"):
 			return nil, errors.New("input dumpsys unavailable")
 		default:
 			return nil, errors.New("unknown command")
@@ -244,37 +244,4 @@ func TestFetchPageInfoConcurrencyLock(t *testing.T) {
 	if maxActive != 1 {
 		t.Fatalf("expected max concurrency per serial to be 1, got %d", maxActive)
 	}
-}
-
-func stringsJoin(args []string) string {
-	res := ""
-	for _, a := range args {
-		res += " " + a
-	}
-	return res
-}
-
-func containsAll(str string, subs ...string) bool {
-	for _, sub := range subs {
-		if !reflect.ValueOf(str).MethodByName("Contains").IsValid() {
-			// fallback check
-		}
-		if !contains(str, sub) {
-			return false
-		}
-	}
-	return true
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || (len(substr) > 0 && indexOf(s, substr) >= 0))
-}
-
-func indexOf(s, substr string) int {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }

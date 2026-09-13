@@ -45,6 +45,53 @@
   canvas.addEventListener('mousedown', handleInspectorMouseDown, true);
 
   function fetchXML() { message.className = 'ui-inspector-message'; message.textContent = '正在获取 XML…'; if (selected) selected.row.classList.remove('selected'); selected = null; locatorAttributes.clear(); xpathNodes = []; showAllNodes = false; showAllButton.textContent = '显示全部'; xpath.value = ''; xpathResult.className = 'ui-inspector-message'; xpathResult.textContent = '尚未测试'; tree.replaceChildren(); props.textContent = ''; clearOverlay(); fetch(`/api/ui/xml?serial=${encodeURIComponent(serial || '')}`).then(response => response.ok ? response.json() : response.json().then(data => Promise.reject(new Error(data.message || '获取失败')))).then(data => { const parsed = new DOMParser().parseFromString(data.xml, 'application/xml'); if (parsed.querySelector('parsererror')) throw new Error('XML 格式无效'); xmlDoc = parsed; xmlBoundsSize = measureXMLBounds(parsed); xmlDisplaySize = validDisplaySize(data.display_size) ? data.display_size : null; renderTree(); props.textContent = `快照时间：${data.captured_at}`; message.textContent = ''; syncOverlay(); }).catch(error => { xmlDoc = null; xmlBoundsSize = null; xmlDisplaySize = null; tree.replaceChildren(); props.textContent = ''; message.className = 'ui-inspector-message ui-inspector-error'; message.textContent = error.message; }); }
+  function fetchPageInfo() { pageInfoMessage.className = 'ui-inspector-message'; pageInfoMessage.textContent = '正在获取页面信息…'; pageInfoGrid.replaceChildren(); fetch(`/api/ui/page-info?serial=${encodeURIComponent(serial || '')}`).then(response => response.ok ? response.json() : response.json().then(data => Promise.reject(new Error(data.message || '获取失败')))).then(data => { pageInfoFetched = true; pageInfoMessage.textContent = ''; renderPageInfo(data); }).catch(error => { pageInfoMessage.className = 'ui-inspector-message ui-inspector-error'; pageInfoMessage.textContent = error.message; }); }
+  function pageInfoRow(label, value) {
+    const row = el('div', null, 'ui-inspector-page-row');
+    row.append(el('div', label, 'ui-inspector-page-label'));
+    const valueBox = el('div', null, 'ui-inspector-page-value');
+    const text = el('span', value);
+    valueBox.append(text);
+    const copy = el('button', '复制', 'ui-inspector-copy-btn');
+    copy.type = 'button';
+    copy.onclick = () => copyPageValue(copy, value);
+    valueBox.append(copy);
+    row.append(valueBox);
+    return row;
+  }
+  function copyPageValue(button, value) {
+    let copy;
+    if (navigator.clipboard && window.isSecureContext) {
+      copy = navigator.clipboard.writeText(value);
+    } else {
+      const area = document.createElement('textarea');
+      area.value = value;
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.append(area);
+      area.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (_) { /* ignore */ }
+      area.remove();
+      copy = ok ? Promise.resolve() : Promise.reject(new Error('复制失败'));
+    }
+    copy.then(() => { button.textContent = '已复制'; button.classList.add('copied'); setTimeout(() => { button.textContent = '复制'; button.classList.remove('copied'); }, 1200); }).catch(() => {});
+  }
+  function renderPageInfo(data) {
+    pageInfoGrid.replaceChildren();
+    pageInfoGrid.append(pageInfoRow('包名', data.package_name || '—'));
+    pageInfoGrid.append(pageInfoRow('Activity', data.activity || '—'));
+    pageInfoGrid.append(pageInfoRow('组件', data.component || '—'));
+    pageInfoGrid.append(pageInfoRow('窗口', data.window_name || '—'));
+    if (data.display) {
+      pageInfoGrid.append(pageInfoRow('分辨率', `${data.display.width} × ${data.display.height}`));
+      if (Number.isFinite(data.display.density_dpi) && data.display.density_dpi > 0) pageInfoGrid.append(pageInfoRow('DPI', String(data.display.density_dpi)));
+      pageInfoGrid.append(pageInfoRow('方向', `${data.display.rotation}°`));
+    } else {
+      pageInfoGrid.append(pageInfoRow('屏幕', '未获取到显示信息'));
+    }
+    if (data.fetched_at) pageInfoGrid.append(pageInfoRow('获取时间', new Date(data.fetched_at).toLocaleString()));
+  }
   function renderTree() { tree.replaceChildren(); const root = xmlDoc && xmlDoc.documentElement; if (!root) { message.textContent = '设备未提供可检查节点'; return; } tree.append(renderNode(root)); }
   function renderNode(node) { const item = el('li'); const children = Array.from(node.children); const row = el('div', null, 'ui-inspector-node'); const toggle = el('button', children.length ? '▾' : '', 'ui-inspector-toggle'); toggle.type = 'button'; toggle.setAttribute('aria-expanded', 'true'); row.append(toggle, el('span', node.tagName, 'ui-inspector-tree-tag')); const summary = [node.tagName]; ['class', 'resource-id', 'text', 'bounds'].forEach(name => { const value = node.getAttribute(name); if (!value) return; const attr = el('span', null, 'ui-inspector-tree-attr'); attr.append(el('span', `${name}=`, 'ui-inspector-tree-attr-name'), el('span', JSON.stringify(value), 'ui-inspector-tree-attr-value')); row.append(attr); summary.push(`${name}=${value}`); }); row.title = summary.join(' '); nodeRows.set(node, row); row.onclick = () => selectNode(node, row); item.append(row); if (children.length) { const childList = el('ul'); children.forEach(child => childList.append(renderNode(child))); toggle.onclick = event => { event.stopPropagation(); childList.hidden = !childList.hidden; toggle.textContent = childList.hidden ? '▸' : '▾'; toggle.setAttribute('aria-expanded', String(!childList.hidden)); }; item.append(childList); } return item; }
   function rawBounds(node) { const match = /^\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]$/.exec(node.getAttribute('bounds') || ''); return match ? { left:+match[1], top:+match[2], right:+match[3], bottom:+match[4] } : null; }
