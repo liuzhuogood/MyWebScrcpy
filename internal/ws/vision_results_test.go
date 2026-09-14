@@ -42,3 +42,43 @@ func TestResultSubscriberIgnoresOtherSessionUpdates(t *testing.T) {
 	default:
 	}
 }
+
+func TestResultSubscriberReceivesDeviceLevelBroadcast(t *testing.T) {
+	h := NewHub("adb", "server.jar")
+	// Subscriber with active session ID
+	sub, unsubscribe := h.subscribeResults("device-1", "browser-session-123")
+	defer unsubscribe()
+
+	// Device-level broadcast (msg.SessionID == "")
+	deviceMsg := vision.Message{
+		Type:     "detection.result",
+		DeviceID: "device-1",
+		Objects: []vision.Object{
+			{Label: "login_button", Confidence: 0.95, X: 0.1, Y: 0.2, W: 0.3, H: 0.4},
+		},
+	}
+	h.publishResult("device-1", deviceMsg)
+
+	select {
+	case got := <-sub:
+		if len(got.Objects) != 1 || got.Objects[0].Label != "login_button" {
+			t.Fatalf("subscriber did not receive expected device-level broadcast: %#v", got)
+		}
+	default:
+		t.Fatal("subscriber with session_id failed to receive device-level broadcast")
+	}
+
+	// Late-joining subscriber with session_id should receive the replayed device-level lastResult
+	lateSub, lateUnsub := h.subscribeResults("device-1", "browser-session-456")
+	defer lateUnsub()
+
+	select {
+	case got := <-lateSub:
+		if len(got.Objects) != 1 || got.Objects[0].Label != "login_button" {
+			t.Fatalf("late subscriber did not receive replayed device-level broadcast: %#v", got)
+		}
+	default:
+		t.Fatal("late subscriber with session_id failed to receive replayed device-level broadcast")
+	}
+}
+
