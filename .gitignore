@@ -20,5 +20,6 @@ Thumbs.db
 *.tmp
 *.log
 recordings/
+data/
 .zcode/
 .openchamber/
