@@ -123,6 +123,13 @@
           <span class="slider"></span>
         </div>
       </label>
+      <button id="btn-template-match" title="模板匹配" aria-label="模板匹配">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <span>模板匹配</span>
+      </button>
       <button id="btn-reboot" title="重启设备" aria-label="重启设备" class="danger-action">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
         <span>重启设备</span>
@@ -150,9 +157,81 @@
   <dialog id="files-dialog" class="files-modal" aria-label="手机文件管理">
     <div class="files-modal-header">
       <strong>手机文件管理</strong>
-      <button id="files-dialog-close" type="button" title="关闭" aria-label="关闭">×</button>
+      <button id="files-dialog-close" type="button" class="dialog-close-btn" title="关闭" aria-label="关闭">×</button>
     </div>
     <iframe id="files-frame" title="手机文件管理" loading="lazy"></iframe>
+  </dialog>
+
+  <dialog id="template-save-dialog" class="template-save-modal" aria-label="保存为模板">
+    <div class="template-modal-header">
+      <strong>保存为模板</strong>
+      <button id="template-save-dialog-close" type="button" class="dialog-close-btn" title="关闭" aria-label="关闭">×</button>
+    </div>
+    <form id="template-save-form" class="template-modal-body">
+      <div class="template-preview-box">
+        <img id="template-preview-img" alt="模板预览" class="template-preview-thumb" />
+        <span id="template-preview-size" class="template-preview-dim"></span>
+      </div>
+      <div class="template-field">
+        <label for="template-name-input">模板名称</label>
+        <input id="template-name-input" type="text" placeholder="例如：确定按钮、图标" required autocomplete="off" maxlength="50" />
+      </div>
+      <div class="template-field">
+        <label for="template-scope-select">生效设备</label>
+        <select id="template-scope-select">
+          <option value="device" selected>仅当前设备</option>
+          <option value="global">全局通用（所有设备）</option>
+        </select>
+      </div>
+      <div class="template-field">
+        <div class="template-field-label">
+          <label for="template-threshold-input">匹配阈值</label>
+          <span id="template-threshold-display" class="template-val-badge">0.80</span>
+        </div>
+        <input id="template-threshold-input" type="range" min="0.50" max="0.99" step="0.01" value="0.80" />
+      </div>
+      <div class="template-modal-actions">
+        <button type="button" id="template-save-cancel" class="btn-secondary">取消</button>
+        <button type="submit" id="template-save-confirm" class="btn-primary">保存模板</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="template-manage-dialog" class="template-manage-modal" aria-label="模板管理">
+    <div class="template-modal-header">
+      <div class="template-manage-header-title">
+        <strong>模板匹配</strong>
+        <label class="toggle-switch-ui" title="开启/关闭模板匹配" aria-label="模板匹配开关">
+          <input type="checkbox" id="template-matching-switch">
+          <span class="slider"></span>
+        </label>
+        <span id="template-match-live-status" class="template-live-status">未开启</span>
+      </div>
+      <button id="template-manage-dialog-close" type="button" class="dialog-close-btn" title="关闭" aria-label="关闭">×</button>
+    </div>
+    <div class="template-manage-toolbar">
+      <div class="template-filter-tabs">
+        <button type="button" class="template-tab-btn active" data-filter="all">全部</button>
+        <button type="button" class="template-tab-btn" data-filter="device">当前设备</button>
+        <button type="button" class="template-tab-btn" data-filter="global">全局</button>
+      </div>
+      <div class="template-toolbar-actions">
+        <input type="file" id="template-upload-input" accept="image/png" style="display:none" />
+        <input type="file" id="template-import-input" accept=".zip,application/zip" style="display:none" />
+        <button type="button" id="template-btn-upload" class="template-tool-btn" title="上传单张 PNG 模板">上传单张</button>
+        <button type="button" id="template-btn-import" class="template-tool-btn" title="导入 ZIP 压缩包（内含 PNG 模板）">导入 ZIP</button>
+        <button type="button" id="template-btn-export" class="template-tool-btn" title="导出 ZIP 压缩包">导出 ZIP</button>
+        <button type="button" id="template-manage-refresh" class="template-refresh-btn" title="刷新列表">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div class="template-help-tip">💡 提示：支持导入/导出 ZIP（压缩包内为 PNG 图片，文件名即为模板名称）；亦支持单张 PNG 上传与下载。</div>
+    <div class="template-list-wrap" id="template-list-container">
+      <div class="template-empty-hint">加载中...</div>
+    </div>
   </dialog>
 
   <div class="player-main">
@@ -177,12 +256,15 @@
       <div class="capture-layer" id="capture-layer" hidden>
         <div class="capture-actions" id="capture-actions">
           <span class="capture-hint">拖动边框选择区域</span>
-          <label>形状 <select id="capture-shape"><option value="square">正方形</option><option value="circle">圆形</option></select></label>
-          <label>线宽 <input id="capture-stroke-width" type="number" min="1" max="10" step="1" value="2" aria-label="圆形线条宽度"> px</label>
+          <div class="capture-row">
+            <label class="capture-field">形状 <select id="capture-shape"><option value="square">正方形</option><option value="circle">圆形</option></select></label>
+            <label class="capture-field">线宽 <input id="capture-stroke-width" type="number" min="1" max="10" step="1" value="2" aria-label="圆形线条宽度"> px</label>
+          </div>
           <input id="capture-bbox-input" class="capture-bbox-input" type="text" spellcheck="false" placeholder='{"x":152,"y":434,"width":48,"height":68}' aria-label="输入 BBOX">
           <button id="capture-apply-bbox" type="button">应用 BBOX</button>
           <button id="capture-save" type="button">下载</button>
           <button id="capture-copy" type="button">复制</button>
+          <button id="capture-save-template" type="button">存为模板</button>
           <button id="capture-copy-bbox" type="button">复制 BBOX</button>
           <button id="capture-cancel" type="button">取消</button>
         </div>
@@ -601,6 +683,9 @@
     function captureCanvasToBlob(output) {
       return new Promise((resolve) => output.toBlob(resolve, 'image/png'));
     }
+    window.createCaptureCanvas = createCaptureCanvas;
+    window.captureCanvasToBlob = captureCanvasToBlob;
+    window.closeCapture = closeCapture;
 
     document.getElementById('capture-save').addEventListener('click', async () => {
       const capture = createCaptureCanvas();
@@ -1312,5 +1397,6 @@
     // 启动投屏连接
     connect();
   </script>
+  <script src="/js/template-match.js"></script>
 </body>
 </html>
