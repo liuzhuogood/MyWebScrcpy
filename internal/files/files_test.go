@@ -331,3 +331,43 @@ func TestManagerOperationsStayOnSelectedPhone(t *testing.T) {
 		t.Fatalf("second phone was affected: result=%#v err=%v", result, err)
 	}
 }
+
+func TestDownloadPreview(t *testing.T) {
+	fake := newFakeADB("phone-a")
+	fake.phones["phone-a"].files["/storage/emulated/0/readme.txt"] = []byte("hello preview")
+	m := NewManager("adb")
+	m.run = fake.run
+	m.stream = fake.stream
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, m)
+
+	// Test preview=1
+	req := httptest.NewRequest(http.MethodGet, "/api/files/download?serial=phone-a&path=readme.txt&preview=1", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("preview status = %d, want %d", rec.Code, http.StatusOK)
+	}
+	cd := rec.Header().Get("Content-Disposition")
+	if !strings.HasPrefix(cd, "inline;") {
+		t.Fatalf("preview Content-Disposition = %q, want inline", cd)
+	}
+	ct := rec.Header().Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/plain") || !strings.Contains(ct, "charset=utf-8") {
+		t.Fatalf("preview Content-Type = %q, want text/plain; charset=utf-8", ct)
+	}
+
+	// Test normal download
+	reqNorm := httptest.NewRequest(http.MethodGet, "/api/files/download?serial=phone-a&path=readme.txt", nil)
+	recNorm := httptest.NewRecorder()
+	mux.ServeHTTP(recNorm, reqNorm)
+	if recNorm.Code != http.StatusOK {
+		t.Fatalf("download status = %d, want %d", recNorm.Code, http.StatusOK)
+	}
+	cdNorm := recNorm.Header().Get("Content-Disposition")
+	if !strings.HasPrefix(cdNorm, "attachment;") {
+		t.Fatalf("normal Content-Disposition = %q, want attachment", cdNorm)
+	}
+}
+

@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 )
@@ -71,7 +73,23 @@ func (h *handler) download(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_path", "不能下载文件夹")
 		return
 	}
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename*=UTF-8''%s", url.PathEscape(item.Name)))
+	disposition := "attachment"
+	if r.URL.Query().Get("preview") == "1" {
+		disposition = "inline"
+		contentType := item.Mime
+		if contentType == "" || contentType == "application/octet-stream" {
+			if extType := mime.TypeByExtension(strings.ToLower(path.Ext(item.Name))); extType != "" {
+				contentType = extType
+			}
+		}
+		if strings.HasPrefix(contentType, "text/") && !strings.Contains(contentType, "charset=") {
+			contentType += "; charset=utf-8"
+		}
+		if contentType != "" {
+			w.Header().Set("Content-Type", contentType)
+		}
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf("%s; filename*=UTF-8''%s", disposition, url.PathEscape(item.Name)))
 	if err := h.manager.Download(serial, rel, w); err != nil {
 		log.Printf("[files] 下载失败: %v", err)
 	}
