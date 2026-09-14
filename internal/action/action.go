@@ -27,7 +27,9 @@ type Request struct {
 	ExpiresMS int64   `json:"expires_ms,omitempty"`
 	// Humanize 启用拟人化触摸（默认关闭）：落点随机偏移、按压时长、
 	// 拖动走带抖动/变速的曲线路径。仅对 tap / swipe 生效。
-	Humanize bool `json:"humanize,omitempty"`
+	Humanize   bool   `json:"humanize,omitempty"`
+	Mode       string `json:"mode,omitempty"`
+	DurationMS int64  `json:"duration_ms,omitempty"`
 }
 
 type Result struct {
@@ -152,6 +154,9 @@ func (q *Queue) rejectPending() {
 func validate(r Request) error {
 	if r.DeviceID == "" {
 		return errors.New("missing_device_id")
+	}
+	if r.Mode != "" && r.Mode != "sdk" && r.Mode != "adb" {
+		return errors.New("unsupported_mode")
 	}
 	switch r.Action {
 	case "tap", "swipe", "key", "text", "raw":

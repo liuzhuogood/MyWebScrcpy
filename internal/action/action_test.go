@@ -2,6 +2,7 @@ package action
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"testing"
 	"time"
@@ -115,5 +116,65 @@ func TestQueueRejectsWhenFull(t *testing.T) {
 	case <-first:
 	case <-time.After(time.Second):
 		t.Fatal("first action did not finish after context cancellation")
+	}
+}
+
+func TestQueueValidatesMode(t *testing.T) {
+	for _, tc := range []struct {
+		mode  string
+		valid bool
+	}{
+		{mode: "", valid: true},
+		{mode: "sdk", valid: true},
+		{mode: "adb", valid: true},
+		{mode: "invalid", valid: false},
+		{mode: "SHELL", valid: false},
+		{mode: "fastboot", valid: false},
+	} {
+		q := New(fakeExecutor{}, 1)
+		req := Request{
+			RequestID:  "mode-test",
+			DeviceID:   "phone",
+			Action:     "tap",
+			X:          0.5,
+			Y:          0.5,
+			Mode:       tc.mode,
+			DurationMS: 500,
+		}
+		res := <-q.Submit(context.Background(), req)
+		if tc.valid {
+			if !res.Accepted || !res.Executed || res.ErrorCode != "" {
+				t.Fatalf("expected mode %q to be accepted, got %+v", tc.mode, res)
+			}
+		} else {
+			if !res.Accepted || res.Executed || res.ErrorCode != "unsupported_mode" {
+				t.Fatalf("expected mode %q to fail with unsupported_mode, got %+v", tc.mode, res)
+			}
+		}
+	}
+}
+
+func TestRequestJSONSerialization(t *testing.T) {
+	req := Request{
+		RequestID:  "req-1",
+		DeviceID:   "device-1",
+		Action:     "swipe",
+		X:          0.1,
+		Y:          0.2,
+		X2:         0.3,
+		Y2:         0.4,
+		Mode:       "adb",
+		DurationMS: 300,
+	}
+	data, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	var decoded Request
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal failed: %v", err)
+	}
+	if decoded.Mode != "adb" || decoded.DurationMS != 300 {
+		t.Fatalf("unexpected decoded request: %+v", decoded)
 	}
 }

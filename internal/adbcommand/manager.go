@@ -130,6 +130,24 @@ func (m *Manager) Get(id, serial string) (*job, error) {
 	}
 	return j, nil
 }
+
+func (m *Manager) ExecuteDirect(ctx context.Context, serial string, args ...string) error {
+	if serial == "" {
+		return errors.New("missing serial")
+	}
+	if len(args) == 0 {
+		return errors.New("missing args")
+	}
+	commandArgs := append(append([]string(nil), m.prefix...), "-s", serial)
+	commandArgs = append(commandArgs, args...)
+	cmd := exec.CommandContext(ctx, m.adbPath, commandArgs...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 func (j *job) Snapshot() View { j.mu.Lock(); defer j.mu.Unlock(); v := j.View; return v }
 
 func (m *Manager) run(j *job) {

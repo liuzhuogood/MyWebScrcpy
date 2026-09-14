@@ -8,8 +8,13 @@ import (
 	"sync"
 	"time"
 
+	"math"
+	"math/rand"
+	"strconv"
+
 	"github.com/gorilla/websocket"
 	"mywebscrcpy/internal/action"
+	"mywebscrcpy/internal/adbcommand"
 	debuglog "mywebscrcpy/internal/debug"
 	"mywebscrcpy/internal/devicegate"
 	"mywebscrcpy/internal/scrcpy"
@@ -83,7 +88,7 @@ func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, fu
 		return nil, nil, nil, err
 	}
 	ms := &managedSession{sess: sess, meta: meta, refs: 1, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), audioAvailable: meta.AudioAvailable, audioReason: meta.AudioReason, width: meta.Width, height: meta.Height}
-	ms.actions = action.New(deviceActionExecutor{ms: ms, gate: h.gateFor(serial), touch: touchPublisher{h: h, serial: serial, sessionID: meta.SessionID}}, 64)
+	ms.actions = action.New(deviceActionExecutor{ms: ms, gate: h.gateFor(serial), touch: touchPublisher{h: h, serial: serial, sessionID: meta.SessionID}, commands: h.commands}, 64)
 	h.sessions[serial] = ms
 	h.sessionMu.Unlock()
 	h.recordEvent(debuglog.Event{Type: "session.started", DeviceID: serial, SessionID: meta.SessionID, Fields: map[string]interface{}{"codec": meta.Codec, "width": meta.Width, "height": meta.Height}})
@@ -389,9 +394,10 @@ func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan
 func timeNow() time.Time { return time.Now().Add(3 * time.Second) }
 
 type deviceActionExecutor struct {
-	ms    *managedSession
-	gate  *devicegate.Gate
-	touch touchPublisher
+	ms       *managedSession
+	gate     *devicegate.Gate
+	touch    touchPublisher
+	commands *adbcommand.Manager
 }
 
 func (e deviceActionExecutor) Execute(ctx context.Context, r action.Request) error {
@@ -407,6 +413,11 @@ func (e deviceActionExecutor) execute(ctx context.Context, r action.Request) err
 		return ctx.Err()
 	default:
 	}
+
+	if r.Mode == "adb" {
+		return e.executeADB(ctx, r)
+	}
+
 	// Replay sessions have no control socket; reject input instead of
 	// dereferencing a nil connection.
 	if e.ms.sess == nil || e.ms.sess.conn == nil {
@@ -480,3 +491,76 @@ func (e deviceActionExecutor) execute(ctx context.Context, r action.Request) err
 	}
 	return errors.New("action_not_implemented")
 }
+
+func (e deviceActionExecutor) executeADB(ctx context.Context, r action.Request) error {
+	if e.commands == nil {
+		return errors.New("adb_manager_unavailable")
+	}
+	serial := r.DeviceID
+	if serial == "" && e.ms.meta != nil {
+		serial = e.ms.meta.Serial
+	}
+	if serial == "" {
+		return errors.New("missing_device_id")
+	}
+
+	e.ms.mu.Lock()
+	width, height := e.ms.width, e.ms.height
+	e.ms.mu.Unlock()
+
+	if width == 0 {
+		width = 1080
+	}
+	if height == 0 {
+		height = 1920
+	}
+
+	switch r.Action {
+	case "tap":
+		x := clampInt32(int32(math.Round(r.X*float64(width))), 0, int32(width)-1)
+		y := clampInt32(int32(math.Round(r.Y*float64(height))), 0, int32(height)-1)
+
+		if r.Humanize {
+			std := humanizeStdTapPx
+			if width < 600 {
+				std = humanizeStdTapPx / 2
+			}
+			fx := clampInt32(int32(math.Round(float64(x)+rand.NormFloat64()*std)), 0, int32(width)-1)
+			fy := clampInt32(int32(math.Round(float64(y)+rand.NormFloat64()*std)), 0, int32(height)-1)
+			holdMS := int64(humanizeMinTapHoldMS + rand.Intn(humanizeMaxTapHoldMS-humanizeMinTapHoldMS))
+			args := []string{"shell", "input", "swipe", strconv.Itoa(int(fx)), strconv.Itoa(int(fy)), strconv.Itoa(int(fx)), strconv.Itoa(int(fy)), strconv.FormatInt(holdMS, 10)}
+			if err := e.commands.ExecuteDirect(ctx, serial, args...); err != nil {
+				return err
+			}
+			e.touch.emit("tap", float64(fx)/float64(width), float64(fy)/float64(height), 0, 0, r.Source)
+			return nil
+		}
+
+		args := []string{"shell", "input", "tap", strconv.Itoa(int(x)), strconv.Itoa(int(y))}
+		if err := e.commands.ExecuteDirect(ctx, serial, args...); err != nil {
+			return err
+		}
+		e.touch.emit("tap", r.X, r.Y, 0, 0, r.Source)
+		return nil
+
+	case "swipe":
+		x1 := clampInt32(int32(math.Round(r.X*float64(width))), 0, int32(width)-1)
+		y1 := clampInt32(int32(math.Round(r.Y*float64(height))), 0, int32(height)-1)
+		x2 := clampInt32(int32(math.Round(r.X2*float64(width))), 0, int32(width)-1)
+		y2 := clampInt32(int32(math.Round(r.Y2*float64(height))), 0, int32(height)-1)
+
+		args := []string{"shell", "input", "swipe", strconv.Itoa(int(x1)), strconv.Itoa(int(y1)), strconv.Itoa(int(x2)), strconv.Itoa(int(y2))}
+		if r.DurationMS > 0 {
+			args = append(args, strconv.FormatInt(r.DurationMS, 10))
+		}
+		if err := e.commands.ExecuteDirect(ctx, serial, args...); err != nil {
+			return err
+		}
+		e.touch.emit("swipe", r.X, r.Y, r.X2, r.Y2, r.Source)
+		return nil
+
+	default:
+		return errors.New("unsupported_action_for_adb_mode")
+	}
+}
+

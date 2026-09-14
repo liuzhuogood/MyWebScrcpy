@@ -79,6 +79,21 @@ func (h *Hub) recordEvent(e debuglog.Event) {
 	}
 }
 
+// SubmitAction submits an action to the active device session.
+func (h *Hub) SubmitAction(ctx context.Context, serial string, req action.Request) (action.Result, error) {
+	if serial == "" {
+		return action.Result{}, errors.New("missing serial")
+	}
+	ms, _, release, err := h.acquireSession(serial)
+	if err != nil {
+		return action.Result{}, err
+	}
+	defer release()
+	req.DeviceID = serial
+	res := <-ms.actions.Submit(ctx, req)
+	return res, nil
+}
+
 // allocPort 分配一个唯一的本地端口给 forward。
 func (h *Hub) allocPort() int {
 	h.portMu.Lock()

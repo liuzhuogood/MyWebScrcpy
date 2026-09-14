@@ -112,7 +112,7 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 				}
 				h.publishResult(serial, msg)
 			} else if msg.Type == "action.request" {
-				result := <-ms.actions.Submit(context.Background(), action.Request{RequestID: msg.RequestID, DeviceID: serial, Source: "vision", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, Text: msg.Text, Keycode: msg.Keycode, MetaState: msg.MetaState, FrameID: msg.FrameID, ExpiresMS: msg.ExpiresMS, Humanize: msg.Humanize})
+				result := <-ms.actions.Submit(context.Background(), action.Request{RequestID: msg.RequestID, DeviceID: serial, Source: "vision", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, Text: msg.Text, Keycode: msg.Keycode, MetaState: msg.MetaState, FrameID: msg.FrameID, ExpiresMS: msg.ExpiresMS, Humanize: msg.Humanize, Mode: msg.Mode, DurationMS: msg.DurationMS})
 				h.recordEvent(debuglog.Event{Type: "action.result", DeviceID: serial, SessionID: meta.SessionID, RequestID: result.RequestID, Fields: map[string]interface{}{"accepted": result.Accepted, "executed": result.Executed, "error_code": result.ErrorCode}})
 				_ = writeJSON(map[string]interface{}{"type": "action.result", "request_id": result.RequestID, "device_id": serial, "session_id": meta.SessionID, "accepted": result.Accepted, "executed": result.Executed, "error_code": result.ErrorCode})
 			}
@@ -184,6 +184,10 @@ func shouldEmitVisionFrame(kind byte, maxFPS int, lastSent, now time.Time) bool 
 	return now.Sub(lastSent) >= time.Second/time.Duration(maxFPS)
 }
 
+func (h *Hub) PublishVisionResult(serial string, msg vision.Message) {
+	h.publishResult(serial, msg)
+}
+
 func (h *Hub) publishResult(serial string, msg vision.Message) {
 	// Detection producers that omit objects mean "no target". Normalize that
 	// legacy form so downstream clients always receive an explicit empty list
@@ -195,7 +199,7 @@ func (h *Hub) publishResult(serial string, msg vision.Message) {
 	defer h.resultMu.Unlock()
 	h.lastResult[serial] = msg
 	for ch, sessionID := range h.results[serial] {
-		if sessionID != "" && sessionID != msg.SessionID {
+		if sessionID != "" && msg.SessionID != "" && sessionID != msg.SessionID {
 			continue
 		}
 		select {
@@ -212,7 +216,7 @@ func (h *Hub) subscribeResults(serial, sessionID string) (chan vision.Message, f
 		h.results[serial] = make(map[chan vision.Message]string)
 	}
 	h.results[serial][ch] = sessionID
-	if latest, ok := h.lastResult[serial]; ok && sessionID != "" && latest.SessionID == sessionID {
+	if latest, ok := h.lastResult[serial]; ok && (latest.SessionID == "" || sessionID == "" || latest.SessionID == sessionID) {
 		ch <- latest
 	}
 	h.resultMu.Unlock()

@@ -31,7 +31,9 @@ type Message struct {
 	MetaState uint32   `json:"meta_state,omitempty"`
 	ExpiresMS int64    `json:"expires_ms,omitempty"`
 	// Humanize 启用拟人化触摸，仅对 action= tap / swipe 生效。
-	Humanize bool `json:"humanize,omitempty"`
+	Humanize   bool   `json:"humanize,omitempty"`
+	Mode       string `json:"mode,omitempty"`
+	DurationMS int64  `json:"duration_ms,omitempty"`
 }
 
 type Object struct {
