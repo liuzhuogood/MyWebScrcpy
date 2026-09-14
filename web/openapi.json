@@ -1,64 +1,4990 @@
 {
   "openapi": "3.1.0",
-  "info": {"title": "MyWebScrcpy API", "version": "1.6.0", "description": "当前服务注册的 HTTP 与 WebSocket 接口。服务默认无内建身份认证，请在受信网络中使用。"},
-  "servers": [{"url": "/"}],
-  "paths": {
-    "/api/devices":{"get":{"tags":["设备与控制"],"summary":"列出在线设备","responses":{"200":{"description":"设备数组"}}}},
-    "/api/rotate":{"get":{"tags":["设备与控制"],"summary":"切换设备旋转方向","parameters":[{"$ref":"#/components/parameters/serial"}],"x-side-effect":true,"responses":{"200":{"description":"旋转结果"},"400":{"description":"缺少 serial"}}}},
-    "/api/screen-state":{"get":{"tags":["设备与控制"],"summary":"读取屏幕电源状态","parameters":[{"$ref":"#/components/parameters/serial"}],"responses":{"200":{"description":"screenOn"}}}},
-    "/api/reboot":{"post":{"tags":["设备与控制"],"summary":"重启设备","parameters":[{"$ref":"#/components/parameters/serial"}],"x-side-effect":true,"responses":{"200":{"description":"成功"},"502":{"description":"ADB 失败"}}}},
-    "/ws":{"get":{"tags":["实时投屏"],"summary":"WebSocket 投屏与控制通道","description":"连接后接收二进制视频帧，文本帧用于控制；断开即结束会话。"}},
-    "/api/recordings":{"get":{"tags":["录像"],"summary":"列出录像"},"post":{"tags":["录像"],"summary":"开始录像","x-side-effect":true}},
-    "/api/recordings/{recording_id}":{"get":{"tags":["录像"],"summary":"读取录像状态"},"delete":{"tags":["录像"],"summary":"删除录像","x-side-effect":true}},
-    "/api/recordings/{recording_id}/stop":{"post":{"tags":["录像"],"summary":"停止录像","x-side-effect":true}},
-    "/api/recordings/{recording_id}/download":{"get":{"tags":["录像"],"summary":"下载录像"}},
-    "/api/recordings/download":{"get":{"tags":["录像"],"summary":"下载最近录像"}},
-    "/api/adb/commands":{"post":{"tags":["ADB 与按键"],"summary":"执行 ADB 命令","x-side-effect":true}},
-    "/api/adb/commands/{command_id}":{"get":{"tags":["ADB 与按键"],"summary":"读取 ADB 命令状态"}},
-    "/api/sendkey":{"post":{"tags":["ADB 与按键"],"summary":"发送按键","x-side-effect":true}},
-    "/api/files":{"get":{"tags":["文件"],"summary":"列出设备文件"}},
-    "/api/files/download":{"get":{"tags":["文件"],"summary":"下载文件"}},
-    "/api/files/upload":{"post":{"tags":["文件"],"summary":"上传文件","x-side-effect":true}},
-    "/api/files/folders":{"post":{"tags":["文件"],"summary":"创建文件夹","x-side-effect":true}},
-    "/api/files/move":{"post":{"tags":["文件"],"summary":"移动文件","x-side-effect":true}},
-    "/api/files/rename":{"post":{"tags":["文件"],"summary":"重命名文件","x-side-effect":true}},
-    "/api/files/delete":{"post":{"tags":["文件"],"summary":"删除文件","x-side-effect":true}},
-    "/api/files/undo":{"post":{"tags":["文件"],"summary":"撤销文件操作","x-side-effect":true}},
-    "/api/scripts/categories":{"get":{"tags":["脚本"],"summary":"列出脚本分类"},"post":{"tags":["脚本"],"summary":"创建脚本分类","x-side-effect":true}},
-    "/api/scripts/categories/{cat}":{"patch":{"tags":["脚本"],"summary":"重命名分类","x-side-effect":true},"delete":{"tags":["脚本"],"summary":"删除分类","x-side-effect":true}},
-    "/api/scripts":{"get":{"tags":["脚本"],"summary":"列出脚本"}},
-    "/api/scripts/{cat}":{"post":{"tags":["脚本"],"summary":"创建脚本","x-side-effect":true}},
-    "/api/scripts/{cat}/{name}":{"get":{"tags":["脚本"],"summary":"读取脚本"},"put":{"tags":["脚本"],"summary":"更新脚本","x-side-effect":true},"delete":{"tags":["脚本"],"summary":"删除脚本","x-side-effect":true}},
-    "/api/ui/xml":{"get":{"tags":["UI 检查"],"summary":"读取 Android UI XML","parameters":[{"$ref":"#/components/parameters/serial"}]}},
-    "/api/ui/page-info":{"get":{"tags":["UI 检查"],"summary":"读取前台应用与屏幕信息","parameters":[{"$ref":"#/components/parameters/serial"}]}},
-    "/api/vision/stream":{"get":{"tags":["Vision"],"summary":"Vision WebSocket 双向帧/动作通道","description":"建立与目标设备的 Vision 双向 WebSocket 通道。连接后服务端先发送 hello（含 protocol_version、device_id、session_id、width、height、codec），随后持续推送二进制视频帧；客户端通过文本 JSON 上行消息。\n\n上行文本消息（客户端→服务端）：\n- hello：携带 max_fps（可选），服务端回 hello.ack。\n- action.request：请求执行设备动作（tap/swipe/key/text），字段定义见 components.schemas.VisionActionRequest，其中 humanize=true 启用拟人化触摸。\n- detection.result：回传识别结果，服务端校验后广播。\n- heartbeat：保活，服务端回 heartbeat。\n\n下行文本消息（服务端→客户端）：\n- hello / hello.ack / action.result / heartbeat / error。\n\naction.request 返回 action.result：{\"type\":\"action.result\",\"request_id\":\"...\",\"accepted\":true,\"executed\":true,\"error_code\":\"...\"}。\n\n动作会与浏览器控制消息共用同一设备级队列；坐标越界返回 invalid_coordinate，队列满返回 queue_full，超时返回 expired。","parameters":[{"$ref":"#/components/parameters/serial"}]}},
-    "/api/vision/results":{"get":{"tags":["Vision"],"summary":"读取 Vision 结果"}},
-    "/api/vision/stats":{"get":{"tags":["Vision"],"summary":"读取 Vision 统计"}},
-    "/api/vision/debug":{"get":{"tags":["Vision"],"summary":"读取 Vision 调试信息"}}
+  "info": {
+    "title": "MyWebScrcpy API",
+    "version": "1.6.0",
+    "description": "MyWebScrcpy 提供的完整 HTTP 与 WebSocket 接口规范。涵盖设备管理、实时投屏、录像、截图、回放、ADB 命令与按键注入、文件管理、脚本管理、UI 布局抓取及 Vision 智能交互。服务默认无内建身份认证，请在受信任网络中部署与使用。"
   },
-  "components":{
-    "parameters":{"serial":{"name":"serial","in":"query","required":true,"schema":{"type":"string"},"description":"ADB 设备 serial"}},
-    "schemas":{
-      "VisionActionRequest":{
-        "type":"object",
-        "description":"Vision 通道上行动作请求消息（WebSocket 文本 JSON，发送到 /api/vision/stream）。",
-        "properties":{
-          "type":{"type":"string","enum":["action.request"],"description":"消息类型"},
-          "request_id":{"type":"string","description":"请求标识，action.result 中回显"},
-          "device_id":{"type":"string","description":"目标设备 serial；缺省时用连接绑定的 serial"},
-          "session_id":{"type":"string","description":"会话标识（可选），用于校验"},
-          "action":{"type":"string","enum":["tap","swipe","key","text"],"description":"动作类型"},
-          "x":{"type":"number","minimum":0,"maximum":1,"description":"归一化 X 坐标 0~1；tap 落点 / swipe 起点"},
-          "y":{"type":"number","minimum":0,"maximum":1,"description":"归一化 Y 坐标 0~1"},
-          "x2":{"type":"number","minimum":0,"maximum":1,"description":"swipe 终点归一化 X 坐标"},
-          "y2":{"type":"number","minimum":0,"maximum":1,"description":"swipe 终点归一化 Y 坐标"},
-          "keycode":{"type":"integer","description":"Android keycode（action=key 时必填）"},
-          "text":{"type":"string","description":"注入的 UTF-8 文本（action=text 时必填）"},
-          "frame_id":{"type":"integer","description":"关联的视频帧 ID（可选）"},
-          "expires_ms":{"type":"integer","description":"动作执行超时毫秒（可选）"},
-          "humanize":{"type":"boolean","default":false,"description":"拟人化触摸，仅对 tap/swipe 生效。tap：落点高斯随机偏移、压力随机、按下到抬起加入随机按压时长；swipe：起止点间生成多个中间点、走带随机抖动的曲线路径并模拟起慢中快收慢变速。默认关闭，行为与精确注入一致，便于自动化复现。注意 scrcpy 协议无按压面积字段，拟人仅以落点偏移+压力近似。"}
+  "servers": [
+    {
+      "url": "/",
+      "description": "当前服务根路径"
+    }
+  ],
+  "paths": {
+    "/api/openapi.json": {
+      "get": {
+        "tags": [
+          "系统"
+        ],
+        "summary": "获取 OpenAPI 规范",
+        "description": "返回 MyWebScrcpy 完整的 OpenAPI 3.1.0 规范定义 JSON，供外部客户端或自动化 Agent 消费与构建客户端。",
+        "responses": {
+          "200": {
+            "description": "OpenAPI 3.1.0 规范文档",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices": {
+      "get": {
+        "tags": [
+          "设备与控制"
+        ],
+        "summary": "列出在线设备",
+        "description": "查询当前由 ADB 发现的所有在线设备列表，包含设备 serial、状态、型号、产品名与 transport_id。",
+        "responses": {
+          "200": {
+            "description": "在线设备列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Device"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/rotate": {
+      "get": {
+        "tags": [
+          "设备与控制"
+        ],
+        "summary": "切换设备旋转方向",
+        "description": "通过 ADB 关闭设备自动旋转并切换屏幕方向（0与1切换），重启设备端 scrcpy-server，前端随后断开重连获取最新屏幕分辨率与方向。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "responses": {
+          "200": {
+            "description": "切换旋转成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RotateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/screen-state": {
+      "get": {
+        "tags": [
+          "设备与控制"
+        ],
+        "summary": "读取屏幕电源状态",
+        "description": "通过 ADB 执行 dumpsys power 检测设备屏幕真实开关状态（ON 或 OFF）。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "读取屏幕状态成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenStateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/reboot": {
+      "post": {
+        "tags": [
+          "设备与控制"
+        ],
+        "summary": "重启设备",
+        "description": "通过 ADB 向指定设备发送 reboot 指令执行系统重启操作。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "responses": {
+          "200": {
+            "description": "重启指令已发送",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "ADB reboot 命令执行失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ws": {
+      "get": {
+        "tags": [
+          "实时投屏"
+        ],
+        "summary": "WebSocket 投屏与控制通道",
+        "description": "建立与目标设备的实时投屏与控制双向 WebSocket 连接。服务端持续推送 Scrcpy 协议封包的二进制视频帧；客户端通过文本或二进制帧注入鼠标、触摸和键盘控制事件；连接断开即结束投屏会话。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "切换协议至 WebSocket"
+          },
+          "400": {
+            "description": "缺少 serial 参数或无效的 WebSocket 握手请求"
+          }
+        }
+      }
+    },
+    "/api/recordings": {
+      "get": {
+        "tags": [
+          "录像"
+        ],
+        "summary": "列出录像",
+        "description": "获取指定设备的全部历史与正在进行的录像记录列表，包含文件大小、录制起止时间与当前状态。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "录像记录列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingsListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "录像"
+        ],
+        "summary": "开始录像",
+        "description": "为目标设备启动录像会话，生成 MP4 视频文件。每台设备同一时刻仅允许一个录像任务，若已有录像在进行将返回 409 冲突。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "录像配置参数",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartRecordingRequest"
+              }
+            }
+          }
         },
-        "required":["type","action"]
+        "responses": {
+          "202": {
+            "description": "录像任务已启动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求体不合法或缺少必需参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "该设备已有正在进行的录像任务",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recordings/{recording_id}": {
+      "get": {
+        "tags": [
+          "录像"
+        ],
+        "summary": "读取录像状态",
+        "description": "查询指定录像任务的详细状态与元数据信息。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/recording_id"
+          },
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "录像任务详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "未找到指定的录像记录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "录像"
+        ],
+        "summary": "删除录像",
+        "description": "删除已结束的录制记录及其对应的 MP4 视频文件；正在录制中的任务不可删除。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/recording_id"
+          },
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "responses": {
+          "204": {
+            "description": "录像及文件删除成功"
+          },
+          "400": {
+            "description": "录制仍在进行中，无法删除",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "未找到指定的录像记录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recordings/{recording_id}/stop": {
+      "post": {
+        "tags": [
+          "录像"
+        ],
+        "summary": "停止录像",
+        "description": "提前手动停止正在进行的录像任务并封包 MP4。该接口具备幂等性，已停止的任务重复调用会返回当前状态。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/recording_id"
+          },
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "responses": {
+          "202": {
+            "description": "录像停止请求已接受",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordingView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "未找到指定的录像记录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recordings/{recording_id}/download": {
+      "get": {
+        "tags": [
+          "录像"
+        ],
+        "summary": "下载录像",
+        "description": "下载指定已完成录像的 MP4 视频文件流，响应头包含 Content-Disposition 附件下载标识。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/recording_id"
+          },
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MP4 视频文件流",
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "录制尚未完成或缺少参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "未找到录像或文件已删除",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/recordings/download": {
+      "get": {
+        "tags": [
+          "录像"
+        ],
+        "summary": "下载最近录像",
+        "description": "下载指定设备最新一次已完成的录像 MP4；若 query 中携带 recording_id 则下载该指定录像。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          },
+          {
+            "name": "recording_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "可选录像任务 ID，缺省时自动下载最近一次已完成的录像"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "MP4 视频文件流",
+            "content": {
+              "video/mp4": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "未指定设备或参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "没有可下载的已完成录像",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/screenshots": {
+      "get": {
+        "tags": [
+          "截图"
+        ],
+        "summary": "列出截图",
+        "description": "获取指定设备的全部截图记录，包含截图 ID、尺寸、字节数与生成时间。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "截图列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenshotsListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "截图"
+        ],
+        "summary": "保存截图",
+        "description": "接收前端或调用方上传的 PNG 格式二进制图片数据并持久化存储，自动解析分辨率与文件属性，受存储配额限制（单张最大 20MB）。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "PNG 格式图片原始二进制数据",
+          "content": {
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "截图保存成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScreenshotEntry"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求体为空或图片格式不正确",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "截图文件超过大小上限 (20MB)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/screenshots/{screenshot_id}": {
+      "get": {
+        "tags": [
+          "截图"
+        ],
+        "summary": "读取或下载截图",
+        "description": "查看指定的 PNG 截图内容。可通过添加 download=1 参数触发浏览器附件下载。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/screenshot_id"
+          },
+          {
+            "$ref": "#/components/parameters/serial"
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "设置为 1 时，响应头携带 Content-Disposition 触发附件下载"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "PNG 图片内容",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "未找到截图",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "截图"
+        ],
+        "summary": "删除截图",
+        "description": "删除指定的截图元数据与图片文件。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/screenshot_id"
+          },
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "responses": {
+          "204": {
+            "description": "截图删除成功"
+          },
+          "404": {
+            "description": "未找到截图",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/replay/start": {
+      "post": {
+        "tags": [
+          "回放"
+        ],
+        "summary": "启动录像回放",
+        "description": "为指定设备启动录像回放任务，将历史 MP4 录像解码并注入到投屏与 Vision 管道中，支持循环播放模式。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "回放配置",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartReplayRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "回放已启动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 recording_id 或参数非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "未找到对应的录像记录",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/replay/stop": {
+      "post": {
+        "tags": [
+          "回放"
+        ],
+        "summary": "停止回放",
+        "description": "停止当前正在运行的回放任务，自动恢复设备真实的实时 Scrcpy 视频流。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "responses": {
+          "202": {
+            "description": "回放已停止",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "当前设备无正在运行的回放任务",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/replay/pause": {
+      "post": {
+        "tags": [
+          "回放"
+        ],
+        "summary": "暂停或恢复回放",
+        "description": "切换当前回放任务的暂停与播放状态。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "暂停状态参数",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PauseReplayRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "回放状态已变更",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 paused 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "无活跃回放任务",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/replay/seek": {
+      "post": {
+        "tags": [
+          "回放"
+        ],
+        "summary": "跳转回放时间",
+        "description": "跳转到录像的指定毫秒时间偏移并继续播放（若之前处于暂停状态会自动恢复播放）。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "目标毫秒偏移",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SeekReplayRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "跳转成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 position_ms 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "无活跃回放任务",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/replay/segment": {
+      "post": {
+        "tags": [
+          "回放"
+        ],
+        "summary": "配置区间循环回放",
+        "description": "设置或清除 A-B 区间片段循环播放窗口（仅在特定起止时间段内循环）。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "区间循环参数",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SegmentReplayRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "区间设置成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数非法（如 len_ms <= 0 或缺少 enabled）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "无活跃回放任务",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/replay": {
+      "get": {
+        "tags": [
+          "回放"
+        ],
+        "summary": "查询当前回放状态",
+        "description": "获取当前设备的回放任务状态；若当前正处于实时直播流，replay 字段为 null。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "回放状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplayStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/adb/commands": {
+      "post": {
+        "tags": [
+          "ADB 与按键"
+        ],
+        "summary": "执行 ADB 命令",
+        "description": "仅以参数数组形式调用 adb -s <serial> <args...>，不通过宿主机 shell 解析，严禁包含 -s, --serial, -H, -P, -L 等改变目标设备的参数。支持同设备 FIFO 队列排队、异步执行 (async: true) 与并发执行 (parallel: true)。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "ADB 命令参数与配置",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ADBCommandRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "同步执行完成",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADBCommandView"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "异步命令已接受并入队",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADBCommandView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数格式非法或包含危险目标切换选项",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "设备离线或不可达",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADBCommandView"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "命令执行超时",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADBCommandView"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/adb/commands/{command_id}": {
+      "get": {
+        "tags": [
+          "ADB 与按键"
+        ],
+        "summary": "读取 ADB 命令状态",
+        "description": "轮询查询异步提交的 ADB 命令执行进度、标准输出 stdout、标准错误 stderr 及 exit_code。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/command_id"
+          },
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "命令状态详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ADBCommandView"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "未找到指定的命令任务",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sendkey": {
+      "post": {
+        "tags": [
+          "ADB 与按键"
+        ],
+        "summary": "发送按键",
+        "description": "通过控制通道向 Android 设备注入指定按键码与修饰键（支持 shift, alt, ctrl, meta）。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "按键键码及修饰键",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "按键发送成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 或 keycode 参数不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files": {
+      "get": {
+        "tags": [
+          "文件"
+        ],
+        "summary": "列出设备文件",
+        "description": "浏览 Android 外部共享存储（/storage/emulated/0）下的目录与文件列表，支持按关键字搜索、类型过滤、字段排序与分页，并返回整体存储容量使用情况。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": ""
+            },
+            "description": "相对 /storage/emulated/0 的目录路径，默认为根目录"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "文件名搜索关键字"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "文件类型过滤，如 image, video, audio, document 等"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "name",
+                "size",
+                "modified"
+              ],
+              "default": "name"
+            },
+            "description": "排序依据字段"
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            },
+            "description": "排序方向（升序 asc 或降序 desc）"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "分页页码"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "maximum": 100
+            },
+            "description": "每页最大数量，上限 100"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "文件列表与存储信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数非法或路径越界",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "指定的目录不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/download": {
+      "get": {
+        "tags": [
+          "文件"
+        ],
+        "summary": "下载文件",
+        "description": "从 Android 设备流式下载指定相对路径的文件，响应头提供文件名编码的 Content-Disposition 下载头。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          },
+          {
+            "name": "path",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "待下载文件的相对路径"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "文件二进制流",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "路径为文件夹或缺少参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "文件不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/upload": {
+      "post": {
+        "tags": [
+          "文件"
+        ],
+        "summary": "上传文件",
+        "description": "通过 multipart/form-data 将文件推送到 Android 设备的指定目录下，支持 rename、overwrite、skip 等冲突策略。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "多部分表单数据，包含 file 二进制、path 目标目录与 conflict 策略",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "要上传的文件"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "目标保存目录（相对路径）",
+                    "default": ""
+                  },
+                  "conflict": {
+                    "type": "string",
+                    "enum": [
+                      "rename",
+                      "overwrite",
+                      "skip"
+                    ],
+                    "default": "rename",
+                    "description": "冲突处理策略"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "文件上传成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少文件或上传表单损坏",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/folders": {
+      "post": {
+        "tags": [
+          "文件"
+        ],
+        "summary": "创建文件夹",
+        "description": "在 Android 设备的指定目录下创建新的文件夹。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "父目录与新文件夹名称",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateFolderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "文件夹创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "文件夹名不合法或缺少参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/move": {
+      "post": {
+        "tags": [
+          "文件"
+        ],
+        "summary": "移动文件",
+        "description": "将设备上的指定文件或文件夹移动到目标目录下，支持重名冲突处理策略。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "移动源路径与目标目录",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveFileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "文件移动成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "源文件不存在或目标路径冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/rename": {
+      "post": {
+        "tags": [
+          "文件"
+        ],
+        "summary": "重命名文件",
+        "description": "重命名设备上的指定文件或文件夹。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "原始路径与新名称",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameFileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "重命名成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "新名称非法或同名文件已存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/delete": {
+      "post": {
+        "tags": [
+          "文件"
+        ],
+        "summary": "删除文件",
+        "description": "批量删除指定的文件或目录（移入设备端 .mywebscrcpy-trash 回收站），并返回用于撤销的 undo_token。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "待删除文件相对路径列表",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeleteFilesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "文件删除成功，返回撤销令牌",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteFilesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "路径列表为空或包含非法路径",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/files/undo": {
+      "post": {
+        "tags": [
+          "文件"
+        ],
+        "summary": "撤销文件操作",
+        "description": "使用删除操作生成的 undo_token 撤销文件删除，将文件从回收站还原到原路径。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "撤销令牌",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UndoFilesRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "撤销还原成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "撤销令牌不存在或已失效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scripts/categories": {
+      "get": {
+        "tags": [
+          "脚本"
+        ],
+        "summary": "列出脚本分类",
+        "description": "查询当前服务端已创建的所有脚本分类目录列表。",
+        "responses": {
+          "200": {
+            "description": "分类列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptCategoryListResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "读取分类目录失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "脚本"
+        ],
+        "summary": "创建脚本分类",
+        "description": "创建新的脚本分类目录，分类名只允许中文、字母、数字、_、-。",
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "分类名称",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScriptCategoryCreateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "分类创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptCategoryActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "分类名不合法或分类已存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scripts/categories/{cat}": {
+      "patch": {
+        "tags": [
+          "脚本"
+        ],
+        "summary": "重命名分类",
+        "description": "将现有脚本分类目录重命名为新名称。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/cat"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "新分类名称",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScriptCategoryRenameRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "重命名成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptCategoryActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "分类名不合法或目标分类名已存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "脚本"
+        ],
+        "summary": "删除分类",
+        "description": "删除脚本分类目录及其下的全部脚本，必须在 query 中显式传递 confirm=true 进行二次确认。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/cat"
+          },
+          {
+            "name": "confirm",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "description": "必须为 true 确认删除"
+          }
+        ],
+        "x-side-effect": true,
+        "responses": {
+          "200": {
+            "description": "分类删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "未传 confirm=true 或分类名非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scripts": {
+      "get": {
+        "tags": [
+          "脚本"
+        ],
+        "summary": "列出脚本",
+        "description": "获取指定分类下的全部脚本基本信息列表。",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "脚本分类名称"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "脚本列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 category 参数或分类名非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scripts/{cat}": {
+      "post": {
+        "tags": [
+          "脚本"
+        ],
+        "summary": "创建脚本",
+        "description": "在指定分类下创建新脚本文件并保存其元数据（描述、参数配置与代码正文）。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/cat"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "脚本定义",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateScriptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "脚本创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "脚本名称不合法或已存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/scripts/{cat}/{name}": {
+      "get": {
+        "tags": [
+          "脚本"
+        ],
+        "summary": "读取脚本",
+        "description": "读取指定分类下单个脚本的完整详情，包含元数据、创建修改时间及脚本完整代码。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/cat"
+          },
+          {
+            "$ref": "#/components/parameters/name"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "脚本完整详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "脚本不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "脚本"
+        ],
+        "summary": "更新脚本",
+        "description": "更新脚本元数据及源码内容。支持传入 updated 时间戳作为并发乐观锁保护（冲突返回 409）。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/cat"
+          },
+          {
+            "$ref": "#/components/parameters/name"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "更新内容及可选并发保护字段",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateScriptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "脚本更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScriptDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "脚本已被他人更新（并发冲突）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "脚本"
+        ],
+        "summary": "删除脚本",
+        "description": "删除指定的脚本及其元数据文件。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/cat"
+          },
+          {
+            "$ref": "#/components/parameters/name"
+          }
+        ],
+        "x-side-effect": true,
+        "responses": {
+          "200": {
+            "description": "脚本删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数非法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ui/xml": {
+      "get": {
+        "tags": [
+          "UI 检查"
+        ],
+        "summary": "读取 Android UI XML",
+        "description": "调用 uiautomator dump 抓取当前屏幕布局树的只读 XML 快照，并返回当前物理屏幕分辨率基准 display_size。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "UI XML 快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UIXMLResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "UI XML 超过大小限制或 XML 格式损坏",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "设备离线或 uiautomator 执行失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ui/page-info": {
+      "get": {
+        "tags": [
+          "UI 检查"
+        ],
+        "summary": "读取前台应用与屏幕信息",
+        "description": "解析当前前台聚焦的应用包名 (package_name)、Activity、Window 名称以及屏幕尺寸、密度与旋转方向。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "前台页面与屏幕属性",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UIPageInfoResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "无法解析前台焦点或设备不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/vision/stream": {
+      "get": {
+        "tags": [
+          "Vision"
+        ],
+        "summary": "Vision WebSocket 双向帧/动作通道",
+        "description": "建立与目标设备的 Vision 双向 WebSocket 通道。连接后服务端先发送 hello（含 protocol_version、device_id、session_id、width、height、codec），随后持续推送二进制视频帧；客户端通过文本 JSON 发送上行控制与保活消息。\n\n上行文本消息（客户端→服务端）：\n- hello：携带 max_fps（可选），服务端回 hello.ack。\n- action.request：请求执行设备动作（tap/swipe/key/text），字段定义见 components.schemas.VisionActionRequest，其中 humanize=true 启用拟人化触摸。\n- detection.result：回传识别结果，服务端校验后广播。\n- heartbeat：保活，服务端回 heartbeat。\n\n下行文本消息（服务端→客户端）：\n- hello / hello.ack / action.result / heartbeat / error。\n\naction.request 返回 action.result：{\"type\":\"action.result\",\"request_id\":\"...\",\"accepted\":true,\"executed\":true,\"error_code\":\"...\"}。\n\n动作会与浏览器控制消息共用同一设备级队列；坐标越界返回 invalid_coordinate，队列满返回 queue_full，超时返回 expired。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "切换至 WebSocket 协议通道"
+          },
+          "400": {
+            "description": "缺少 serial 参数"
+          }
+        }
+      }
+    },
+    "/api/vision/results": {
+      "get": {
+        "tags": [
+          "Vision"
+        ],
+        "summary": "读取 Vision 结果",
+        "description": "WebSocket 广播通道。订阅该连接的前端页面或客户端可实时接收由算法回传的目标识别框 (detection.result) 与触控可视化事件 (touch)。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "可选会话 ID 过滤"
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "切换至 WebSocket 广播通道"
+          },
+          "400": {
+            "description": "缺少 serial 参数"
+          }
+        }
+      }
+    },
+    "/api/vision/stats": {
+      "get": {
+        "tags": [
+          "Vision"
+        ],
+        "summary": "读取 Vision 统计",
+        "description": "查询当前设备视频流与动作执行队列的运行状态指标（订阅者数量、累计帧数、丢帧统计、动作队列深度等）。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "会话统计指标",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisionSessionStats"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "设备流会话未建立",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/vision/debug": {
+      "get": {
+        "tags": [
+          "Vision"
+        ],
+        "summary": "读取 Vision 调试信息",
+        "description": "获取环形诊断缓冲区内最近发生的事件快照（如动作提交、协议拒绝、丢帧、异常等），支持通过 limit 限制返回条数（1~500）。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "minimum": 1,
+              "maximum": 500
+            },
+            "description": "返回最近事件的最大数量（1~500，默认 100）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "调试事件列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VisionDebugResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数或 limit 格式错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates": {
+      "get": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "获取模板列表",
+        "description": "查询指定设备关联及全局共享的所有模板列表，支持通过 serial 过滤（默认包含当前设备与 global 模板）。",
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "设备序列号或 'all'"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "模板列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplatesListResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "创建模板",
+        "description": "创建新的匹配模板。支持 multipart/form-data 文件上传或 JSON/Base64 图片，可设定名称、所属设备、匹配阈值与多尺度列表。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateRequest"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "模板创建成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Template"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数不合法或图片无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "模板已存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates/export": {
+      "get": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "导出模板 ZIP 压缩包",
+        "description": "按设备 serial 与生效范围 scope（all / device / global）导出模板 PNG 压缩包。",
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "设备序列号或 'all'"
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "device",
+                "global"
+              ]
+            },
+            "description": "导出范围：all（全部）、device（当前设备）、global（全局通用）"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ZIP 压缩包二进制流",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates/import": {
+      "post": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "导入模板 ZIP 压缩包",
+        "description": "解压上传的 ZIP 包（内含 PNG 图像），自动注册为指定设备或全局模板。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "ZIP 格式的模板压缩包"
+                  },
+                  "serial": {
+                    "type": "string",
+                    "description": "所属设备序列号或 'global'"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "导入成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "imported": {
+                      "type": "integer",
+                      "description": "成功导入的模板数量"
+                    },
+                    "templates": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Template"
+                      }
+                    }
+                  },
+                  "required": [
+                    "success",
+                    "imported"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "文件格式无效或解析失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates/{id}": {
+      "get": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "获取模板详情",
+        "description": "根据模板 ID 查询详细配置参数。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "模板唯一 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "模板详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Template"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "模板未找到",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "更新模板",
+        "description": "根据模板 ID 更新名称、所属设备、匹配阈值、多尺度或启用状态。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "模板唯一 ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "模板更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Template"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "模板未找到",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "删除模板",
+        "description": "删除指定模板及其持久化文件。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "模板唯一 ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "模板未找到",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates/{id}/image": {
+      "get": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "获取模板图像",
+        "description": "返回指定模板的原始 PNG 图像二进制数据。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "模板唯一 ID"
+          },
+          {
+            "name": "download",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "设为 1 时触发浏览器附件下载"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "模板图片",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "模板未找到",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates/status": {
+      "get": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "查询设备模板匹配状态",
+        "description": "查询指定设备后台匹配 Worker 的运行状态与活跃模板数量。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "设备匹配状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "控制设备模板匹配开关",
+        "description": "开启或停止针对指定设备的后台模板匹配服务。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "更新后的设备匹配状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 或参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates/matches": {
+      "get": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "获取设备最新匹配命中结果",
+        "description": "查询指定设备最新一次匹配的命中目标列表及置信度、坐标数据。",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/serial"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "匹配命中列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateMatchesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates/detect": {
+      "post": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "执行即时模板匹配检测",
+        "description": "在上传的图片或指定设备当前屏幕截图上执行即时模板匹配，返回匹配命中结果。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateDetectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "即时匹配结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateDetectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少图片或设备",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/templates/click": {
+      "post": {
+        "tags": [
+          "模板匹配"
+        ],
+        "summary": "根据模板名称或ID在屏幕上匹配并点击目标",
+        "description": "根据模板名称或ID在设备屏幕上执行匹配。若命中则自动点击其几何中心；支持开启随机小范围微偏移（保持在模板边界内）；支持选择 sdk（默认）或 adb 点击模式（包含拟人化物理手指微偏移与按压时长）。未匹配返回 422 报错。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TemplateClickRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "点击成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemplateClickResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少设备号或模板标识",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "模板不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "当前画面未匹配到该模板",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "serial": {
+        "name": "serial",
+        "in": "query",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "ADB 设备 serial（如 emulator-5554 或 192.168.1.100:5555）",
+        "example": "emulator-5554"
+      },
+      "recording_id": {
+        "name": "recording_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "录像任务唯一标识",
+        "example": "rec_1710400000_abc123"
+      },
+      "screenshot_id": {
+        "name": "screenshot_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "截图唯一标识",
+        "example": "shot_1710400000_xyz"
+      },
+      "command_id": {
+        "name": "command_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "ADB 命令任务唯一标识",
+        "example": "cmd_1710400000_1"
+      },
+      "cat": {
+        "name": "cat",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "脚本分类名称",
+        "example": "自动化测试"
+      },
+      "name": {
+        "name": "name",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "脚本文件名称",
+        "example": "unlock_device.sh"
+      }
+    },
+    "schemas": {
+      "Device": {
+        "type": "object",
+        "description": "ADB 在线设备信息",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "description": "设备序列号",
+            "example": "emulator-5554"
+          },
+          "state": {
+            "type": "string",
+            "description": "设备连接状态 (如 device, offline)",
+            "example": "device"
+          },
+          "product": {
+            "type": "string",
+            "description": "产品名称",
+            "example": "sdk_gphone64_arm64"
+          },
+          "model": {
+            "type": "string",
+            "description": "设备型号",
+            "example": "sdk_gphone64_arm64"
+          },
+          "device": {
+            "type": "string",
+            "description": "设备代号",
+            "example": "emu64a"
+          },
+          "transport_id": {
+            "type": "string",
+            "description": "ADB transport_id",
+            "example": "1"
+          }
+        },
+        "required": [
+          "serial",
+          "state"
+        ]
+      },
+      "RotateResponse": {
+        "type": "object",
+        "description": "屏幕旋转切换响应",
+        "properties": {
+          "rotation": {
+            "type": "string",
+            "enum": [
+              "0",
+              "1"
+            ],
+            "description": "切换后的屏幕方向",
+            "example": "1"
+          }
+        },
+        "required": [
+          "rotation"
+        ]
+      },
+      "ScreenStateResponse": {
+        "type": "object",
+        "description": "屏幕电源状态响应",
+        "properties": {
+          "screenOn": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "屏幕是否点亮（true 为亮屏，false 为息屏）",
+            "example": true
+          },
+          "error": {
+            "type": "string",
+            "description": "读取出错时的错误信息",
+            "example": ""
+          }
+        }
+      },
+      "SimpleOkResponse": {
+        "type": "object",
+        "description": "通用成功操作响应",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "是否操作成功",
+            "example": true
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "通用错误信息响应",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "错误码或错误摘要",
+            "example": "invalid_request"
+          },
+          "message": {
+            "type": "string",
+            "description": "详细错误描述",
+            "example": "missing serial"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "StartRecordingRequest": {
+        "type": "object",
+        "description": "发起录像请求体",
+        "properties": {
+          "max_duration_ms": {
+            "type": "integer",
+            "description": "最大录制毫秒数（必填）",
+            "example": 300000
+          },
+          "record_audio": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否录制音频（默认 false）",
+            "example": false
+          }
+        },
+        "required": [
+          "max_duration_ms"
+        ]
+      },
+      "RecordingView": {
+        "type": "object",
+        "description": "录像任务视图模型",
+        "properties": {
+          "recording_id": {
+            "type": "string",
+            "description": "录像唯一标识",
+            "example": "rec_1710400000_abc123"
+          },
+          "serial": {
+            "type": "string",
+            "description": "关联设备 serial",
+            "example": "emulator-5554"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "recording",
+              "completed",
+              "failed",
+              "stopped"
+            ],
+            "description": "录像当前状态",
+            "example": "recording"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "录制开始时间 (UTC RFC3339)",
+            "example": "2026-09-14T06:00:00Z"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "录制结束时间（未结束为 null）",
+            "example": "2026-09-14T06:05:00Z"
+          },
+          "max_duration_ms": {
+            "type": "integer",
+            "description": "最大时长毫秒",
+            "example": 300000
+          },
+          "bytes_written": {
+            "type": "integer",
+            "description": "已写入字节数",
+            "example": 10485760
+          },
+          "failure_reason": {
+            "type": "string",
+            "description": "失败原因（若失败）",
+            "example": ""
+          },
+          "record_audio": {
+            "type": "boolean",
+            "description": "是否启用了音频录制",
+            "example": false
+          },
+          "audio_status": {
+            "type": "string",
+            "description": "音频录制状态",
+            "example": "disabled"
+          }
+        },
+        "required": [
+          "recording_id",
+          "serial",
+          "status",
+          "started_at",
+          "max_duration_ms",
+          "bytes_written"
+        ]
+      },
+      "RecordingsListResponse": {
+        "type": "object",
+        "description": "录像列表响应",
+        "properties": {
+          "recordings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecordingView"
+            }
+          }
+        },
+        "required": [
+          "recordings"
+        ]
+      },
+      "ScreenshotEntry": {
+        "type": "object",
+        "description": "截图记录模型",
+        "properties": {
+          "screenshot_id": {
+            "type": "string",
+            "description": "截图唯一标识",
+            "example": "shot_1710400000_xyz"
+          },
+          "serial": {
+            "type": "string",
+            "description": "所属设备 serial",
+            "example": "emulator-5554"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "截图创建时间",
+            "example": "2026-09-14T06:00:00Z"
+          },
+          "width": {
+            "type": "integer",
+            "description": "图片宽度像素",
+            "example": 1080
+          },
+          "height": {
+            "type": "integer",
+            "description": "图片高度像素",
+            "example": 2400
+          },
+          "bytes": {
+            "type": "integer",
+            "description": "图片文件字节数",
+            "example": 1258291
+          }
+        },
+        "required": [
+          "screenshot_id",
+          "serial",
+          "created_at",
+          "width",
+          "height",
+          "bytes"
+        ]
+      },
+      "ScreenshotsListResponse": {
+        "type": "object",
+        "description": "截图列表响应",
+        "properties": {
+          "screenshots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScreenshotEntry"
+            }
+          }
+        },
+        "required": [
+          "screenshots"
+        ]
+      },
+      "StartReplayRequest": {
+        "type": "object",
+        "description": "启动回放请求",
+        "properties": {
+          "recording_id": {
+            "type": "string",
+            "description": "目标录像 ID",
+            "example": "rec_1710400000_abc123"
+          },
+          "loop": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否循环回放",
+            "example": true
+          }
+        },
+        "required": [
+          "recording_id"
+        ]
+      },
+      "PauseReplayRequest": {
+        "type": "object",
+        "description": "暂停/恢复回放请求",
+        "properties": {
+          "paused": {
+            "type": "boolean",
+            "description": "true 为暂停，false 为继续播放",
+            "example": true
+          }
+        },
+        "required": [
+          "paused"
+        ]
+      },
+      "SeekReplayRequest": {
+        "type": "object",
+        "description": "跳转回放位置请求",
+        "properties": {
+          "position_ms": {
+            "type": "integer",
+            "description": "目标毫秒位置",
+            "example": 15000
+          }
+        },
+        "required": [
+          "position_ms"
+        ]
+      },
+      "SegmentReplayRequest": {
+        "type": "object",
+        "description": "区间循环回放设置请求",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "是否开启区间片段回放",
+            "example": true
+          },
+          "start_ms": {
+            "type": "integer",
+            "default": 0,
+            "description": "片段起始毫秒位置",
+            "example": 5000
+          },
+          "len_ms": {
+            "type": "integer",
+            "default": 0,
+            "description": "片段持续毫秒长度（开启时需大于 0）",
+            "example": 10000
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
+      "ReplayView": {
+        "type": "object",
+        "description": "回放任务运行状态",
+        "properties": {
+          "replay_id": {
+            "type": "string",
+            "description": "回放任务标识",
+            "example": "rp_1710400000_001"
+          },
+          "serial": {
+            "type": "string",
+            "description": "设备 serial",
+            "example": "emulator-5554"
+          },
+          "recording_id": {
+            "type": "string",
+            "description": "回放中的录像 ID",
+            "example": "rec_1710400000_abc123"
+          },
+          "status": {
+            "type": "string",
+            "description": "回放状态",
+            "example": "replaying"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "回放启动时间",
+            "example": "2026-09-14T06:00:00Z"
+          },
+          "loop": {
+            "type": "boolean",
+            "description": "是否循环播放",
+            "example": true
+          },
+          "loop_count": {
+            "type": "integer",
+            "description": "已完成循环次数",
+            "example": 2
+          },
+          "paused": {
+            "type": "boolean",
+            "description": "当前是否处于暂停状态",
+            "example": false
+          },
+          "segment_on": {
+            "type": "boolean",
+            "description": "是否启用了区间循环",
+            "example": false
+          },
+          "segment_start_ms": {
+            "type": "integer",
+            "description": "区间起始毫秒",
+            "example": 0
+          },
+          "segment_len_ms": {
+            "type": "integer",
+            "description": "区间长度毫秒",
+            "example": 0
+          }
+        },
+        "required": [
+          "replay_id",
+          "serial",
+          "recording_id",
+          "status",
+          "started_at"
+        ]
+      },
+      "ReplayStatusResponse": {
+        "type": "object",
+        "description": "设备回放状态查询响应",
+        "properties": {
+          "replay": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplayView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "当前回放任务信息，若未处于回放状态则为 null"
+          }
+        },
+        "required": [
+          "replay"
+        ]
+      },
+      "ADBCommandRequest": {
+        "type": "object",
+        "description": "执行 ADB 命令请求参数",
+        "properties": {
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "子命令参数数组（严禁包含 -s, --serial, -H, -P, -L 等参数）",
+            "example": [
+              "shell",
+              "getprop",
+              "ro.build.version.release"
+            ]
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "default": 60000,
+            "description": "执行超时毫秒数，默认 60000",
+            "example": 10000
+          },
+          "async": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否异步执行（true 时立即返回 202 并提供 command_id 供轮询）",
+            "example": false
+          },
+          "parallel": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否显式绕过同设备 FIFO 队列并发执行（调用方自担竞态风险）",
+            "example": false
+          }
+        },
+        "required": [
+          "args"
+        ]
+      },
+      "ADBCommandView": {
+        "type": "object",
+        "description": "ADB 命令执行结果与快照",
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "description": "命令任务 ID",
+            "example": "cmd_1710400000_1"
+          },
+          "serial": {
+            "type": "string",
+            "description": "目标设备 serial",
+            "example": "emulator-5554"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed",
+              "timed_out"
+            ],
+            "description": "当前执行状态",
+            "example": "completed"
+          },
+          "queued_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "排队时间",
+            "example": "2026-09-14T06:00:00Z"
+          },
+          "started_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "开始运行时间",
+            "example": "2026-09-14T06:00:00.010Z"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "结束时间",
+            "example": "2026-09-14T06:00:00.080Z"
+          },
+          "exit_code": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "进程退出码（0 为成功）",
+            "example": 0
+          },
+          "stdout": {
+            "type": "string",
+            "description": "标准输出内容",
+            "example": "14\n"
+          },
+          "stderr": {
+            "type": "string",
+            "description": "标准错误内容",
+            "example": ""
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "description": "执行耗时毫秒",
+            "example": 70
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "输出是否超限截断",
+            "example": false
+          },
+          "error": {
+            "type": "string",
+            "description": "执行错误信息",
+            "example": ""
+          }
+        },
+        "required": [
+          "command_id",
+          "serial",
+          "status",
+          "queued_at"
+        ]
+      },
+      "SendKeyRequest": {
+        "type": "object",
+        "description": "发送按键请求参数",
+        "properties": {
+          "keycode": {
+            "type": "integer",
+            "description": "Android Keycode 码 (如 3=HOME, 4=BACK, 26=POWER, 66=ENTER)",
+            "example": 4
+          },
+          "modifiers": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "shift",
+                "alt",
+                "ctrl",
+                "meta"
+              ]
+            },
+            "description": "修饰键数组",
+            "example": [
+              "ctrl"
+            ]
+          }
+        },
+        "required": [
+          "keycode"
+        ]
+      },
+      "FileItem": {
+        "type": "object",
+        "description": "文件/目录项模型",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "文件或目录名称",
+            "example": "Download"
+          },
+          "path": {
+            "type": "string",
+            "description": "相对根目录路径",
+            "example": "Download"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "file",
+              "folder"
+            ],
+            "description": "类型：文件或文件夹",
+            "example": "folder"
+          },
+          "mime": {
+            "type": "string",
+            "description": "MIME 类型",
+            "example": "inode/directory"
+          },
+          "size": {
+            "type": "integer",
+            "description": "大小字节数",
+            "example": 4096
+          },
+          "modified": {
+            "type": "string",
+            "description": "修改时间格式化字符串",
+            "example": "2026-09-14 13:00:00"
+          },
+          "actions": {
+            "type": "object",
+            "properties": {
+              "download": {
+                "type": "boolean",
+                "example": false
+              },
+              "move": {
+                "type": "boolean",
+                "example": true
+              },
+              "rename": {
+                "type": "boolean",
+                "example": true
+              },
+              "delete": {
+                "type": "boolean",
+                "example": true
+              }
+            }
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "kind",
+          "size"
+        ]
+      },
+      "FileListResponse": {
+        "type": "object",
+        "description": "文件列表查询响应",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "当前目录相对路径",
+            "example": ""
+          },
+          "breadcrumbs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "example": "根目录"
+                },
+                "path": {
+                  "type": "string",
+                  "example": ""
+                }
+              }
+            },
+            "description": "路径导航面包屑"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileItem"
+            },
+            "description": "子项列表"
+          },
+          "total": {
+            "type": "integer",
+            "description": "总子项数",
+            "example": 8
+          },
+          "page": {
+            "type": "integer",
+            "description": "当前页码",
+            "example": 1
+          },
+          "page_size": {
+            "type": "integer",
+            "description": "每页条数",
+            "example": 50
+          },
+          "has_more": {
+            "type": "boolean",
+            "description": "是否有下一页",
+            "example": false
+          },
+          "storage": {
+            "type": "object",
+            "description": "设备外部存储空间字节容量",
+            "properties": {
+              "used": {
+                "type": "integer",
+                "example": 21474836480
+              },
+              "total": {
+                "type": "integer",
+                "example": 68719476736
+              },
+              "available": {
+                "type": "integer",
+                "example": 47244640256
+              }
+            }
+          }
+        },
+        "required": [
+          "path",
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ]
+      },
+      "FileActionResponse": {
+        "type": "object",
+        "description": "文件单项操作响应",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": true
+          },
+          "item": {
+            "$ref": "#/components/schemas/FileItem"
+          }
+        },
+        "required": [
+          "ok",
+          "item"
+        ]
+      },
+      "CreateFolderRequest": {
+        "type": "object",
+        "description": "创建文件夹请求参数",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "目标父目录路径",
+            "example": "Download"
+          },
+          "name": {
+            "type": "string",
+            "description": "新文件夹名称",
+            "example": "MyFolder"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "MoveFileRequest": {
+        "type": "object",
+        "description": "移动文件请求参数",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "源文件相对路径",
+            "example": "Download/test.txt"
+          },
+          "target": {
+            "type": "string",
+            "description": "目标目录相对路径",
+            "example": "Documents"
+          },
+          "conflict": {
+            "type": "string",
+            "enum": [
+              "rename",
+              "overwrite",
+              "skip"
+            ],
+            "default": "rename",
+            "description": "重名冲突处理策略",
+            "example": "rename"
+          }
+        },
+        "required": [
+          "path",
+          "target"
+        ]
+      },
+      "RenameFileRequest": {
+        "type": "object",
+        "description": "重命名文件请求参数",
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "原始相对路径",
+            "example": "Download/test.txt"
+          },
+          "name": {
+            "type": "string",
+            "description": "新名称",
+            "example": "renamed.txt"
+          },
+          "conflict": {
+            "type": "string",
+            "enum": [
+              "rename",
+              "overwrite",
+              "skip"
+            ],
+            "default": "rename",
+            "description": "重名冲突处理策略",
+            "example": "rename"
+          }
+        },
+        "required": [
+          "path",
+          "name"
+        ]
+      },
+      "DeleteFilesRequest": {
+        "type": "object",
+        "description": "删除文件请求参数",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "待删除的文件或目录相对路径列表",
+            "example": [
+              "Download/temp.jpg"
+            ]
+          }
+        },
+        "required": [
+          "paths"
+        ]
+      },
+      "DeleteFilesResponse": {
+        "type": "object",
+        "description": "删除文件响应",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": true
+          },
+          "undo_token": {
+            "type": "string",
+            "description": "撤销删除凭据 token",
+            "example": "undo_1710400000"
+          }
+        },
+        "required": [
+          "ok",
+          "undo_token"
+        ]
+      },
+      "UndoFilesRequest": {
+        "type": "object",
+        "description": "撤销删除请求参数",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "删除操作返回的 undo_token",
+            "example": "undo_1710400000"
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "ScriptCategoryListResponse": {
+        "type": "object",
+        "description": "脚本分类列表响应",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "分类名称列表",
+            "example": [
+              "默认",
+              "自动化测试"
+            ]
+          }
+        },
+        "required": [
+          "categories"
+        ]
+      },
+      "ScriptCategoryCreateRequest": {
+        "type": "object",
+        "description": "新建脚本分类请求参数",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "分类名，仅允许中文、字母、数字、_、-",
+            "example": "自动化测试"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ScriptCategoryRenameRequest": {
+        "type": "object",
+        "description": "重命名脚本分类请求参数",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "新分类名称",
+            "example": "常用工具"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ScriptCategoryActionResponse": {
+        "type": "object",
+        "description": "脚本分类操作响应",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": true
+          },
+          "name": {
+            "type": "string",
+            "example": "自动化测试"
+          }
+        },
+        "required": [
+          "ok",
+          "name"
+        ]
+      },
+      "ScriptInfo": {
+        "type": "object",
+        "description": "脚本元数据模型",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "脚本名称",
+            "example": "unlock_device.sh"
+          },
+          "description": {
+            "type": "string",
+            "description": "脚本功能说明",
+            "example": "点亮并滑动解锁屏幕"
+          },
+          "params": {
+            "type": "string",
+            "description": "参数配置或说明",
+            "example": ""
+          },
+          "content": {
+            "type": "string",
+            "description": "脚本源码正文（可选）"
+          },
+          "created": {
+            "type": "string",
+            "description": "创建时间",
+            "example": "2026-09-14T06:00:00Z"
+          },
+          "updated": {
+            "type": "string",
+            "description": "最后更新时间",
+            "example": "2026-09-14T06:00:00Z"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ScriptDetail": {
+        "type": "object",
+        "description": "脚本完整详情模型",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "脚本名称",
+            "example": "unlock_device.sh"
+          },
+          "description": {
+            "type": "string",
+            "description": "脚本描述",
+            "example": "点亮并滑动解锁屏幕"
+          },
+          "params": {
+            "type": "string",
+            "description": "参数配置说明",
+            "example": ""
+          },
+          "content": {
+            "type": "string",
+            "description": "完整脚本源码文本",
+            "example": "#!/bin/bash\ninput keyevent 26\ninput swipe 500 1500 500 500\n"
+          },
+          "created": {
+            "type": "string",
+            "description": "创建时间",
+            "example": "2026-09-14T06:00:00Z"
+          },
+          "updated": {
+            "type": "string",
+            "description": "最后更新时间",
+            "example": "2026-09-14T06:00:00Z"
+          }
+        },
+        "required": [
+          "name",
+          "content"
+        ]
+      },
+      "ScriptListResponse": {
+        "type": "object",
+        "description": "脚本列表响应",
+        "properties": {
+          "scripts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ScriptInfo"
+            }
+          }
+        },
+        "required": [
+          "scripts"
+        ]
+      },
+      "CreateScriptRequest": {
+        "type": "object",
+        "description": "新建脚本请求体",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "脚本名称，只允许中文、字母、数字、_、-",
+            "example": "unlock_device.sh"
+          },
+          "description": {
+            "type": "string",
+            "description": "脚本功能描述",
+            "example": "点亮并滑动解锁屏幕"
+          },
+          "params": {
+            "type": "string",
+            "description": "参数说明或结构化配置",
+            "example": ""
+          },
+          "content": {
+            "type": "string",
+            "description": "脚本正文代码",
+            "example": "#!/bin/bash\ninput keyevent 26\n"
+          }
+        },
+        "required": [
+          "name",
+          "content"
+        ]
+      },
+      "UpdateScriptRequest": {
+        "type": "object",
+        "description": "更新脚本请求体",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "重命名脚本（可选）",
+            "example": "unlock_device.sh"
+          },
+          "description": {
+            "type": "string",
+            "description": "更新描述",
+            "example": "点亮并滑动解锁屏幕"
+          },
+          "params": {
+            "type": "string",
+            "description": "更新参数说明",
+            "example": ""
+          },
+          "content": {
+            "type": "string",
+            "description": "更新脚本源码",
+            "example": "#!/bin/bash\ninput keyevent 26\n"
+          },
+          "updated": {
+            "type": "string",
+            "description": "上一次更新时间戳，用于乐观锁并发防覆盖校验",
+            "example": "2026-09-14T06:00:00Z"
+          }
+        },
+        "required": [
+          "content"
+        ]
+      },
+      "ScriptDetailResponse": {
+        "type": "object",
+        "description": "脚本操作成功返回模型",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": true
+          },
+          "script": {
+            "$ref": "#/components/schemas/ScriptDetail"
+          }
+        },
+        "required": [
+          "ok",
+          "script"
+        ]
+      },
+      "UIXMLResponse": {
+        "type": "object",
+        "description": "Android UI 布局快照响应",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "description": "设备 serial",
+            "example": "emulator-5554"
+          },
+          "captured_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "抓取时间戳",
+            "example": "2026-09-14T06:00:00Z"
+          },
+          "xml": {
+            "type": "string",
+            "description": "UIAutomator dump 产出的原始 XML 层次结构字符串",
+            "example": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><hierarchy rotation=\"0\"><node index=\"0\" text=\"\" resource-id=\"\" class=\"android.widget.FrameLayout\" bounds=\"[0,0][1080,2400]\" /></hierarchy>"
+          },
+          "display_size": {
+            "type": "object",
+            "description": "屏幕坐标基准尺寸",
+            "properties": {
+              "width": {
+                "type": "integer",
+                "example": 1080
+              },
+              "height": {
+                "type": "integer",
+                "example": 2400
+              }
+            }
+          }
+        },
+        "required": [
+          "serial",
+          "captured_at",
+          "xml"
+        ]
+      },
+      "UIPageInfoResponse": {
+        "type": "object",
+        "description": "前台页面与屏幕属性响应",
+        "properties": {
+          "package_name": {
+            "type": "string",
+            "description": "前台聚焦应用包名",
+            "example": "com.android.settings"
+          },
+          "activity": {
+            "type": "string",
+            "description": "前台 Activity 类名",
+            "example": ".Settings"
+          },
+          "component": {
+            "type": "string",
+            "description": "组件全名 package/activity",
+            "example": "com.android.settings/.Settings"
+          },
+          "window_name": {
+            "type": "string",
+            "description": "顶层窗口全称",
+            "example": "com.android.settings/com.android.settings.Settings"
+          },
+          "display": {
+            "type": "object",
+            "description": "屏幕尺寸、密度与旋转状态",
+            "properties": {
+              "width": {
+                "type": "integer",
+                "example": 1080
+              },
+              "height": {
+                "type": "integer",
+                "example": 2400
+              },
+              "density_dpi": {
+                "type": "integer",
+                "example": 420
+              },
+              "rotation": {
+                "type": "integer",
+                "enum": [
+                  0,
+                  90,
+                  180,
+                  270
+                ],
+                "description": "旋转角度 (0, 90, 180, 270)",
+                "example": 0
+              }
+            }
+          },
+          "fetched_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "查询时间",
+            "example": "2026-09-14T06:00:00Z"
+          }
+        },
+        "required": [
+          "package_name",
+          "activity",
+          "component",
+          "window_name",
+          "fetched_at"
+        ]
+      },
+      "VisionActionRequest": {
+        "type": "object",
+        "description": "Vision 通道上行动作请求消息（WebSocket 文本 JSON，发送到 /api/vision/stream）。",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "action.request"
+            ],
+            "description": "消息类型"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "请求标识，action.result 中回显"
+          },
+          "device_id": {
+            "type": "string",
+            "description": "目标设备 serial；缺省时用连接绑定的 serial"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "会话标识（可选），用于校验"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "tap",
+              "swipe",
+              "key",
+              "text"
+            ],
+            "description": "动作类型"
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化 X 坐标 0~1；tap 落点 / swipe 起点"
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化 Y 坐标 0~1"
+          },
+          "x2": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "swipe 终点归一化 X 坐标"
+          },
+          "y2": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "swipe 终点归一化 Y 坐标"
+          },
+          "keycode": {
+            "type": "integer",
+            "description": "Android keycode（action=key 时必填）"
+          },
+          "text": {
+            "type": "string",
+            "description": "注入的 UTF-8 文本（action=text 时必填）"
+          },
+          "frame_id": {
+            "type": "integer",
+            "description": "关联的视频帧 ID（可选）"
+          },
+          "expires_ms": {
+            "type": "integer",
+            "description": "动作执行超时毫秒（可选）"
+          },
+          "humanize": {
+            "type": "boolean",
+            "default": false,
+            "description": "拟人化触摸，仅对 tap/swipe 生效。tap：落点高斯随机偏移、压力随机、按下到抬起加入随机按压时长；swipe：起止点间生成多个中间点、走带随机抖动的曲线路径并模拟起慢中快收慢变速。默认关闭，行为与精确注入一致，便于自动化复现。注意 scrcpy 协议无按压面积字段，拟人仅以落点偏移+压力近似。"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "sdk",
+              "adb"
+            ],
+            "default": "sdk",
+            "description": "点击/滑动执行通道。sdk（默认）：复用 scrcpy 控制 Socket 极速注入；adb：调用系统 adb shell input tap/swipe，支持拟人化物理手指微偏移与按压时长。"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "description": "滑动或按压时长毫秒数，对 swipe 或持续按压生效"
+          }
+        },
+        "required": [
+          "type",
+          "action"
+        ]
+      },
+      "VisionSessionStats": {
+        "type": "object",
+        "description": "Vision 视频流与会话统计模型",
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "description": "设备 serial",
+            "example": "emulator-5554"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "会话 ID",
+            "example": "sess_1710400000"
+          },
+          "subscribers": {
+            "type": "integer",
+            "description": "当前订阅客户端数",
+            "example": 2
+          },
+          "frames": {
+            "type": "integer",
+            "description": "累计推送视频帧数",
+            "example": 1450
+          },
+          "dropped_frames": {
+            "type": "integer",
+            "description": "丢弃帧数",
+            "example": 0
+          },
+          "queue_length": {
+            "type": "integer",
+            "description": "动作执行队列深度",
+            "example": 0
+          },
+          "last_frame_unix_ms": {
+            "type": "integer",
+            "description": "最新帧毫秒时间戳",
+            "example": 1710400005123
+          }
+        },
+        "required": [
+          "device_id",
+          "subscribers",
+          "frames",
+          "dropped_frames",
+          "queue_length"
+        ]
+      },
+      "VisionDebugEvent": {
+        "type": "object",
+        "description": "Vision 诊断事件模型",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "事件记录时间",
+            "example": "2026-09-14T06:00:00Z"
+          },
+          "type": {
+            "type": "string",
+            "description": "事件类型标识",
+            "example": "action.result"
+          },
+          "device_id": {
+            "type": "string",
+            "description": "设备 serial",
+            "example": "emulator-5554"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "会话 ID",
+            "example": "sess_1710400000"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "关联请求 ID",
+            "example": "req_1"
+          },
+          "message": {
+            "type": "string",
+            "description": "事件说明",
+            "example": "action executed successfully"
+          },
+          "fields": {
+            "type": "object",
+            "description": "事件详细参数键值对"
+          }
+        },
+        "required": [
+          "at",
+          "type"
+        ]
+      },
+      "VisionDebugResponse": {
+        "type": "object",
+        "description": "Vision 调试事件快照响应",
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "description": "设备 serial",
+            "example": "emulator-5554"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisionDebugEvent"
+            },
+            "description": "最近诊断事件列表"
+          }
+        },
+        "required": [
+          "device_id",
+          "events"
+        ]
+      },
+      "VisionObject": {
+        "type": "object",
+        "description": "视觉检测识别目标",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "目标类别标签",
+            "example": "button"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "识别置信度 (0~1)",
+            "example": 0.95
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化左上角 X (0~1)",
+            "example": 0.12
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化左上角 Y (0~1)",
+            "example": 0.34
+          },
+          "w": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化宽度 (0~1)",
+            "example": 0.25
+          },
+          "h": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化高度 (0~1)",
+            "example": 0.06
+          }
+        },
+        "required": [
+          "label",
+          "confidence",
+          "x",
+          "y",
+          "w",
+          "h"
+        ]
+      },
+      "VisionMessage": {
+        "type": "object",
+        "description": "Vision 广播消息体（目标识别或触控可视化）",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "消息类型，如 detection.result / touch",
+            "example": "detection.result"
+          },
+          "protocol_version": {
+            "type": "string",
+            "example": "1"
+          },
+          "device_id": {
+            "type": "string",
+            "example": "emulator-5554"
+          },
+          "session_id": {
+            "type": "string",
+            "example": "sess_1710400000"
+          },
+          "frame_id": {
+            "type": "integer",
+            "example": 105
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "Unix 毫秒时间戳",
+            "example": 1710400000000
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisionObject"
+            },
+            "description": "检测到的目标物体列表（为空表示清空绘制）"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "Template": {
+        "type": "object",
+        "description": "模板定义与配置元数据",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "tpl_1710400000_abcd1234"
+          },
+          "name": {
+            "type": "string",
+            "example": "确认按钮"
+          },
+          "serial": {
+            "type": "string",
+            "description": "所属设备序列号或 'global'",
+            "example": "emulator-5554"
+          },
+          "method": {
+            "type": "string",
+            "example": "sqdiff_normed"
+          },
+          "threshold": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "example": 0.8
+          },
+          "grayscale": {
+            "type": "boolean",
+            "example": true
+          },
+          "scales": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "example": [
+              1.0
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "image_path": {
+            "type": "string",
+            "example": "data/templates/emulator-5554/tpl_1710400000_abcd1234/template.png"
+          },
+          "width": {
+            "type": "integer",
+            "example": 120
+          },
+          "height": {
+            "type": "integer",
+            "example": 48
+          },
+          "created_at": {
+            "type": "integer",
+            "example": 1710400000000
+          },
+          "updated_at": {
+            "type": "integer",
+            "example": 1710400000000
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "serial",
+          "threshold",
+          "enabled"
+        ]
+      },
+      "TemplatesListResponse": {
+        "type": "object",
+        "description": "模板列表查询响应",
+        "properties": {
+          "templates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Template"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "example": 5
+          }
+        },
+        "required": [
+          "templates",
+          "total"
+        ]
+      },
+      "CreateTemplateRequest": {
+        "type": "object",
+        "description": "创建模板请求参数",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "example": "确认按钮"
+          },
+          "serial": {
+            "type": "string",
+            "example": "emulator-5554"
+          },
+          "method": {
+            "type": "string",
+            "example": "sqdiff_normed"
+          },
+          "threshold": {
+            "type": "number",
+            "example": 0.8
+          },
+          "grayscale": {
+            "type": "boolean",
+            "example": true
+          },
+          "scales": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "image_base64": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "serial"
+        ]
+      },
+      "UpdateTemplateRequest": {
+        "type": "object",
+        "description": "更新模板请求参数",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "threshold": {
+            "type": "number"
+          },
+          "grayscale": {
+            "type": "boolean"
+          },
+          "scales": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "image_base64": {
+            "type": "string"
+          }
+        }
+      },
+      "TemplateStatusResponse": {
+        "type": "object",
+        "description": "设备模板匹配状态",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "example": "emulator-5554"
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true
+          },
+          "active_templates": {
+            "type": "integer",
+            "example": 3
+          },
+          "last_match_time": {
+            "type": "string",
+            "example": "2026-09-14T23:00:00Z"
+          }
+        },
+        "required": [
+          "serial",
+          "enabled"
+        ]
+      },
+      "UpdateTemplateStatusRequest": {
+        "type": "object",
+        "description": "修改设备模板匹配开关",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "example": "emulator-5554"
+          },
+          "enabled": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "serial",
+          "enabled"
+        ]
+      },
+      "TemplateMatchResult": {
+        "type": "object",
+        "description": "单项模板匹配结果",
+        "properties": {
+          "template_id": {
+            "type": "string",
+            "example": "tpl_1710400000_abcd1234"
+          },
+          "template_name": {
+            "type": "string",
+            "example": "确认按钮"
+          },
+          "score": {
+            "type": "number",
+            "example": 0.94
+          },
+          "x": {
+            "type": "integer",
+            "example": 100
+          },
+          "y": {
+            "type": "integer",
+            "example": 200
+          },
+          "width": {
+            "type": "integer",
+            "example": 80
+          },
+          "height": {
+            "type": "integer",
+            "example": 36
+          },
+          "normalized_x": {
+            "type": "number",
+            "example": 0.0925
+          },
+          "normalized_y": {
+            "type": "number",
+            "example": 0.0833
+          },
+          "normalized_w": {
+            "type": "number",
+            "example": 0.074
+          },
+          "normalized_h": {
+            "type": "number",
+            "example": 0.015
+          },
+          "matched_at": {
+            "type": "integer",
+            "example": 1710400000000
+          }
+        },
+        "required": [
+          "template_id",
+          "template_name",
+          "score",
+          "x",
+          "y",
+          "width",
+          "height"
+        ]
+      },
+      "TemplateMatchesResponse": {
+        "type": "object",
+        "description": "设备实时模板匹配命中列表",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "example": "emulator-5554"
+          },
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateMatchResult"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "example": 1
+          }
+        },
+        "required": [
+          "serial",
+          "matches",
+          "count"
+        ]
+      },
+      "TemplateDetectRequest": {
+        "type": "object",
+        "description": "即时模板匹配检测请求",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "example": "emulator-5554"
+          },
+          "image_base64": {
+            "type": "string"
+          },
+          "template_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "min_score": {
+            "type": "number",
+            "example": 0.8
+          },
+          "max_results": {
+            "type": "integer",
+            "example": 10
+          }
+        }
+      },
+      "TemplateDetectResponse": {
+        "type": "object",
+        "description": "即时模板匹配检测响应",
+        "properties": {
+          "matches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TemplateMatchResult"
+            }
+          },
+          "count": {
+            "type": "integer",
+            "example": 1
+          }
+        },
+        "required": [
+          "matches",
+          "count"
+        ]
+      },
+      "TemplateClickRequest": {
+        "type": "object",
+        "description": "模板匹配并点击请求参数",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "description": "设备序列号",
+            "example": "10.0.0.30:5555"
+          },
+          "name": {
+            "type": "string",
+            "description": "模板名称",
+            "example": "确认按钮"
+          },
+          "template_id": {
+            "type": "string",
+            "description": "模板 ID（与 name 二选一）",
+            "example": "tmpl_1710400000_a1b2c3"
+          },
+          "random_offset": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否在模板目标区域内施加随机微偏移（默认点击精确几何中心）"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "sdk",
+              "adb"
+            ],
+            "default": "sdk",
+            "description": "点击执行通道：sdk（默认）或 adb"
+          },
+          "humanize": {
+            "type": "boolean",
+            "default": false,
+            "description": "是否开启拟人化触摸（adb 模式下产生手指高斯接触微偏移与真实按压时长）"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "description": "滑动或按压时长毫秒数"
+          }
+        },
+        "required": [
+          "serial"
+        ]
+      },
+      "TemplateClickResponse": {
+        "type": "object",
+        "description": "模板点击执行响应结果",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": true
+          },
+          "template_id": {
+            "type": "string",
+            "example": "tmpl_1710400000_a1b2c3"
+          },
+          "template_name": {
+            "type": "string",
+            "example": "确认按钮"
+          },
+          "score": {
+            "type": "number",
+            "example": 0.96
+          },
+          "x": {
+            "type": "number",
+            "description": "实际点击落点 X 归一化坐标",
+            "example": 0.65
+          },
+          "y": {
+            "type": "number",
+            "description": "实际点击落点 Y 归一化坐标",
+            "example": 0.72
+          },
+          "random_offset": {
+            "type": "boolean",
+            "example": false
+          },
+          "mode": {
+            "type": "string",
+            "example": "sdk"
+          },
+          "executed": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "ok",
+          "template_id",
+          "template_name",
+          "score",
+          "x",
+          "y",
+          "mode",
+          "executed"
+        ]
       }
     }
   }

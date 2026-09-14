@@ -1,3 +1,527 @@
-<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MyWebScrcpy API 文档</title><style>body{font:15px/1.6 system-ui,sans-serif;max-width:1100px;margin:auto;padding:20px;color:#172033;background:#f7f9fc}.card{background:#fff;border:1px solid #dfe5ef;border-radius:10px;padding:16px;margin:12px 0}.prompt{white-space:pre-wrap;background:#101828;color:#e6edf7;padding:16px;border-radius:8px}.copy{padding:8px 14px;background:#165dff;color:#fff;border:0;border-radius:6px}.endpoint{border-left:4px solid #165dff;padding-left:12px;margin:12px 0}.method{font-weight:700;color:#165dff;margin-right:8px}.side{color:#b54708;font-size:12px}@media(max-width:600px){body{padding:12px}}</style></head><body><p><a href="/">← 设备列表</a></p><h1>API 文档</h1><p>接口定义来自 <code>/api/openapi.json</code>。</p><section class="card"><h2>AI 技能提示词</h2><button class="copy" id="copy">复制提示词</button><div class="prompt" id="prompt">请创建一个名为 my-scrcpy-use 的技能。先读取 http://&lt;这里替换成浏览器当前地址&gt;/api/openapi.json 和 http://&lt;这里替换成浏览器当前地址&gt;/api-docs.html，严格以当前接口定义为准，不要猜测不存在的路径、字段或响应。若服务使用自签名或内部证书，读取接口时忽略证书校验（curl 使用 -k/--insecure，代码客户端关闭 TLS 证书校验），仅在用户明确授权且网络可信时这样做。
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyWebScrcpy API 文档</title>
+  <style>
+    :root {
+      --bg: #f7f9fc;
+      --card-bg: #ffffff;
+      --text: #1f2328;
+      --text-muted: #656d76;
+      --border: #d0d7de;
+      --border-light: #e8ecf2;
+      --primary: #0969da;
+      --primary-bg: #ddf4ff;
+      --success: #1a7f37;
+      --success-bg: #dafbe1;
+      --warning: #9a6700;
+      --warning-bg: #fff8c5;
+      --danger: #cf222e;
+      --danger-bg: #ffebe9;
+      --code-bg: #f6f8fa;
+      --dark-bg: #101828;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 24px 16px 64px;
+      color: var(--text);
+      background: var(--bg);
+    }
+    a { color: var(--primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    header { margin-bottom: 20px; }
+    h1 { font-size: 24px; margin: 8px 0 4px; font-weight: 700; }
+    .subtitle { color: var(--text-muted); margin: 0 0 16px; font-size: 13px; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .card h2 { font-size: 16px; margin: 0 0 12px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+    .prompt {
+      white-space: pre-wrap;
+      background: var(--dark-bg);
+      color: #e6edf7;
+      padding: 14px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.5;
+      margin-top: 10px;
+      user-select: all;
+    }
+    .copy-btn {
+      padding: 6px 14px;
+      background: var(--primary);
+      color: #fff;
+      border: 0;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .copy-btn:hover { opacity: 0.9; }
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .search-input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      background: #fff;
+      outline: none;
+    }
+    .search-input:focus { border-color: var(--primary); }
+    .group-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin: 24px 0 10px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .group-count {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: normal;
+    }
+    details.endpoint {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      margin: 8px 0;
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+    details.endpoint[open] {
+      border-color: #abb4bf;
+    }
+    summary.endpoint-summary {
+      padding: 10px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      user-select: none;
+      list-style: none;
+      background: #fff;
+    }
+    summary.endpoint-summary::-webkit-details-marker { display: none; }
+    summary.endpoint-summary:hover {
+      background: #fbfcfd;
+    }
+    .method-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+      min-width: 54px;
+      text-align: center;
+    }
+    .method-get { background: var(--primary-bg); color: var(--primary); }
+    .method-post { background: var(--success-bg); color: var(--success); }
+    .method-put, .method-patch { background: var(--warning-bg); color: var(--warning); }
+    .method-delete { background: var(--danger-bg); color: var(--danger); }
+    .path-text {
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-weight: 600;
+      font-size: 13px;
+      color: #1f2328;
+    }
+    .summary-text {
+      color: var(--text-muted);
+      font-size: 13px;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .side-badge {
+      color: #b54708;
+      background: #fffaeb;
+      border: 1px solid #fedf89;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+    }
+    .arrow-icon {
+      color: var(--text-muted);
+      font-size: 11px;
+      transition: transform 0.15s;
+      margin-left: auto;
+    }
+    details[open] summary .arrow-icon {
+      transform: rotate(90deg);
+    }
+    .endpoint-body {
+      padding: 14px 16px 18px;
+      border-top: 1px solid var(--border-light);
+      background: #fafbfc;
+      font-size: 13px;
+    }
+    .desc-box {
+      margin-bottom: 14px;
+      color: #333d47;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+    .section-header {
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin: 14px 0 6px;
+    }
+    .param-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6px 0 10px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .param-table th, .param-table td {
+      padding: 7px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .param-table th {
+      background: #f6f8fa;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .param-table tr:last-child td { border-bottom: 0; }
+    .tag-req {
+      color: var(--danger);
+      font-size: 10px;
+      font-weight: 600;
+      margin-left: 2px;
+    }
+    .tag-type {
+      font-family: ui-monospace, Consolas, monospace;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+    .code-block {
+      background: #f6f8fa;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 10px 12px;
+      margin: 6px 0;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-x: auto;
+      color: #24292f;
+      white-space: pre;
+    }
+    .status-badge {
+      display: inline-block;
+      font-family: ui-monospace, Consolas, monospace;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      margin-right: 6px;
+    }
+    .status-2xx { background: var(--success-bg); color: var(--success); }
+    .status-4xx { background: var(--warning-bg); color: var(--warning); }
+    .status-5xx { background: var(--danger-bg); color: var(--danger); }
+    .status-1xx { background: var(--primary-bg); color: var(--primary); }
+    .response-row {
+      margin: 8px 0;
+      padding: 8px 10px;
+      background: #fff;
+      border: 1px solid var(--border-light);
+      border-radius: 4px;
+    }
+    @media(max-width:600px){
+      body{padding: 14px 10px 40px;}
+      summary.endpoint-summary{flex-wrap: wrap; gap: 6px;}
+      .summary-text{width: 100%;}
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <p><a href="/">← 设备列表</a></p>
+    <h1>API 文档</h1>
+    <p class="subtitle">接口规范遵循 OpenAPI 3.1.0，源文件位于 <code>/api/openapi.json</code>。</p>
+  </header>
 
-技能应帮助用户安全地使用设备列表、投屏实时连接、旋转/屏幕状态/重启、录像、ADB 命令、按键、文件管理、脚本管理、UI XML 和 Vision 接口。默认先执行只读操作；有副作用操作先说明影响并获得确认。</div></section><section class="card"><h2>接口目录</h2><div id="list">加载中…</div></section><script>(()=>{const address=location.protocol==='file:'?location.href:location.origin;const promptEl=document.querySelector('#prompt');promptEl.textContent=promptEl.textContent.replaceAll('http://<这里替换成浏览器当前地址>',address);document.querySelector('#copy').onclick=()=>navigator.clipboard.writeText(promptEl.textContent).then(()=>document.querySelector('#copy').textContent='已复制');fetch('/api/openapi.json').then(r=>r.json()).then(spec=>{const groups={};for(const [path,item] of Object.entries(spec.paths)){for(const [method,op] of Object.entries(item)){const tag=(op.tags||['其他'])[0];if(tag==='脚本')continue;(groups[tag]??=[]).push({path,method,op})}}document.querySelector('#list').innerHTML=Object.entries(groups).map(([tag,items])=>`<h3>${tag}</h3>`+items.map(x=>`<div class="endpoint"><span class="method">${x.method.toUpperCase()}</span><code>${x.path}</code><div>${x.op.summary||''}${x.op['x-side-effect']?' <span class="side">有副作用，需确认</span>':''}</div></div>`).join('')).join('')}).catch(()=>document.querySelector('#list').textContent='接口清单加载失败')})()</script></body></html>
+  <section class="card">
+    <h2>
+      <span>AI 技能提示词</span>
+      <button class="copy-btn" id="copy">复制提示词</button>
+    </h2>
+    <div class="prompt" id="prompt">请创建一个名为 my-scrcpy-use 的技能。先读取 http://&lt;这里替换成浏览器当前地址&gt;/api/openapi.json 和 http://&lt;这里替换成浏览器当前地址&gt;/api-docs.html，严格以当前接口定义为准，不要猜测不存在的路径、字段或响应。若服务使用自签名或内部证书，读取接口时忽略证书校验（curl 使用 -k/--insecure，代码客户端关闭 TLS 证书校验），仅在用户明确授权且网络可信时这样做。
+
+技能应帮助用户安全地使用设备列表、投屏实时连接、旋转/屏幕状态/重启、录像、ADB 命令、按键、文件管理、脚本管理、UI XML 和 Vision 接口。默认先执行只读操作；有副作用操作先说明影响并获得确认。</div>
+  </section>
+
+  <section class="card">
+    <h2>
+      <span>接口目录</span>
+    </h2>
+    <div class="filter-bar">
+      <input type="text" id="filter" class="search-input" placeholder="输入路径、名称或摘要快速过滤接口…">
+    </div>
+    <div id="list">加载中…</div>
+  </section>
+
+  <script>
+  (()=>{
+    const address = location.protocol === 'file:' ? location.href : location.origin;
+    const promptEl = document.querySelector('#prompt');
+    promptEl.textContent = promptEl.textContent.replaceAll('http://<这里替换成浏览器当前地址>', address);
+
+    document.querySelector('#copy').onclick = () => {
+      navigator.clipboard.writeText(promptEl.textContent).then(() => {
+        const btn = document.querySelector('#copy');
+        btn.textContent = '已复制';
+        setTimeout(() => btn.textContent = '复制提示词', 2000);
+      });
+    };
+
+    function resolveRef(spec, ref) {
+      if (!ref || typeof ref !== 'string' || !ref.startsWith('#/')) return null;
+      const parts = ref.replace(/^#\//, '').split('/');
+      let cur = spec;
+      for (const p of parts) {
+        if (cur && typeof cur === 'object') cur = cur[p];
+        else return null;
+      }
+      return cur;
+    }
+
+    function resolveSchema(spec, schema) {
+      if (!schema) return null;
+      if (schema.$ref) {
+        const target = resolveRef(spec, schema.$ref);
+        return target ? resolveSchema(spec, target) : schema;
+      }
+      return schema;
+    }
+
+    function generateSample(spec, schema, depth = 0) {
+      if (depth > 4 || !schema) return null;
+      schema = resolveSchema(spec, schema);
+      if (!schema) return null;
+      if (schema.example !== undefined) return schema.example;
+      if (schema.anyOf) {
+        for (const sub of schema.anyOf) {
+          if (sub.type !== 'null') return generateSample(spec, sub, depth + 1);
+        }
+      }
+      if (schema.type === 'string') {
+        if (schema.format === 'date-time') return '2026-09-14T06:00:00Z';
+        if (schema.enum && schema.enum.length) return schema.enum[0];
+        return 'string';
+      }
+      if (schema.type === 'integer') return schema.default !== undefined ? schema.default : 0;
+      if (schema.type === 'number') return schema.default !== undefined ? schema.default : 0.0;
+      if (schema.type === 'boolean') return schema.default !== undefined ? schema.default : true;
+      if (schema.type === 'array') {
+        const sub = schema.items ? generateSample(spec, schema.items, depth + 1) : {};
+        return [sub];
+      }
+      if (schema.type === 'object' || schema.properties) {
+        const obj = {};
+        if (schema.properties) {
+          for (const [k, v] of Object.entries(schema.properties)) {
+            obj[k] = generateSample(spec, v, depth + 1);
+          }
+        }
+        return obj;
+      }
+      return null;
+    }
+
+    function escapeHTML(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    let globalGroups = {};
+
+    function renderGroups(filterText = '') {
+      const q = filterText.trim().toLowerCase();
+      let html = '';
+      let totalCount = 0;
+
+      for (const [tag, items] of Object.entries(globalGroups)) {
+        const filtered = items.filter(x => {
+          if (!q) return true;
+          return x.path.toLowerCase().includes(q) ||
+                 x.method.toLowerCase().includes(q) ||
+                 (x.op.summary && x.op.summary.toLowerCase().includes(q)) ||
+                 (x.op.description && x.op.description.toLowerCase().includes(q));
+        });
+
+        if (filtered.length === 0) continue;
+        totalCount += filtered.length;
+
+        html += `<div class="group-title"><span>${escapeHTML(tag)}</span><span class="group-count">(${filtered.length})</span></div>`;
+
+        html += filtered.map(x => {
+          const method = x.method.toUpperCase();
+          const methodClass = 'method-' + x.method.toLowerCase();
+          const hasSideEffect = Boolean(x.op['x-side-effect']);
+          const summary = x.op.summary || '';
+          const desc = x.op.description || '';
+          const params = (x.op.parameters || []).map(p => p.$ref ? (resolveRef(x.spec, p.$ref) || p) : p);
+
+          let paramsHtml = '';
+          if (params.length > 0) {
+            paramsHtml = `
+              <div class="section-header">请求参数 (Query / Path)</div>
+              <table class="param-table">
+                <thead><tr><th>参数名</th><th>位置</th><th>类型</th><th>必填</th><th>说明</th><th>示例</th></tr></thead>
+                <tbody>
+                  ${params.map(p => {
+                    const schema = resolveSchema(x.spec, p.schema || {});
+                    const type = schema ? (schema.type || 'string') : 'string';
+                    const req = p.required ? '<span class="tag-req">必填</span>' : '可选';
+                    const example = p.example !== undefined ? p.example : (schema && schema.example !== undefined ? schema.example : '');
+                    return `<tr>
+                      <td><code>${escapeHTML(p.name)}</code></td>
+                      <td><span class="tag-type">${escapeHTML(p.in)}</span></td>
+                      <td><span class="tag-type">${escapeHTML(type)}</span></td>
+                      <td>${req}</td>
+                      <td>${escapeHTML(p.description || '')}</td>
+                      <td>${example !== '' ? `<code>${escapeHTML(example)}</code>` : '-'}</td>
+                    </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+            `;
+          }
+
+          let bodyHtml = '';
+          if (x.op.requestBody) {
+            const rb = x.op.requestBody;
+            const content = rb.content || {};
+            const types = Object.keys(content);
+            const primaryType = types[0] || 'application/json';
+            const bodySchemaObj = content[primaryType] ? content[primaryType].schema : null;
+            const resolvedBodySchema = resolveSchema(x.spec, bodySchemaObj);
+            const sample = generateSample(x.spec, bodySchemaObj);
+
+            bodyHtml = `
+              <div class="section-header">请求 Body (${escapeHTML(primaryType)})${rb.required ? ' <span class="tag-req">必填</span>' : ''}</div>
+              ${rb.description ? `<div style="color:var(--text-muted);font-size:12px;margin:2px 0 6px;">${escapeHTML(rb.description)}</div>` : ''}
+              ${sample !== null ? `<div class="code-block">${escapeHTML(JSON.stringify(sample, null, 2))}</div>` : ''}
+            `;
+          }
+
+          let responsesHtml = '';
+          if (x.op.responses) {
+            const respEntries = Object.entries(x.op.responses);
+            responsesHtml = `
+              <div class="section-header">响应状态 (Responses)</div>
+              ${respEntries.map(([code, r]) => {
+                let badgeClass = 'status-2xx';
+                if (code.startsWith('4')) badgeClass = 'status-4xx';
+                else if (code.startsWith('5')) badgeClass = 'status-5xx';
+                else if (code.startsWith('1')) badgeClass = 'status-1xx';
+
+                let respBodySample = '';
+                if (r.content && r.content['application/json'] && r.content['application/json'].schema) {
+                  const s = generateSample(x.spec, r.content['application/json'].schema);
+                  if (s !== null) {
+                    respBodySample = `<div class="code-block">${escapeHTML(JSON.stringify(s, null, 2))}</div>`;
+                  }
+                } else if (r.content && r.content['video/mp4']) {
+                  respBodySample = '<div style="font-size:12px;color:var(--text-muted);margin:4px 0;">二进制流: video/mp4</div>';
+                } else if (r.content && r.content['image/png']) {
+                  respBodySample = '<div style="font-size:12px;color:var(--text-muted);margin:4px 0;">二进制流: image/png</div>';
+                }
+
+                return `
+                  <div class="response-row">
+                    <div>
+                      <span class="status-badge ${badgeClass}">${escapeHTML(code)}</span>
+                      <strong>${escapeHTML(r.description || '')}</strong>
+                    </div>
+                    ${respBodySample}
+                  </div>
+                `;
+              }).join('')}
+            `;
+          }
+
+          return `
+            <details class="endpoint">
+              <summary class="endpoint-summary">
+                <span class="method-badge ${methodClass}">${method}</span>
+                <span class="path-text">${escapeHTML(x.path)}</span>
+                <span class="summary-text">${escapeHTML(summary)}</span>
+                ${hasSideEffect ? '<span class="side-badge">有副作用，需确认</span>' : ''}
+                <span class="arrow-icon">▶</span>
+              </summary>
+              <div class="endpoint-body">
+                ${desc ? `<div class="desc-box">${escapeHTML(desc)}</div>` : ''}
+                ${paramsHtml}
+                ${bodyHtml}
+                ${responsesHtml}
+              </div>
+            </details>
+          `;
+        }).join('');
+      }
+
+      const listEl = document.querySelector('#list');
+      if (totalCount === 0) {
+        listEl.innerHTML = '<div style="color:var(--text-muted);padding:16px 0;">未找到匹配的接口。</div>';
+      } else {
+        listEl.innerHTML = html;
+      }
+    }
+
+    fetch('/api/openapi.json')
+      .then(r => r.json())
+      .then(spec => {
+        const groups = {};
+        for (const [path, item] of Object.entries(spec.paths)) {
+          for (const [method, op] of Object.entries(item)) {
+            const tag = (op.tags || ['其他'])[0];
+            if(tag==='脚本')continue;
+            (groups[tag] ??= []).push({ path, method, op, spec });
+          }
+        }
+        globalGroups = groups;
+        renderGroups();
+
+        document.querySelector('#filter').oninput = e => {
+          renderGroups(e.target.value);
+        };
+      })
+      .catch(() => {
+        document.querySelector('#list').textContent = '接口清单加载失败';
+      });
+  })();
+  </script>
+</body>
+</html>

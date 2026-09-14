@@ -141,16 +141,45 @@ Go 返回：
 - `tap`：落点做高斯随机偏移（近似手指按压区域而非精确单点）、压力随机，并在按下与抬起之间加入随机按压时长。
 - `swipe`：在起止点之间生成多个中间点，走带随机抖动的曲线路径，并模拟人手"起慢—中快—收慢"的变速节奏。
 
-默认关闭，行为与精确注入一致，便于自动化复现。注意：scrcpy 协议没有按压面积（contact area）字段，拟人仅通过落点偏移与压力近似手指按压，无法真正上报接触面积。
+新增可选参数 `mode`（字符串，枚举：`"sdk"` / `"adb"`，默认 `"sdk"`）：
+- `"sdk"`（默认）：通过已建立的 scrcpy 控制 Socket 极速注入，延迟极低（~5ms），完全兼容 `humanize`。
+- `"adb"`：通过底层独立 ADB 通道执行 `adb shell input tap/swipe`，穿透受限窗口；自动完成归一化坐标向设备物理像素的转换；支持 `humanize=true`（通过高斯落点微偏移模拟手指接触面半径，并通过 `input swipe fx fy fx fy holdMS` 模拟 60~150ms 物理手指按压时长）。
+
+新增可选参数 `duration_ms`（整数）：
+- 滑动或按压持续时间（毫秒），在 `mode="adb"` 的 swipe 或按压动作中生效。
 
 示例：
 
 ```json
 {"type":"action.request","request_id":"swipe-001","action":"swipe","x":0.8,"y":0.8,"x2":0.2,"y2":0.8,"expires_ms":1000}
+{"type":"action.request","request_id":"adb-tap-001","action":"tap","x":0.5,"y":0.5,"mode":"adb","humanize":true,"expires_ms":1000}
+{"type":"action.request","request_id":"adb-swipe-001","action":"swipe","x":0.5,"y":0.8,"x2":0.5,"y2":0.2,"mode":"adb","duration_ms":300,"expires_ms":1000}
 {"type":"action.request","request_id":"back-001","action":"key","keycode":4,"expires_ms":1000}
 {"type":"action.request","request_id":"text-001","action":"text","text":"你好","expires_ms":1000}
 {"type":"action.request","request_id":"tap-human-001","action":"tap","x":0.5,"y":0.4,"humanize":true,"expires_ms":1000}
 ```
+
+### 模板自动定位点击 API
+
+支持直接传入模板名称或模板 ID，服务端在设备屏幕上自动定位匹配并触发点击：
+
+```http
+POST /api/templates/click
+Content-Type: application/json
+
+{
+  "serial": "10.0.0.30:5555",
+  "name": "确认按钮",
+  "random_offset": false,
+  "mode": "sdk"
+}
+```
+
+- `name` / `template_id`：模板名称或模板 ID；
+- `random_offset`：布尔值（默认 `false`）。为 `true` 时在模板目标框内做随机小范围微偏移（严格限制在目标框内部），模拟人手点击按钮不同位置；
+- `mode`：`"sdk"`（默认）或 `"adb"`；
+- 若未在当前画面匹配到该模板，接口返回 `422 Unprocessable Entity`（`"error": "template_not_matched"`）；模板不存在返回 `404 Not Found`。
+
 
 ## 6. Python 核心循环：直接处理视频流帧
 
