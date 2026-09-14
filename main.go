@@ -17,6 +17,7 @@ import (
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/scripts"
+	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/uipage"
 	"mywebscrcpy/internal/uixml"
 	"mywebscrcpy/internal/ws"
@@ -83,6 +84,15 @@ func main() {
 	scripts.RegisterRoutes(mux)
 	// 文件管理 API：每个请求都携带当前投屏页面选定的设备 serial，操作手机共享存储。
 	files.RegisterRoutes(mux, fileManager)
+
+	// 模板管理与匹配 API
+	templateStorage, err := template.NewStorage("")
+	if err != nil {
+		log.Printf("警告: 初始化模板存储失败: %v", err)
+	}
+	templateService := template.NewService(adbPath, templateStorage, hub)
+	defer templateService.Stop()
+	template.RegisterRoutes(mux, templateService)
 
 	// API: 设备列表
 	mux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) {
