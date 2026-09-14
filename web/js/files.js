@@ -4,11 +4,14 @@
   const state = {
     path: '', query: '', type: 'all', sort: 'name', order: 'asc', items: [],
     selected: new Set(), controller: null, dialogMode: '', dialogItem: null,
-    uploadQueue: [], toastTimer: null, page: 1, hasMore: false,
+    previewItem: null, uploadQueue: [], toastTimer: null, page: 1, hasMore: false,
   };
   const $ = (id) => document.getElementById(id);
   const pageParams = new URLSearchParams(location.search);
   state.serial = pageParams.get('serial') || '';
+
+  const FOLDER_SVG = `<svg class="folder-svg-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M2.5 4.5C2.5 3.94772 2.94772 3.5 3.5 3.5H7.5C7.76522 3.5 8.01957 3.60536 8.20711 3.79289L9.91421 5.5H16.5C17.0523 5.5 17.5 5.94772 17.5 6.5V15.5C17.5 16.0523 17.0523 16.5 16.5 16.5H3.5C2.94772 16.5 2.5 16.0523 2.5 15.5V4.5Z" fill="#3888ff"/><path d="M2.5 7.5H17.5V15.5C17.5 16.0523 17.0523 16.5 16.5 16.5H3.5C2.94772 16.5 2.5 16.0523 2.5 15.5V7.5Z" fill="#165dff"/></svg>`;
+
   function withSerial(endpoint) { const separator = endpoint.includes('?') ? '&' : '?'; return `${endpoint}${separator}serial=${encodeURIComponent(state.serial)}`; }
   function escapeHTML(value) { return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char])); }
   function formatBytes(value) {
@@ -21,7 +24,67 @@
     if (!value) return '—';
     const date = new Date(value); return Number.isNaN(date.valueOf()) ? value : date.toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' });
   }
-  function iconFor(item) { return ({ folder: '▰', image: '▧', video: '▶', audio: '♪', document: '▤', other: '▪' })[item.kind] || '▪'; }
+
+  function getExt(name) {
+    const idx = (name || '').lastIndexOf('.');
+    return idx > 0 ? name.slice(idx + 1).toLowerCase() : '';
+  }
+
+  function getBadgeInfo(item) {
+    const ext = getExt(item.name);
+    const upper = ext ? ext.toUpperCase() : 'FILE';
+    const text = upper.length > 4 ? upper.slice(0, 4) : upper;
+    switch (ext) {
+      case 'txt': case 'log':
+        return { text, cls: 'badge-txt' };
+      case 'json': case 'xml': case 'yaml': case 'yml': case 'sh': case 'js': case 'ts': case 'html': case 'css':
+        return { text, cls: 'badge-code' };
+      case 'md':
+        return { text: 'MD', cls: 'badge-md' };
+      case 'png': case 'jpg': case 'jpeg': case 'gif': case 'webp': case 'svg': case 'bmp': case 'ico':
+        return { text, cls: 'badge-image' };
+      case 'mp4': case 'mov': case 'mkv': case 'avi': case 'webm': case '3gp':
+        return { text, cls: 'badge-video' };
+      case 'mp3': case 'wav': case 'flac': case 'm4a': case 'aac': case 'ogg':
+        return { text, cls: 'badge-audio' };
+      case 'apk': case 'aab':
+        return { text, cls: 'badge-apk' };
+      case 'zip': case 'rar': case '7z': case 'tar': case 'gz':
+        return { text, cls: 'badge-archive' };
+      case 'pdf':
+        return { text: 'PDF', cls: 'badge-pdf' };
+      default:
+        if (item.kind === 'image') return { text: text || 'IMG', cls: 'badge-image' };
+        if (item.kind === 'video') return { text: text || 'VID', cls: 'badge-video' };
+        if (item.kind === 'audio') return { text: text || 'AUD', cls: 'badge-audio' };
+        if (item.kind === 'document') return { text: text || 'DOC', cls: 'badge-txt' };
+        return { text: text || 'FILE', cls: 'badge-other' };
+    }
+  }
+
+  function iconFor(item) {
+    if (item.kind === 'folder') {
+      return `<span class="file-folder-icon" aria-hidden="true">${FOLDER_SVG}</span>`;
+    }
+    const { text, cls } = getBadgeInfo(item);
+    return `<span class="file-badge ${cls}" aria-hidden="true">${escapeHTML(text)}</span>`;
+  }
+
+  function getPreviewType(item) {
+    if (!item || item.kind === 'folder') return null;
+    const ext = getExt(item.name);
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext) || item.kind === 'image') {
+      return 'image';
+    }
+    if (['mp4', 'webm', 'mov', 'mkv', 'ogg'].includes(ext) || item.kind === 'video') {
+      return 'video';
+    }
+    if (['txt', 'log', 'json', 'xml', 'md', 'yml', 'yaml', 'js', 'ts', 'html', 'css', 'sh', 'csv', 'ini', 'conf', 'properties'].includes(ext) || (item.mime && item.mime.startsWith('text/'))) {
+      return 'text';
+    }
+    return null;
+  }
+
   function notify(message, error = false) {
     const toast = $('toast'); toast.textContent = message; toast.className = `files-toast${error ? ' error' : ''}`; toast.hidden = false;
     clearTimeout(state.toastTimer); state.toastTimer = setTimeout(() => { toast.hidden = true; }, 4200);
@@ -40,15 +103,15 @@
   async function loadFiles({ append = false } = {}) {
     if (state.controller) state.controller.abort();
     state.controller = new AbortController();
-    if (!append) { state.page = 1; showState('loading'); setStatus('正在加载文件…'); }
+    if (!append) { state.page = 1; showState('loading'); setStatus(''); }
     const params = new URLSearchParams({ path: state.path, q: state.query, type: state.type === 'all' ? '' : state.type, sort: state.sort, order: state.order, page: String(append ? state.page + 1 : state.page), page_size: '100' });
     try {
       const data = await api(`/api/files?${params}`, { signal: state.controller.signal });
       state.page = data.page || state.page; state.hasMore = Boolean(data.has_more); state.items = append ? [...state.items, ...(data.items || [])] : (data.items || []); if (!append) state.selected.clear(); render({ ...data, items: state.items }); showState(state.items.length ? 'table' : 'empty');
-      setStatus(data.total ? `${data.total} 项` : '这个文件夹还是空的');
+      setStatus(data.total ? `${data.total} 项` : '');
     } catch (error) {
       if (error.name === 'AbortError') return;
-      $('files-error-text').textContent = error.message; showState('error'); setStatus('加载失败');
+      $('files-error-text').textContent = error.message; showState('error'); setStatus('');
     }
   }
 
@@ -69,7 +132,10 @@
   }
   function rowFor(item) {
     const row = document.createElement('tr'); row.dataset.path = item.path;
-    row.innerHTML = `<td class="check-column"><input class="item-check" type="checkbox" aria-label="选择 ${escapeHTML(item.name)}"></td><td><div class="file-name-cell"><span class="file-icon" aria-hidden="true">${iconFor(item)}</span><button class="file-name ${item.kind === 'folder' ? 'folder-link' : ''}" type="button">${escapeHTML(item.name)}</button>${state.query ? `<small class="file-path-hint">${escapeHTML(item.path)}</small>` : ''}</div></td><td data-label="类型">${escapeHTML(item.kind === 'folder' ? '文件夹' : item.mime)}</td><td data-label="大小">${item.kind === 'folder' ? '—' : formatBytes(item.size)}</td><td data-label="修改时间">${formatTime(item.modified)}</td><td class="action-column"><div class="row-actions"><button type="button" data-action="download" title="下载" ${item.kind === 'folder' ? 'disabled' : ''}>↓</button><button type="button" data-action="rename" title="重命名">✎</button><button type="button" data-action="move" title="移动到">↗</button><button type="button" data-action="delete" title="删除" class="danger-icon">×</button></div></td>`;
+    const previewType = getPreviewType(item);
+    const nameClass = item.kind === 'folder' ? 'folder-link' : (previewType ? 'preview-link' : '');
+    const previewBtn = previewType ? `<button type="button" data-action="preview" title="预览">👁</button>` : '';
+    row.innerHTML = `<td class="check-column"><input class="item-check" type="checkbox" aria-label="选择 ${escapeHTML(item.name)}"></td><td><div class="file-name-cell"><span class="file-icon">${iconFor(item)}</span><button class="file-name ${nameClass}" type="button">${escapeHTML(item.name)}</button>${state.query ? `<small class="file-path-hint">${escapeHTML(item.path)}</small>` : ''}</div></td><td data-label="类型">${escapeHTML(item.kind === 'folder' ? '文件夹' : item.mime)}</td><td data-label="大小">${item.kind === 'folder' ? '—' : formatBytes(item.size)}</td><td data-label="修改时间">${formatTime(item.modified)}</td><td class="action-column"><div class="row-actions">${previewBtn}<button type="button" data-action="download" title="下载" ${item.kind === 'folder' ? 'disabled' : ''}>↓</button><button type="button" data-action="rename" title="重命名">✎</button><button type="button" data-action="move" title="移动到">↗</button><button type="button" data-action="delete" title="删除" class="danger-icon">×</button></div></td>`;
     row.querySelector('.item-check').checked = state.selected.has(item.path);
     return row;
   }
@@ -125,6 +191,72 @@
     } catch (error) { notify(error.message, true); }
   }
 
+  function openPreview(item) {
+    const type = getPreviewType(item);
+    if (!type) return;
+    state.previewItem = item;
+    $('preview-filename').textContent = item.name;
+
+    const img = $('preview-image');
+    const vid = $('preview-video');
+    const txt = $('preview-text');
+
+    img.hidden = true;
+    img.src = '';
+    vid.hidden = true;
+    vid.pause();
+    vid.removeAttribute('src');
+    vid.load();
+    txt.hidden = true;
+    txt.textContent = '';
+
+    const previewUrl = withSerial(`/api/files/download?path=${encodeURIComponent(item.path)}&preview=1`);
+
+    if (type === 'image') {
+      img.src = previewUrl;
+      img.hidden = false;
+    } else if (type === 'video') {
+      vid.src = previewUrl;
+      vid.hidden = false;
+    } else if (type === 'text') {
+      txt.hidden = false;
+      txt.textContent = '加载中…';
+      fetch(previewUrl)
+        .then(async (response) => {
+          if (!response.ok) throw new Error('加载失败');
+          return response.text();
+        })
+        .then((content) => {
+          if (state.previewItem === item) {
+            txt.textContent = content;
+          }
+        })
+        .catch(() => {
+          if (state.previewItem === item) {
+            txt.textContent = '加载文件内容失败';
+          }
+        });
+    }
+
+    $('file-preview-dialog').showModal();
+  }
+
+  function closePreview() {
+    const dialog = $('file-preview-dialog');
+    if (dialog && dialog.open) {
+      dialog.close();
+    }
+    state.previewItem = null;
+    const vid = $('preview-video');
+    if (vid) {
+      vid.pause();
+      vid.removeAttribute('src');
+      vid.load();
+    }
+    if ($('preview-image')) $('preview-image').src = '';
+    if ($('preview-text')) $('preview-text').textContent = '';
+  }
+
   function startUpload(file, conflict = 'fail', existing = null) {
     const item = existing || { id: `${Date.now()}-${Math.random()}`, file, progress: 0, status: '上传中', xhr: null, conflict };
     if (!existing) state.uploadQueue.push(item); else { item.status = '上传中'; item.progress = 0; item.conflict = conflict; }
@@ -157,7 +289,20 @@
   $('sort-select').addEventListener('change', (event) => { state.sort = event.target.value; loadFiles(); });
   $('order-button').addEventListener('click', () => { state.order = state.order === 'asc' ? 'desc' : 'asc'; $('order-button').textContent = `${$('sort-select').selectedOptions[0].textContent}${state.order === 'asc' ? '升序' : '降序'}`; loadFiles(); });
   $('breadcrumbs').addEventListener('click', (event) => { const button = event.target.closest('[data-path]'); if (button) setPath(button.dataset.path); });
-  $('files-table-body').addEventListener('click', (event) => { const row = event.target.closest('tr'); if (!row) return; const item = state.items.find((candidate) => candidate.path === row.dataset.path); if (!item) return; if (event.target.closest('.folder-link')) return setPath(item.path); const action = event.target.closest('[data-action]')?.dataset.action; if (action === 'download') downloadItem(item); if (action === 'rename') openActionDialog('rename', item); if (action === 'move') openActionDialog('move', item); if (action === 'delete') deletePaths([item.path]); });
+  $('files-table-body').addEventListener('click', (event) => {
+    const row = event.target.closest('tr');
+    if (!row) return;
+    const item = state.items.find((candidate) => candidate.path === row.dataset.path);
+    if (!item) return;
+    if (event.target.closest('.folder-link')) return setPath(item.path);
+    if (event.target.closest('.preview-link')) return openPreview(item);
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'preview') return openPreview(item);
+    if (action === 'download') downloadItem(item);
+    if (action === 'rename') openActionDialog('rename', item);
+    if (action === 'move') openActionDialog('move', item);
+    if (action === 'delete') deletePaths([item.path]);
+  });
   $('files-table-body').addEventListener('change', (event) => { if (!event.target.classList.contains('item-check')) return; const path = event.target.closest('tr').dataset.path; if (event.target.checked) state.selected.add(path); else state.selected.delete(path); updateSelectionUI(); });
   $('select-all-button').addEventListener('click', () => { const all = state.items.length && state.items.every((item) => state.selected.has(item.path)); state.items.forEach((item) => all ? state.selected.delete(item.path) : state.selected.add(item.path)); document.querySelectorAll('.item-check').forEach((checkbox) => { checkbox.checked = state.selected.has(checkbox.closest('tr').dataset.path); }); updateSelectionUI(); });
   document.querySelectorAll('[data-batch-action]').forEach((button) => button.addEventListener('click', () => button.dataset.batchAction === 'delete' ? deletePaths([...state.selected]) : openActionDialog('move')));
@@ -166,5 +311,27 @@
   $('load-more-button').addEventListener('click', () => loadFiles({ append: true }));
   $('clear-upload-queue').addEventListener('click', () => { state.uploadQueue = state.uploadQueue.filter((item) => !['上传完成', '已取消'].includes(item.status)); renderUploadQueue(); });
   $('dialog-cancel').addEventListener('click', () => $('action-dialog').close()); $('action-form').addEventListener('submit', (event) => { event.preventDefault(); performAction($('dialog-input').value.trim()); });
-  if (state.serial) loadFiles(); else { showState('error'); $('files-error-text').textContent = '未指定手机，请从投屏页面打开文件管理'; setStatus('未指定手机'); }
+
+  $('preview-close-btn').addEventListener('click', closePreview);
+  $('preview-download-btn').addEventListener('click', () => {
+    if (state.previewItem) downloadItem(state.previewItem);
+  });
+  $('file-preview-dialog').addEventListener('cancel', () => {
+    closePreview();
+  });
+  $('file-preview-dialog').addEventListener('click', (event) => {
+    const dialog = $('file-preview-dialog');
+    const rect = dialog.getBoundingClientRect();
+    const isInDialog = (
+      rect.top <= event.clientY &&
+      event.clientY <= rect.top + rect.height &&
+      rect.left <= event.clientX &&
+      event.clientX <= rect.left + rect.width
+    );
+    if (!isInDialog) {
+      closePreview();
+    }
+  });
+
+  if (state.serial) loadFiles(); else { showState('error'); $('files-error-text').textContent = '未指定手机，请从投屏页面打开文件管理'; setStatus(''); }
 })();

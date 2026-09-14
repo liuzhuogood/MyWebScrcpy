@@ -8,25 +8,24 @@
 </head>
 <body class="files-page">
   <header class="files-header">
-    <div class="files-title-wrap">
-      <h1>手机文件</h1>
-      <span id="files-status" class="files-status">正在加载文件…</span>
-    </div>
     <form id="search-form" class="files-search" role="search">
       <label class="sr-only" for="search-input">搜索文件和文件夹</label>
       <input id="search-input" type="search" placeholder="搜索文件和文件夹" autocomplete="off">
       <button type="submit" title="搜索" aria-label="搜索">⌕</button>
     </form>
-    <div id="storage-summary" class="storage-summary" aria-live="polite">容量信息加载中</div>
+    <div class="files-header-meta">
+      <span id="files-status" class="files-status"></span>
+      <div id="storage-summary" class="storage-summary" aria-live="polite">容量信息加载中</div>
+    </div>
   </header>
 
   <main class="files-main">
     <section class="files-pathbar" aria-label="当前位置和操作">
       <nav id="breadcrumbs" class="breadcrumbs" aria-label="文件夹层级"></nav>
       <div class="files-primary-actions">
-        <label class="files-primary-btn" for="file-input">＋ 上传</label>
+        <label class="btn-primary" for="file-input">＋ 上传</label>
         <input id="file-input" type="file" multiple hidden>
-        <button id="new-folder-button" class="files-secondary-btn" type="button">新建文件夹</button>
+        <button id="new-folder-button" class="btn-secondary" type="button">新建文件夹</button>
       </div>
     </section>
 
@@ -64,12 +63,12 @@
       <div id="files-loading" class="files-state">正在加载文件…</div>
       <div id="files-error" class="files-state files-error-state" hidden>
         <p id="files-error-text">文件加载失败，请检查网络后重试</p>
-        <button id="retry-button" class="files-secondary-btn" type="button">重试</button>
+        <button id="retry-button" class="btn-secondary" type="button">重试</button>
       </div>
       <div id="files-empty" class="files-state" hidden>
         <div class="files-state-icon">□</div>
         <p id="files-empty-text">这个文件夹还是空的</p>
-        <button id="empty-upload-button" class="files-primary-btn" type="button">上传文件</button>
+        <button id="empty-upload-button" class="btn-primary" type="button">上传文件</button>
       </div>
       <div id="files-table-wrap" hidden>
         <table class="files-table">
@@ -80,7 +79,7 @@
           <tbody id="files-table-body"></tbody>
         </table>
       </div>
-      <div id="files-pagination" class="files-pagination" hidden><button id="load-more-button" class="files-secondary-btn" type="button">加载更多</button><span id="pagination-summary"></span></div>
+      <div id="files-pagination" class="files-pagination" hidden><button id="load-more-button" class="btn-secondary" type="button">加载更多</button><span id="pagination-summary"></span></div>
     </section>
 
     <section id="upload-queue" class="upload-queue" hidden aria-label="上传队列">
@@ -95,8 +94,25 @@
       <p id="dialog-description" class="dialog-description"></p>
       <label id="dialog-input-label" for="dialog-input">名称</label>
       <input id="dialog-input" name="value" type="text" required autocomplete="off">
-      <div class="dialog-actions"><button id="dialog-cancel" class="files-secondary-btn" type="button">取消</button><button class="files-primary-btn" type="submit">确定</button></div>
+      <div class="dialog-actions"><button id="dialog-cancel" class="btn-secondary" type="button">取消</button><button class="btn-primary" type="submit">确定</button></div>
     </form>
+  </dialog>
+
+  <dialog id="file-preview-dialog" class="preview-modal" aria-label="文件预览">
+    <div class="preview-modal-header">
+      <div class="preview-header-title">
+        <strong id="preview-filename"></strong>
+      </div>
+      <div class="preview-header-actions">
+        <button id="preview-download-btn" class="btn-secondary" type="button">下载</button>
+        <button id="preview-close-btn" class="dialog-close-btn" type="button" title="关闭" aria-label="关闭">×</button>
+      </div>
+    </div>
+    <div id="preview-body" class="preview-modal-body">
+      <img id="preview-image" alt="预览图片" hidden>
+      <video id="preview-video" controls autoplay hidden></video>
+      <pre id="preview-text" hidden></pre>
+    </div>
   </dialog>
 
   <div id="toast" class="files-toast" role="status" aria-live="polite" hidden></div>
