@@ -88,7 +88,7 @@ func NewService(adbPath string, storage *Storage, publisher VisionPublisher) *Se
 	if sub, ok := publisher.(ActionSubmitter); ok {
 		submitter = sub
 	}
-	return &Service{
+	s := &Service{
 		adbPath:      adbPath,
 		storage:      storage,
 		matcher:      NewMatcher(),
@@ -99,6 +99,14 @@ func NewService(adbPath string, storage *Storage, publisher VisionPublisher) *Se
 		workers:      make(map[string]*deviceWorker),
 		streams:      make(map[string]*streamDecoder),
 	}
+	if storage != nil {
+		storage.OnChange(func(serials []string) {
+			for _, ser := range serials {
+				s.TriggerRedetect(ser)
+			}
+		})
+	}
+	return s
 }
 
 // ConsumeVideoFrame receives H.264 directly from the in-process scrcpy hub.
@@ -342,6 +350,69 @@ func (s *Service) GetLatestFrame(serial string) image.Image {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 	return w.latestFrame
+}
+
+// TriggerRedetectAll triggers immediate re-detection across all active device workers.
+func (s *Service) TriggerRedetectAll() {
+	s.TriggerRedetect("")
+}
+
+// TriggerRedetect triggers immediate re-detection for the specified serial using its latest cached frame.
+// If serial is "global" or empty, all active device workers are triggered.
+func (s *Service) TriggerRedetect(serial string) {
+	norm := strings.TrimSpace(serial)
+	var targets []*deviceWorker
+
+	s.mu.RLock()
+	if norm == "" || norm == GlobalSerial || strings.EqualFold(norm, "global") {
+		for _, w := range s.workers {
+			if w != nil && w.enabled {
+				targets = append(targets, w)
+			}
+		}
+	} else {
+		if w, ok := s.workers[norm]; ok && w != nil && w.enabled {
+			targets = append(targets, w)
+		} else if w, ok := s.workers[NormalizeSerial(norm)]; ok && w != nil && w.enabled {
+			targets = append(targets, w)
+		}
+	}
+	s.mu.RUnlock()
+
+	for _, w := range targets {
+		s.redetectWorker(w)
+	}
+}
+
+func (s *Service) redetectWorker(w *deviceWorker) {
+	if w == nil || !w.enabled {
+		return
+	}
+	w.mu.RLock()
+	frame := w.latestFrame
+	targetSerial := w.serial
+	w.mu.RUnlock()
+
+	if frame == nil {
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+
+		matches, err := s.Detect(ctx, targetSerial, frame)
+		if err != nil {
+			return
+		}
+
+		w.mu.Lock()
+		w.lastMatches = matches
+		w.lastMatchTime = time.Now()
+		w.mu.Unlock()
+
+		s.BroadcastMatches(targetSerial, matches)
+	}()
 }
 
 // captureScreenDefault returns an error indicating adb screencap has been replaced by the real-time video stream engine.
@@ -681,6 +752,10 @@ func (s *Service) Stop() {
 		}
 
 		s.broadcastClear(w.serial)
+	}
+
+	if s.storage != nil {
+		_ = s.storage.Close()
 	}
 }
 

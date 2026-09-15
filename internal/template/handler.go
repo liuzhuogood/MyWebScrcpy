@@ -75,6 +75,7 @@ func (h *Handler) handleAddTemplateImage(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "add_template_image_failed", err.Error())
 		return
 	}
+	h.service.TriggerRedetect(tmpl.Serial)
 	writeJSON(w, http.StatusCreated, tmpl)
 }
 
@@ -188,6 +189,7 @@ func (h *Handler) handleCreateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.service.TriggerRedetect(tmpl.Serial)
 	writeJSON(w, http.StatusCreated, tmpl)
 }
 
@@ -277,6 +279,7 @@ func (h *Handler) handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	oldTmpl, _ := h.service.Storage().GetTemplate(id)
 	updated, err := h.service.Storage().UpdateTemplate(id, req, img)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -287,12 +290,17 @@ func (h *Handler) handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if oldTmpl != nil && oldTmpl.Serial != updated.Serial {
+		h.service.TriggerRedetect(oldTmpl.Serial)
+	}
+	h.service.TriggerRedetect(updated.Serial)
 	writeJSON(w, http.StatusOK, updated)
 }
 
 // handleDeleteTemplate DELETE /api/templates/{id}
 func (h *Handler) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
+	oldTmpl, _ := h.service.Storage().GetTemplate(id)
 	err := h.service.Storage().DeleteTemplate(id)
 	if err != nil {
 		if errors.Is(err, ErrTemplateNotFound) {
@@ -301,6 +309,12 @@ func (h *Handler) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusInternalServerError, "delete_template_failed", err.Error())
 		return
+	}
+
+	if oldTmpl != nil {
+		h.service.TriggerRedetect(oldTmpl.Serial)
+	} else {
+		h.service.TriggerRedetectAll()
 	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "id": id})
 }
@@ -658,6 +672,8 @@ func (h *Handler) handleImportTemplates(w http.ResponseWriter, r *http.Request) 
 		}
 		imported = append(imported, tmpl)
 	}
+
+	h.service.TriggerRedetect(serial)
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":   true,

@@ -26,6 +26,11 @@ type Storage struct {
 	templates map[string]*Template
 	images    map[string]image.Image
 	variants  map[string][]image.Image
+
+	watcher   *DirWatcher
+	callbacks []func(serials []string)
+	cbMu      sync.RWMutex
+	closed    bool
 }
 
 // DefaultStorageDir keeps the template directory robust and writable when the
@@ -69,7 +74,70 @@ func NewStorage(baseDir string) (*Storage, error) {
 		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}
 
+	w, err := NewDirWatcher(s.baseDir, 300*time.Millisecond, func() {
+		_, _ = s.Reload()
+	})
+	if err == nil {
+		if err := w.Start(); err == nil {
+			s.watcher = w
+		}
+	}
+
 	return s, nil
+}
+
+// Close closes the storage and any background watchers.
+func (s *Storage) Close() error {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return nil
+	}
+	s.closed = true
+	w := s.watcher
+	s.watcher = nil
+	s.mu.Unlock()
+
+	if w != nil {
+		return w.Close()
+	}
+	return nil
+}
+
+// OnChange registers a callback to be invoked when templates are modified or reloaded.
+func (s *Storage) OnChange(fn func(serials []string)) {
+	if fn == nil {
+		return
+	}
+	s.cbMu.Lock()
+	defer s.cbMu.Unlock()
+	s.callbacks = append(s.callbacks, fn)
+}
+
+func (s *Storage) notifyChange(serials []string) {
+	if len(serials) == 0 {
+		return
+	}
+	unique := make(map[string]bool, len(serials))
+	filtered := make([]string, 0, len(serials))
+	for _, ser := range serials {
+		if !unique[ser] {
+			unique[ser] = true
+			filtered = append(filtered, ser)
+		}
+	}
+	if len(filtered) == 0 {
+		return
+	}
+
+	s.cbMu.RLock()
+	cbs := make([]func(serials []string), len(s.callbacks))
+	copy(cbs, s.callbacks)
+	s.cbMu.RUnlock()
+
+	for _, cb := range cbs {
+		go cb(filtered)
+	}
 }
 
 // BaseDir returns the root directory where templates are stored.
@@ -79,13 +147,94 @@ func (s *Storage) BaseDir() string {
 	return s.baseDir
 }
 
-// loadExisting traverses baseDir and populates the in-memory cache.
-func (s *Storage) loadExisting() error {
-	serialEntries, err := os.ReadDir(s.baseDir)
+type diskTemplateEntry struct {
+	tmpl     *Template
+	img      image.Image
+	variants []image.Image
+	modTime  time.Time
+}
+
+func (s *Storage) readDiskTemplate(tmplDir string) (*diskTemplateEntry, error) {
+	metaPath := filepath.Join(tmplDir, "meta.json")
+	imgPath := filepath.Join(tmplDir, "template.png")
+
+	metaStat, err := os.Stat(metaPath)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	imgStat, err := os.Stat(imgPath)
+	if err != nil {
+		return nil, err
 	}
 
+	maxMod := metaStat.ModTime()
+	if imgStat.ModTime().After(maxMod) {
+		maxMod = imgStat.ModTime()
+	}
+
+	metaBytes, err := os.ReadFile(metaPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var tmpl Template
+	if err := json.Unmarshal(metaBytes, &tmpl); err != nil {
+		return nil, err
+	}
+
+	imgFile, err := os.Open(imgPath)
+	if err != nil {
+		return nil, err
+	}
+	img, err := png.Decode(imgFile)
+	_ = imgFile.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	variants := []image.Image{img}
+	variantDir := filepath.Join(tmplDir, "variants")
+	if entries, readErr := os.ReadDir(variantDir); readErr == nil {
+		for _, entry := range entries {
+			if entry.IsDir() || filepath.Ext(entry.Name()) != ".png" {
+				continue
+			}
+			fPath := filepath.Join(variantDir, entry.Name())
+			if fi, sErr := entry.Info(); sErr == nil && fi.ModTime().After(maxMod) {
+				maxMod = fi.ModTime()
+			}
+			f, openErr := os.Open(fPath)
+			if openErr != nil {
+				continue
+			}
+			variant, decodeErr := png.Decode(f)
+			_ = f.Close()
+			if decodeErr == nil {
+				variants = append(variants, variant)
+			}
+		}
+	}
+	tmpl.ImageCount = len(variants)
+
+	if maxMod.After(tmpl.UpdatedAt) {
+		tmpl.UpdatedAt = maxMod
+	}
+
+	return &diskTemplateEntry{
+		tmpl:     &tmpl,
+		img:      img,
+		variants: variants,
+		modTime:  maxMod,
+	}, nil
+}
+
+func (s *Storage) readAllDiskTemplates() (map[string]*diskTemplateEntry, error) {
+	serialEntries, err := os.ReadDir(s.baseDir)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]*diskTemplateEntry)
 	for _, sEntry := range serialEntries {
 		if !sEntry.IsDir() {
 			continue
@@ -101,55 +250,113 @@ func (s *Storage) loadExisting() error {
 				continue
 			}
 			tmplDir := filepath.Join(serialPath, idEntry.Name())
-			metaPath := filepath.Join(tmplDir, "meta.json")
-			imgPath := filepath.Join(tmplDir, "template.png")
-
-			metaBytes, err := os.ReadFile(metaPath)
+			entry, err := s.readDiskTemplate(tmplDir)
 			if err != nil {
 				continue
 			}
+			result[entry.tmpl.ID] = entry
+		}
+	}
+	return result, nil
+}
 
-			var tmpl Template
-			if err := json.Unmarshal(metaBytes, &tmpl); err != nil {
-				continue
-			}
+// loadExisting traverses baseDir and populates the in-memory cache.
+func (s *Storage) loadExisting() error {
+	diskEntries, err := s.readAllDiskTemplates()
+	if err != nil {
+		return err
+	}
+	for id, entry := range diskEntries {
+		s.templates[id] = entry.tmpl
+		s.images[id] = entry.img
+		s.variants[id] = entry.variants
+	}
+	return nil
+}
 
-			imgFile, err := os.Open(imgPath)
-			if err != nil {
-				continue
-			}
-			img, err := png.Decode(imgFile)
-			_ = imgFile.Close()
-			if err != nil {
-				continue
-			}
+// Reload re-traverses the base directory, compares with in-memory templates,
+// incrementally applies additions, updates, and deletions, and returns all affected serials.
+func (s *Storage) Reload() ([]string, error) {
+	diskEntries, err := s.readAllDiskTemplates()
+	if err != nil {
+		return nil, err
+	}
 
-			s.templates[tmpl.ID] = &tmpl
-			s.images[tmpl.ID] = img
-			variants := []image.Image{img}
-			variantDir := filepath.Join(tmplDir, "variants")
-			if entries, readErr := os.ReadDir(variantDir); readErr == nil {
-				for _, entry := range entries {
-					if entry.IsDir() || filepath.Ext(entry.Name()) != ".png" {
-						continue
-					}
-					f, openErr := os.Open(filepath.Join(variantDir, entry.Name()))
-					if openErr != nil {
-						continue
-					}
-					variant, decodeErr := png.Decode(f)
-					_ = f.Close()
-					if decodeErr == nil {
-						variants = append(variants, variant)
-					}
-				}
-			}
-			s.variants[tmpl.ID] = variants
-			tmpl.ImageCount = len(variants)
+	s.mu.Lock()
+	affected := make(map[string]bool)
+
+	// 1. Clear templates that no longer exist on disk
+	for id, memTmpl := range s.templates {
+		if _, exists := diskEntries[id]; !exists {
+			delete(s.templates, id)
+			delete(s.images, id)
+			delete(s.variants, id)
+			affected[memTmpl.Serial] = true
 		}
 	}
 
-	return nil
+	// 2. Add or update templates from disk
+	for id, disk := range diskEntries {
+		memTmpl, exists := s.templates[id]
+		if !exists {
+			s.templates[id] = disk.tmpl
+			s.images[id] = disk.img
+			s.variants[id] = disk.variants
+			affected[disk.tmpl.Serial] = true
+		} else if isTemplateModified(memTmpl, disk) {
+			s.templates[id] = disk.tmpl
+			s.images[id] = disk.img
+			s.variants[id] = disk.variants
+			affected[memTmpl.Serial] = true
+			affected[disk.tmpl.Serial] = true
+		}
+	}
+	s.mu.Unlock()
+
+	var serials []string
+	for ser := range affected {
+		serials = append(serials, ser)
+	}
+	sort.Strings(serials)
+
+	if len(serials) > 0 {
+		s.notifyChange(serials)
+	}
+
+	return serials, nil
+}
+
+func isTemplateModified(mem *Template, disk *diskTemplateEntry) bool {
+	if mem == nil || disk == nil || disk.tmpl == nil {
+		return true
+	}
+	dt := disk.tmpl
+	if mem.Name != dt.Name ||
+		mem.Serial != dt.Serial ||
+		mem.Threshold != dt.Threshold ||
+		mem.Method != dt.Method ||
+		mem.Grayscale != dt.Grayscale ||
+		mem.Enabled != dt.Enabled ||
+		mem.Width != dt.Width ||
+		mem.Height != dt.Height ||
+		mem.SceneWidth != dt.SceneWidth ||
+		mem.SceneHeight != dt.SceneHeight ||
+		mem.ImageCount != dt.ImageCount ||
+		!mem.UpdatedAt.Equal(dt.UpdatedAt) {
+		return true
+	}
+	if len(mem.Scales) != len(dt.Scales) {
+		return true
+	}
+	for i := range mem.Scales {
+		if mem.Scales[i] != dt.Scales[i] {
+			return true
+		}
+	}
+	if disk.modTime.After(mem.UpdatedAt) {
+		return true
+	}
+	return false
 }
 
 // CreateTemplate stores a new template metadata and image.
@@ -256,6 +463,8 @@ func (s *Storage) CreateTemplate(req CreateTemplateRequest, img image.Image) (*T
 	s.images[id] = img
 	s.variants[id] = []image.Image{img}
 
+	s.notifyChange([]string{tmpl.Serial})
+
 	return tmpl.Clone(), nil
 }
 
@@ -332,6 +541,7 @@ func (s *Storage) AddTemplateImage(id string, img image.Image) (*Template, error
 	if err = os.WriteFile(filepath.Join(s.getTemplateDir(tmpl.Serial, id), "meta.json"), meta, 0644); err != nil {
 		return nil, err
 	}
+	s.notifyChange([]string{tmpl.Serial})
 	return tmpl.Clone(), nil
 }
 
@@ -514,6 +724,12 @@ func (s *Storage) UpdateTemplate(id string, req UpdateTemplateRequest, newImg im
 		updated.ImageCount = 1
 	}
 
+	if oldSerial != newSerial {
+		s.notifyChange([]string{oldSerial, newSerial})
+	} else {
+		s.notifyChange([]string{newSerial})
+	}
+
 	return updated.Clone(), nil
 }
 
@@ -535,6 +751,8 @@ func (s *Storage) DeleteTemplate(id string) error {
 	delete(s.templates, id)
 	delete(s.images, id)
 	delete(s.variants, id)
+
+	s.notifyChange([]string{tmpl.Serial})
 
 	return nil
 }

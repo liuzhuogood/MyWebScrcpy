@@ -222,6 +222,8 @@
         // 成功保存后关闭选区
         const closeFn = window.closeCapture || (typeof closeCapture === 'function' ? closeCapture : null);
         if (closeFn) closeFn();
+
+        loadTemplates();
       } catch (err) {
         console.error('保存模板失败:', err);
         alert(`保存模板失败: ${err.message}`);
