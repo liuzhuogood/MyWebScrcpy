@@ -279,6 +279,10 @@
     if (inspectorBtn && inspectorBtn.getAttribute('aria-expanded') === 'true') {
       inspectorBtn.click();
     }
+    // 互斥：关闭 RightPanel（文件管理、模板匹配）
+    if (window.RightPanel) {
+      window.RightPanel.close();
+    }
 
     panel.hidden = false;
     playerMain.classList.remove('inspector-open', 'inspector-resized', 'shell-resized');

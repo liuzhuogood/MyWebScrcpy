@@ -241,13 +241,108 @@ body {
   grid-column: 1;
   justify-self: start;
 }
-.player-main.right-panel-open { display:grid; grid-template-columns:minmax(0,1fr) 8px var(--right-width, minmax(420px,1fr)); align-items:center; padding:12px; }
-.right-panel-resizer { display:none; width:8px; align-self:stretch; cursor:col-resize; }
-.right-panel { min-width:0; height:100%; background:#18202d; overflow:auto; }
-.right-panel > dialog[open] { position:static; inset:auto; box-sizing:border-box; width:100%; height:100%; max-width:none; max-height:none; margin:0; border:0; border-radius:0; box-shadow:none; }
-.right-panel > dialog::backdrop { display:none; }
-.player-main.right-panel-open .right-panel-resizer { display:block; }
-.right-panel-resizer:hover { background:#165dff; }
+/* --- 右侧抽屉面板（文件管理、模板匹配）布局 --- */
+.player-main.right-panel-open {
+  display: grid;
+  grid-template-columns: max-content 8px minmax(420px, 1fr);
+  grid-template-rows: 100%;
+  height: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 0;
+  overflow: hidden;
+  padding: 12px;
+}
+
+.player-main.right-panel-open.right-panel-resized {
+  grid-template-columns: minmax(0, 1fr) 8px max(420px, var(--right-width));
+}
+
+.player-main.right-panel-open .screen-wrap {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  justify-self: start;
+  max-height: 100%;
+  min-width: 0;
+}
+
+.right-panel-resizer {
+  display: none;
+}
+
+.player-main.right-panel-open .right-panel-resizer {
+  display: block;
+  grid-column: 2;
+  grid-row: 1;
+  width: 8px;
+  align-self: stretch;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  z-index: 10;
+  position: relative;
+}
+
+.player-main.right-panel-open .right-panel-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.player-main.right-panel-open .right-panel-resizer:hover::after,
+.player-main.right-panel-open .right-panel-resizer.dragging::after {
+  background: #165dff;
+}
+
+.right-panel {
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 0;
+  height: 100%;
+  max-height: 100%;
+  align-self: stretch;
+  background: #f7f8fa;
+  border: 1px solid #e5e6eb;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.right-panel[hidden] {
+  display: none !important;
+}
+
+.right-panel > dialog[open] {
+  position: static;
+  inset: auto;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: transparent;
+}
+
+.right-panel > dialog::backdrop {
+  display: none;
+}
 .screen-wrap {
   position: relative;
   border-radius: 8px;
@@ -1564,6 +1659,7 @@ body {
   gap: 4px;
 }
 .template-card-scope-btn,
+.template-card-add-image-btn,
 .template-card-click-btn,
 .template-card-dl-btn,
 .template-card-del-btn {
@@ -1588,6 +1684,7 @@ body {
   background: #e8ffea;
   color: #00b42a;
 }
+.template-card-add-image-btn:hover { background: #e8f3ff; color: #165dff; }
 .template-card-dl-btn:hover {
   background: #e8f3ff;
   color: #165dff;

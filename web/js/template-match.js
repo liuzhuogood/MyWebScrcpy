@@ -299,7 +299,7 @@
               </label>
               <div class="template-card-btns">
                 ${scopeBtnHtml}
-                <button type="button" class="template-card-add-image-btn" data-id="${t.id}" title="添加参考图">＋图</button>
+                <button type="button" class="template-card-add-image-btn" data-id="${t.id}" title="添加参考图" aria-label="添加参考图"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="13" height="13" rx="2"/><circle cx="7.5" cy="8.5" r="1"/><path d="m4 15 4-4 3 3 2-2 3 3"/><path d="M19 12v7M15.5 15.5h7"/></svg></button>
                 <button type="button" class="template-card-click-btn" data-id="${t.id}" data-name="${escapeHtml(t.name)}" title="点击目标 (在屏幕上定位此模板并点击)">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
