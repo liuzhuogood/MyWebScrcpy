@@ -90,8 +90,14 @@ func main() {
 	// 模板管理与匹配 API
 	templateStorage, err := template.NewStorage("")
 	if err != nil {
-		log.Printf("警告: 初始化模板存储失败: %v", err)
+		log.Printf("警告: 初始化模板存储失败: %v，尝试回退到临时目录", err)
+		fallbackDir := filepath.Join(os.TempDir(), "mywebscrcpy-templates")
+		templateStorage, err = template.NewStorage(fallbackDir)
+		if err != nil {
+			log.Fatalf("致命错误: 模板存储完全无法初始化: %v", err)
+		}
 	}
+	log.Printf("模板存储目录: %s", templateStorage.BaseDir())
 	templateService := template.NewService(adbPath, templateStorage, hub)
 	templateService.SetAutoMatching(*templateMatchingFlag)
 	hub.SetVideoFrameConsumer(templateService)

@@ -28,15 +28,34 @@ type Storage struct {
 	variants  map[string][]image.Image
 }
 
+// DefaultStorageDir keeps the template directory robust and writable when the
+// service is launched by a supervisor without a valid or writable working directory.
+func DefaultStorageDir() string {
+	if dir := strings.TrimSpace(os.Getenv("TEMPLATES_DIR")); dir != "" {
+		return dir
+	}
+	localDir := filepath.Join("data", "templates")
+	if err := os.MkdirAll(localDir, 0755); err == nil {
+		return localDir
+	}
+	if userConfigDir, err := os.UserConfigDir(); err == nil && userConfigDir != "" {
+		return filepath.Join(userConfigDir, "mywebscrcpy", "templates")
+	}
+	if cacheDir, err := os.UserCacheDir(); err == nil && cacheDir != "" {
+		return filepath.Join(cacheDir, "mywebscrcpy", "templates")
+	}
+	return filepath.Join(os.TempDir(), "mywebscrcpy-templates")
+}
+
 // NewStorage initializes a template storage engine using baseDir.
-// If baseDir is empty, "data/templates" is used.
+// If baseDir is empty, DefaultStorageDir() is used.
 func NewStorage(baseDir string) (*Storage, error) {
 	if baseDir == "" {
-		baseDir = filepath.Join("data", "templates")
+		baseDir = DefaultStorageDir()
 	}
 
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create base directory: %w", err)
+		return nil, fmt.Errorf("failed to create base directory (%s): %w", baseDir, err)
 	}
 
 	s := &Storage{

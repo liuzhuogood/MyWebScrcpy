@@ -120,6 +120,30 @@
    - 重启 `mywebscrcpy.service`，服务状态确认 `active`，进程正常常驻（PID: 752157）；
    - 执行 HTTPS 健康检查：`https://10.0.0.6:8080` 返回 `HTTP/1.1 200 OK`。
 
+### 8. 用户
+
+> 看一下为什么10.0.0.6上的模板匹配接口不行，报错
+
+### 8. Antigravity
+
+排查根因：
+1. **工作目录与权限问题**：
+   - `mywebscrcpy.service` 未配置 `WorkingDirectory`，systemd 默认以工作目录 `/` 启动进程；
+   - `template.NewStorage("")` 默认相对路径 `data/templates` 被解析为根目录 `/data/templates`；普通用户 `liuzhuo` 在 `/` 无权创建目录，导致 `mkdir data: permission denied`；
+   - `main.go` 在初次初始化失败后仅打印日志，未做回退兜底，向上抛出 `nil` 存储实例，导致接口收到请求时发生空指针解引用 panic（500 报错）。
+
+修复方案：
+1. **服务配置健全化**：
+   - 在 `10.0.0.6` 的 `/etc/systemd/system/mywebscrcpy.service` 中补齐 `WorkingDirectory=/opt/mywebscrcpy`；
+   - 将 `/opt/mywebscrcpy` 属主修正为 `liuzhuo:liuzhuo`，确保服务可写入 `data/templates`。
+2. **代码多级防崩兜底**：
+   - `internal/template/storage.go` 引入 `DefaultStorageDir()`：按 `TEMPLATES_DIR -> data/templates -> UserConfigDir -> UserCacheDir -> TempDir` 多级回退；
+   - `main.go` 增加强制回退：若初次失败自动回退到系统临时目录，绝对杜绝传递 nil 指针。
+3. **验证结果**：
+   - 服务重启后日志明确显示 `模板存储目录: data/templates`；
+   - `GET /api/templates` 与 `GET /api/templates/status` 均正常返回 200 OK。
+
+
 
 
 
