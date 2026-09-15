@@ -7,13 +7,12 @@ import (
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
+	"log"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/Eyevinn/mp4ff/avc"
-	go264 "github.com/oops1/go.264"
 	"mywebscrcpy/internal/action"
 	"mywebscrcpy/internal/vision"
 	"mywebscrcpy/internal/ws"
@@ -44,20 +43,6 @@ type deviceWorker struct {
 	lastMatches   []MatchResult
 	lastMatchTime time.Time
 	latestFrame   image.Image
-	liveMu        sync.Mutex
-	livePending   *liveFrame
-	liveRunning   bool
-}
-
-type liveFrame struct {
-	image      image.Image
-	frameID    uint64
-	capturedAt time.Time
-}
-
-type streamDecoder struct {
-	sessionID string
-	decoder   *go264.Decoder
 }
 
 // Service orchestrates template management, screen capture, matching workers, and vision publishing.
@@ -70,13 +55,17 @@ type Service struct {
 	interval     time.Duration
 	autoMatching bool
 
-	mu       sync.RWMutex
-	workers  map[string]*deviceWorker
-	closed   bool
-	streamMu sync.Mutex
-	streams  map[string]*streamDecoder
+	mu      sync.RWMutex
+	workers map[string]*deviceWorker
+	closed  bool
 
 	captureScreenFn func(ctx context.Context, serial string) (image.Image, error)
+
+	pyMatcher     *PyMatcher
+	pyStarted     bool
+	pyError       string
+	pyMu          sync.Mutex
+	pyUnavailOnce sync.Once
 }
 
 // NewService creates a new template Service instance.
@@ -97,7 +86,6 @@ func NewService(adbPath string, storage *Storage, publisher VisionPublisher) *Se
 		interval:     defaultMatchInterval,
 		autoMatching: true,
 		workers:      make(map[string]*deviceWorker),
-		streams:      make(map[string]*streamDecoder),
 	}
 	if storage != nil {
 		storage.OnChange(func(serials []string) {
@@ -105,133 +93,55 @@ func NewService(adbPath string, storage *Storage, publisher VisionPublisher) *Se
 				s.TriggerRedetect(ser)
 			}
 		})
+		s.pyMatcher = NewPyMatcher(storage.BaseDir(), s.applyPythonResult)
 	}
 	return s
 }
 
-// ConsumeVideoFrame receives H.264 directly from the in-process scrcpy hub.
-// Decoding remains ordered; matching is deliberately latest-frame-only below.
+// ConsumeVideoFrame receives H.264 directly from the in-process scrcpy hub and
+// forwards the raw encoded frame to the Python matching process (which decodes
+// H264 with PyAV, including CABAC, and runs OpenCV template matching). If the
+// Python matcher is not available, live matching is disabled rather than
+// silently falling back to the built-in decoder.
 func (s *Service) ConsumeVideoFrame(frame ws.VideoFrame) {
 	if frame.Kind != 0 && frame.Kind != 1 && frame.Kind != 2 {
 		return
 	}
-	s.streamMu.Lock()
-	state := s.streams[frame.DeviceID]
-	if state == nil || state.sessionID != frame.SessionID {
-		if state != nil {
-			_ = state.decoder.Close()
-		}
-		state = &streamDecoder{sessionID: frame.SessionID, decoder: go264.NewDecoderWithConfig(go264.DecoderConfig{ForceSoftware: true})}
-		s.streams[frame.DeviceID] = state
-	}
-	annexB, err := h264ToAnnexB(frame.Payload, frame.Kind == 0)
-	if err != nil {
-		s.streamMu.Unlock()
+	if s.pyMatcher == nil {
 		return
 	}
-	decoded, err := state.decoder.Decode(annexB)
-	s.streamMu.Unlock()
-	if err != nil {
+	if !s.PythonMatchingEnabled() {
+		s.notePyUnavailable()
 		return
 	}
-	for _, decodedFrame := range decoded {
-		if decodedFrame == nil || decodedFrame.Width <= 0 || decodedFrame.Height <= 0 || len(decodedFrame.Y) == 0 {
-			continue
-		}
-		gray := image.NewGray(image.Rect(0, 0, decodedFrame.Width, decodedFrame.Height))
-		for y := 0; y < decodedFrame.Height; y++ {
-			copy(gray.Pix[y*gray.Stride:y*gray.Stride+decodedFrame.Width], decodedFrame.Y[y*decodedFrame.StrideY:y*decodedFrame.StrideY+decodedFrame.Width])
-		}
-		s.submitLiveFrame(frame.DeviceID, &liveFrame{image: gray, frameID: frame.FrameID, capturedAt: frame.CapturedAt})
+	// 仅当该设备的模板匹配开关为开启时才转发帧，避免无谓解码与资源占用。
+	if !s.deviceMatchingActive(frame.DeviceID) {
+		return
 	}
+	s.pyMatcher.SubmitFrame(frame.DeviceID, uint8(frame.Kind), frame.FrameID, frame.Payload)
 }
 
-func h264ToAnnexB(payload []byte, config bool) ([]byte, error) {
-	if len(payload) < 1 {
-		return nil, errors.New("empty h264 payload")
-	}
-	if len(payload) >= 4 && payload[0] == 0 && payload[1] == 0 && (payload[2] == 1 || payload[2] == 0 && payload[3] == 1) {
-		return append([]byte(nil), payload...), nil
-	}
-	if config {
-		rec, err := avc.DecodeAVCDecConfRec(payload)
-		if err != nil {
-			return nil, err
-		}
-		var out []byte
-		for _, nals := range [][][]byte{rec.SPSnalus, rec.PPSnalus} {
-			for _, nal := range nals {
-				out = append(out, 0, 0, 0, 1)
-				out = append(out, nal...)
-			}
-		}
-		return out, nil
-	}
-	var out []byte
-	for offset := 0; offset+4 <= len(payload); {
-		size := int(payload[offset])<<24 | int(payload[offset+1])<<16 | int(payload[offset+2])<<8 | int(payload[offset+3])
-		offset += 4
-		if size < 1 || offset+size > len(payload) {
-			return nil, errors.New("invalid avcc frame")
-		}
-		out = append(out, 0, 0, 0, 1)
-		out = append(out, payload[offset:offset+size]...)
-		offset += size
-	}
-	return out, nil
-}
-
-func (s *Service) submitLiveFrame(serial string, frame *liveFrame) {
+// deviceMatchingActive reports whether frames for serial should be forwarded to
+// the Python matcher. A manually disabled worker (switch off) is honored and
+// never re-enabled by incoming frames.
+func (s *Service) deviceMatchingActive(serial string) bool {
 	s.mu.RLock()
-	w := s.workers[serial]
+	w, exists := s.workers[serial]
 	auto := s.autoMatching
 	s.mu.RUnlock()
-	if w == nil && auto {
-		_ = s.SetDeviceMatching(serial, true)
-		s.mu.RLock()
-		w = s.workers[serial]
-		s.mu.RUnlock()
+	if exists {
+		return w.enabled
 	}
-	if w == nil || !w.enabled {
-		return
-	}
-	w.liveMu.Lock()
-	w.livePending = frame
-	if w.liveRunning {
-		w.liveMu.Unlock()
-		return
-	}
-	w.liveRunning = true
-	w.liveMu.Unlock()
-	go func() {
-		for {
-			w.liveMu.Lock()
-			next := w.livePending
-			w.livePending = nil
-			w.liveMu.Unlock()
-			if next == nil {
-				w.liveMu.Lock()
-				w.liveRunning = false
-				w.liveMu.Unlock()
-				return
-			}
-			matches, _ := s.Detect(context.Background(), serial, next.image)
-			w.mu.Lock()
-			w.latestFrame = next.image
-			w.lastMatches = matches
-			w.lastMatchTime = time.Now()
-			w.mu.Unlock()
-			s.broadcastMatchesForFrame(serial, matches, next.frameID, next.capturedAt)
-		}
-	}()
+	return auto
 }
 
-func (s *Service) broadcastMatchesForFrame(serial string, matches []MatchResult, frameID uint64, capturedAt time.Time) {
-	objects := make([]vision.Object, len(matches))
-	for i, m := range matches {
-		objects[i] = vision.Object{Label: m.Name, Confidence: m.Score, X: m.X, Y: m.Y, W: m.W, H: m.H}
-	}
-	s.broadcastResultWithFrame(serial, objects, frameID, capturedAt)
+// notePyUnavailable logs a clear, one-time explanation when the Python matcher
+// is required but unavailable, so users know why live matching is off.
+func (s *Service) notePyUnavailable() {
+	s.pyUnavailOnce.Do(func() {
+		log.Printf("模板匹配未启动：未检测到可用的 Python 匹配环境（需要 python3 + PyAV(av) + OpenCV）。")
+		log.Printf("请安装依赖，或通过环境变量 MYWEBSCRCPY_PYTHON 指定 Python 解释器。详见 docs/python-matching.md。")
+	})
 }
 
 // SetAutoMatching configures whether device matching is enabled automatically on first status inquiry.
@@ -246,6 +156,80 @@ func (s *Service) AutoMatching() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.autoMatching
+}
+
+// StartPythonMatching spawns the Python matching subprocess. On failure the
+// service keeps using the built-in Go matching path.
+func (s *Service) StartPythonMatching() error {
+	if s.pyMatcher == nil {
+		err := errors.New("python matcher not configured")
+		s.setPyError(err)
+		return err
+	}
+	s.pyMu.Lock()
+	defer s.pyMu.Unlock()
+	if s.pyStarted {
+		s.pyError = ""
+		return nil
+	}
+	if err := s.pyMatcher.Start(); err != nil {
+		s.pyError = err.Error()
+		return err
+	}
+	s.pyStarted = true
+	s.pyError = ""
+	return nil
+}
+
+// setPyError records the Python matcher error under the pyMu lock.
+func (s *Service) setPyError(err error) {
+	s.pyMu.Lock()
+	defer s.pyMu.Unlock()
+	if err != nil {
+		s.pyError = err.Error()
+	} else {
+		s.pyError = ""
+	}
+}
+
+// PythonMatchingEnabled reports whether the Python matcher is running.
+func (s *Service) PythonMatchingEnabled() bool {
+	s.pyMu.Lock()
+	defer s.pyMu.Unlock()
+	return s.pyStarted
+}
+
+// PythonMatchingStatus returns (ready, errorReason). ready is true when the
+// Python matcher is running; otherwise errorReason explains what is missing.
+func (s *Service) PythonMatchingStatus() (bool, string) {
+	s.pyMu.Lock()
+	defer s.pyMu.Unlock()
+	return s.pyStarted, s.pyError
+}
+
+// applyPythonResult applies a matching result returned by the Python process to
+// the device worker and broadcasts it to connected clients.
+func (s *Service) applyPythonResult(serial string, frameID uint64, matches []MatchResult) {
+	s.mu.RLock()
+	w, exists := s.workers[serial]
+	auto := s.autoMatching
+	s.mu.RUnlock()
+	// 仅在 worker 不存在且自动匹配开启时创建；用户手动关闭（enabled=false）的不覆盖。
+	if !exists && auto {
+		_ = s.SetDeviceMatching(serial, true)
+		s.mu.RLock()
+		w = s.workers[serial]
+		exists = w != nil
+		s.mu.RUnlock()
+	}
+	if !exists || !w.enabled {
+		return
+	}
+	w.mu.Lock()
+	w.lastMatches = matches
+	w.lastMatchTime = time.Now()
+	w.mu.Unlock()
+	s.BroadcastMatches(serial, matches)
 }
 
 // SetActionSubmitter injects an ActionSubmitter instance into Service.
@@ -676,6 +660,10 @@ func (s *Service) GetDeviceStatus(serial string) DeviceStatus {
 		LastMatches: []MatchResult{},
 	}
 
+	ready, pyErr := s.PythonMatchingStatus()
+	status.PythonReady = ready
+	status.PythonError = pyErr
+
 	if s.storage != nil {
 		tmpls := s.storage.ListTemplates(serial)
 		count := 0
@@ -736,6 +724,10 @@ func (s *Service) Stop() {
 		workers = append(workers, w)
 	}
 	s.mu.Unlock()
+
+	if s.pyMatcher != nil {
+		s.pyMatcher.Close()
+	}
 
 	for _, w := range workers {
 		w.mu.Lock()

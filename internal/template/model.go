@@ -83,6 +83,8 @@ type DeviceStatus struct {
 	ActiveTemplates int           `json:"active_templates"`
 	LastMatchTime   time.Time     `json:"last_match_time,omitempty"`
 	LastMatches     []MatchResult `json:"last_matches,omitempty"`
+	PythonReady     bool          `json:"python_ready"`             // Python 匹配进程是否就绪
+	PythonError     string        `json:"python_error,omitempty"`   // 未就绪时的原因
 }
 
 // CreateTemplateRequest carries parameters to create a new template.

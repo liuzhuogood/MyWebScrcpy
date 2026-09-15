@@ -84,6 +84,10 @@ python3 -m pip install -r scripts/vision/requirements.txt
 python3 scripts/vision/demo_vision.py --url ws://127.0.0.1:8080 --serial 10.0.0.30:5555
 ```
 
+> 内置的**模板匹配**也由内嵌 Python 进程实现（PyAV 解码 + OpenCV 匹配，支持 CABAC）。
+> 环境要求、裸机/Docker/Windows 部署与故障排查见
+> [模板匹配 Python 引擎说明](docs/python-matching.md)。
+
 Vision 接口当前支持协议版本 `1`。显式发送未知版本会收到
 `unsupported_protocol`；省略版本号仍兼容旧客户端。
 

@@ -484,7 +484,11 @@
         liveStatus.className = 'template-live-status active';
         const m = matches[0];
         const pct = Math.round((m.score || 0) * 100);
-        let text = `命中: ${m.template_name} (${pct}%) @ (${m.x}, ${m.y})`;
+        const label = m.name || m.template_name || m.label || m.template_id || '未知目标';
+        const fx = Number(m.x);
+        const fy = Number(m.y);
+        const pos = Number.isFinite(fx) && Number.isFinite(fy) ? ` @ (${fx.toFixed(3)}, ${fy.toFixed(3)})` : '';
+        let text = `命中: ${label} (${pct}%)${pos}`;
         if (matches.length > 1) {
           text += ` 等 ${matches.length} 处`;
         }

@@ -100,6 +100,12 @@ func main() {
 	log.Printf("模板存储目录: %s", templateStorage.BaseDir())
 	templateService := template.NewService(adbPath, templateStorage, hub)
 	templateService.SetAutoMatching(*templateMatchingFlag)
+	if err := templateService.StartPythonMatching(); err != nil {
+		log.Printf("⚠️ 模板匹配初始化失败：%v", err)
+		log.Printf("模板匹配需要 Python 环境（python3 + PyAV(av) + OpenCV）。")
+		log.Printf("请安装依赖，或通过环境变量 MYWEBSCRCPY_PYTHON 指定 Python 解释器（例如 Docker 内置环境）。")
+		log.Printf("未检测到可用 Python 环境时，实时模板匹配将不可用。详见 docs/python-matching.md")
+	}
 	hub.SetVideoFrameConsumer(templateService)
 	defer templateService.Stop()
 	template.RegisterRoutes(mux, templateService)
