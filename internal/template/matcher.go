@@ -173,20 +173,13 @@ func (m *Matcher) MatchWithScene(sc *SceneContext, scene image.Image, tmpl *Temp
 		method = MethodTmCcoeffNormed
 	}
 
-	sceneScale := 1.0
-	if tmpl.SceneHeight > 0 && sc.Height > 0 {
-		sceneScale = float64(sc.Height) / float64(tmpl.SceneHeight)
-	} else if tmpl.SceneWidth > 0 && sc.Width > 0 {
-		sceneScale = float64(sc.Width) / float64(tmpl.SceneWidth)
-	}
-
 	var allCandidates []candidateMatch
 
 	for _, scale := range scales {
 		if scale <= 0 {
 			continue
 		}
-		effectiveScale := scale * sceneScale
+		effectiveScale := scale
 
 		var scaledTmplImg image.Image
 		var tw, th int

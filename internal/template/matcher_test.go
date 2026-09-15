@@ -423,7 +423,7 @@ func TestMatcherEdgeCases(t *testing.T) {
 	}
 }
 
-func TestSceneResolutionAdaptiveMatching(t *testing.T) {
+func TestSceneScaleNotApplied(t *testing.T) {
 	matcher := NewMatcher()
 
 	// Base template created from a 100x100 canvas
@@ -449,7 +449,8 @@ func TestSceneResolutionAdaptiveMatching(t *testing.T) {
 		t.Errorf("Expected scale 1.0 template not to match 2x target with >=0.85, got score %f", resNoScene[0].Score)
 	}
 
-	// Case 2: Template with SceneHeight: 100 -> auto scales by 200/100 = 2.0
+	// Case 2: Even with SceneHeight recorded, scale stays 1.0 (no auto-rescale),
+	// so it still must NOT match the 2x target.
 	tmplAdaptive := &Template{
 		ID:          "tmpl-adaptive",
 		Name:        "icon",
@@ -462,13 +463,28 @@ func TestSceneResolutionAdaptiveMatching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Match failed: %v", err)
 	}
-	if len(resAdaptive) == 0 {
-		t.Fatalf("Expected adaptive resolution match, got 0 matches")
+	if len(resAdaptive) > 0 && resAdaptive[0].Score >= 0.85 {
+		t.Errorf("Expected scene fields NOT to auto-scale the template, got score %f", resAdaptive[0].Score)
 	}
-	if resAdaptive[0].Score < 0.85 {
-		t.Errorf("Expected score >= 0.85, got %f", resAdaptive[0].Score)
+
+	// Case 3: Manual scales=[2.0] matches the 2x target without any scene metadata.
+	tmplManual := &Template{
+		ID:        "tmpl-manual",
+		Name:      "icon",
+		Threshold: 0.85,
+		Scales:    []float64{2.0},
 	}
-	box := resAdaptive[0].PixelBox
+	resManual, err := matcher.Match(scene, tmplManual, tmplImg, MatchOptions{})
+	if err != nil {
+		t.Fatalf("Match failed: %v", err)
+	}
+	if len(resManual) == 0 {
+		t.Fatalf("Expected manual scales=[2.0] to match 2x target, got 0 matches")
+	}
+	if resManual[0].Score < 0.85 {
+		t.Errorf("Expected score >= 0.85, got %f", resManual[0].Score)
+	}
+	box := resManual[0].PixelBox
 	if math.Abs(float64(box.X-60)) > 2 || math.Abs(float64(box.Y-80)) > 2 {
 		t.Errorf("Expected box around (60,80), got (%d, %d)", box.X, box.Y)
 	}
