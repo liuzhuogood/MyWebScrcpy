@@ -103,6 +103,24 @@
   - 四方互斥：UI 检查、ADB 终端、文件管理、模板匹配四个右侧面板完全互斥，打开任意一个自动收起其他面板，避免界面杂乱或层级冲突；
   - 键盘输入：受惠于上一版本的输入守卫，文件管理和模板匹配内的所有文字输入、快捷键原生可用，不再被投屏劫持。
 
+### 7. 用户
+
+> 帮我提取推送一下，部署10.0.0.6上
+
+### 7. Antigravity
+
+执行与部署验证：
+1. **代码提交与推送**：
+   - 提交 Hash: `ece55a1`
+   - 提交信息: `feat(player): 将文件管理与模板匹配改造为右侧自适应占满抽屉面板`
+   - 成功推送至 `origin/main`。
+2. **生产构建与部署 (`10.0.0.6`)**：
+   - 交叉编译 Linux amd64 二进制：`GOOS=linux GOARCH=amd64 go build -o mywebscrcpy-linux-amd64 .`；
+   - 通过 scp 上传至服务器用户目录并原子替换至 `/opt/mywebscrcpy/mywebscrcpy-linux-amd64`；
+   - 重启 `mywebscrcpy.service`，服务状态确认 `active`，进程正常常驻（PID: 752157）；
+   - 执行 HTTPS 健康检查：`https://10.0.0.6:8080` 返回 `HTTP/1.1 200 OK`。
+
+
 
 
 
