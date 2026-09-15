@@ -286,6 +286,7 @@
   <script src="/js/decoder.js"></script>
   <script src="/js/audio.js"></script>
   <script src="/js/picture-in-picture.js"></script>
+  <script src="/js/op-log.js" defer></script>
   <script src="/js/right-panel.js"></script>
   <script src="/js/ui-inspector.js" defer></script>
   <script>
@@ -327,7 +328,7 @@
     });
     document.getElementById('btn-files').addEventListener('click', () => {
       filesFrame.src = `/files.html?serial=${encodeURIComponent(serial)}`;
-      filesDialog.showModal();
+      if (window.RightPanel) { filesDialog.close?.(); filesDialog.hidden=true; window.RightPanel.open(filesDialog); } else filesDialog.showModal();
       setMoreMenu(false);
     });
     // ===== 区域截图 =====
@@ -730,7 +731,7 @@
         alert('复制 BBOX 失败，请确认浏览器已允许剪贴板访问。');
       }
     });
-    document.getElementById('files-dialog-close').addEventListener('click', () => filesDialog.close());
+    document.getElementById('files-dialog-close').addEventListener('click', () => window.RightPanel ? window.RightPanel.close(filesDialog) : filesDialog.close());
     filesDialog.addEventListener('click', (event) => { if (event.target === filesDialog) filesDialog.close(); });
 
     const decoder = new ScrcpyDecoder(canvas);
@@ -1182,16 +1183,21 @@
 
     // ===== 鼠标事件 → scrcpy 触摸事件 =====
     let mouseDown = false;
+    let mouseDownDevicePos = null;
+    let mouseDownTime = 0;
 
     canvas.addEventListener('mousedown', (e) => {
       e.preventDefault();
       if (e.button === 2) {
         // 右键 = 返回
         send(packer.back(KEY_UP));
+        window.OperationLog?.record('key', { label: '返回', keycode: 'KEYCODE_BACK' });
         return;
       }
       mouseDown = true;
       const { x, y } = toDeviceCoords(e.clientX, e.clientY);
+      mouseDownDevicePos = { x, y };
+      mouseDownTime = Date.now();
       send(packer.touch(ACTION_DOWN, POINTER_MOUSE, x, y, 1.0, 0x1, 0x1));
     });
 
@@ -1207,6 +1213,25 @@
       mouseDown = false;
       const { x, y } = toDeviceCoords(e.clientX, e.clientY);
       send(packer.touch(ACTION_UP, POINTER_MOUSE, x, y, 0.0, 0, 0));
+      if (mouseDownDevicePos && window.OperationLog) {
+        const dx = x - mouseDownDevicePos.x;
+        const dy = y - mouseDownDevicePos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const duration = Date.now() - mouseDownTime;
+        if (dist < 15) {
+          if (duration >= 500) {
+            window.OperationLog.record('longpress', { x, y, duration });
+          } else {
+            window.OperationLog.record('tap', { x, y });
+          }
+        } else {
+          window.OperationLog.record('swipe', {
+            x1: mouseDownDevicePos.x, y1: mouseDownDevicePos.y,
+            x2: x, y2: y, duration,
+          });
+        }
+      }
+      mouseDownDevicePos = null;
     });
 
     // 滚轮
@@ -1223,25 +1248,64 @@
 
     // ===== 键盘事件 =====
     // canvas 不能直接获得焦点，监听 window
+    const KEY_LOG_MAP = {
+      [AKEYCODE.DEL]:        { label: '退格',     keycode: 'KEYCODE_DEL' },
+      [AKEYCODE.ENTER]:      { label: '回车',     keycode: 'KEYCODE_ENTER' },
+      [AKEYCODE.TAB]:        { label: 'Tab',      keycode: 'KEYCODE_TAB' },
+      [AKEYCODE.ESCAPE]:     { label: 'ESC',      keycode: 'KEYCODE_ESCAPE' },
+      [AKEYCODE.SPACE]:      { label: '空格',     keycode: 'KEYCODE_SPACE' },
+      [AKEYCODE.DPAD_UP]:    { label: '↑',        keycode: 'KEYCODE_DPAD_UP' },
+      [AKEYCODE.DPAD_DOWN]:  { label: '↓',        keycode: 'KEYCODE_DPAD_DOWN' },
+      [AKEYCODE.DPAD_LEFT]:  { label: '←',        keycode: 'KEYCODE_DPAD_LEFT' },
+      [AKEYCODE.DPAD_RIGHT]: { label: '→',        keycode: 'KEYCODE_DPAD_RIGHT' },
+    };
+    function shouldIgnoreKeyboardEvent(e) {
+      // 1. 忽略修饰键单独按下
+      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return true;
+
+      // 2. 带有 Meta 键（Mac 的 Command 快捷键）或 Alt 组合键，绝不作为手机输入拦截，放行给浏览器
+      if (e.metaKey || (e.altKey && !e.ctrlKey)) return true;
+
+      // 3. 检查事件目标与当前获得焦点的元素
+      const target = e.target;
+      const active = document.activeElement;
+
+      function isExcluded(el) {
+        if (!el) return false;
+        const tag = el.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+        if (el.isContentEditable) return true;
+        // 处于 UI 检查面板内
+        if (el.closest && el.closest('.ui-inspector-panel')) return true;
+        // 处于弹窗或浮层内
+        if (el.closest && el.closest('dialog, .display-size-panel, .more-menu, .capture-actions, .files-modal')) return true;
+        return false;
+      }
+
+      return isExcluded(target) || isExcluded(active);
+    }
+
     window.addEventListener('keydown', (e) => {
-      // 忽略修饰键单独按下
-      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
+      if (shouldIgnoreKeyboardEvent(e)) return;
 
       const result = keyboardEventToKeyCode(e);
       if (result) {
         e.preventDefault();
         send(packer.keyCode(KEY_DOWN, result.keycode, result.meta));
+        const info = KEY_LOG_MAP[result.keycode];
+        if (info) window.OperationLog?.record('key', info);
         return;
       }
-      // 可打印字符 → 文本注入
-      if (e.key.length === 1) {
+      // 可打印字符 → 文本注入（必须无修饰键组合，避免拦截 Ctrl+C 等快捷键）
+      if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
         e.preventDefault();
         send(packer.text(e.key));
+        window.OperationLog?.record('text', { text: e.key });
       }
     });
 
     window.addEventListener('keyup', (e) => {
-      if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta') return;
+      if (shouldIgnoreKeyboardEvent(e)) return;
       const result = keyboardEventToKeyCode(e);
       if (result) {
         e.preventDefault();
@@ -1253,22 +1317,26 @@
     document.getElementById('btn-home').addEventListener('click', () => {
       send(packer.keyCode(KEY_DOWN, AKEYCODE.HOME, 0));
       send(packer.keyCode(KEY_UP, AKEYCODE.HOME, 0));
+      window.OperationLog?.record('key', { label: 'HOME', keycode: 'KEYCODE_HOME' });
     });
     document.getElementById('btn-back').addEventListener('click', () => {
       // BACK_OR_SCREEN_ON: 需要 DOWN 再 UP 才生效
       send(new Uint8Array([4, KEY_DOWN]));
       send(new Uint8Array([4, KEY_UP]));
+      window.OperationLog?.record('key', { label: '返回', keycode: 'KEYCODE_BACK' });
     });
     document.getElementById('btn-recents').addEventListener('click', () => {
       send(packer.keyCode(KEY_DOWN, AKEYCODE.APP_SWITCH, 0));
       send(packer.keyCode(KEY_UP, AKEYCODE.APP_SWITCH, 0));
       setMoreMenu(false);
+      window.OperationLog?.record('key', { label: '最近应用', keycode: 'KEYCODE_APP_SWITCH' });
     });
     document.getElementById('btn-power').addEventListener('click', () => {
       // AKEYCODE_POWER (26): 模拟电源键，亮屏/熄屏切换
       send(packer.keyCode(KEY_DOWN, AKEYCODE.POWER, 0));
       send(packer.keyCode(KEY_UP, AKEYCODE.POWER, 0));
       setMoreMenu(false);
+      window.OperationLog?.record('key', { label: '电源键', keycode: 'KEYCODE_POWER' });
     });
     document.getElementById('btn-rotate').addEventListener('click', () => {
       // 使用 scrcpy 协议的 TypeRotateDevice (type=11) 消息旋转设备
@@ -1371,11 +1439,15 @@
 
     // ===== 触摸事件支持 (移动端) =====
     let touchActive = false;
+    let touchStartDevicePos = null;
+    let touchStartTime = 0;
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const t = e.touches[0];
       touchActive = true;
       const { x, y } = toDeviceCoords(t.clientX, t.clientY);
+      touchStartDevicePos = { x, y };
+      touchStartTime = Date.now();
       send(packer.touch(ACTION_DOWN, POINTER_FINGER_BASE, x, y, t.force || 1.0));
     }, { passive: false });
 
@@ -1393,6 +1465,25 @@
       const t = e.changedTouches[0];
       const { x, y } = toDeviceCoords(t.clientX, t.clientY);
       send(packer.touch(ACTION_UP, POINTER_FINGER_BASE, x, y, 0));
+      if (touchStartDevicePos && window.OperationLog) {
+        const dx = x - touchStartDevicePos.x;
+        const dy = y - touchStartDevicePos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const duration = Date.now() - touchStartTime;
+        if (dist < 15) {
+          if (duration >= 500) {
+            window.OperationLog.record('longpress', { x, y, duration });
+          } else {
+            window.OperationLog.record('tap', { x, y });
+          }
+        } else {
+          window.OperationLog.record('swipe', {
+            x1: touchStartDevicePos.x, y1: touchStartDevicePos.y,
+            x2: x, y2: y, duration,
+          });
+        }
+      }
+      touchStartDevicePos = null;
     });
 
     // 启动投屏连接

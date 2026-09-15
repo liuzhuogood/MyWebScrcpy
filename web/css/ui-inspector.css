@@ -1,7 +1,8 @@
 #ui-inspector-overlay { position:absolute; inset:0; pointer-events:none; z-index:4; }
 .ui-inspector-panel { min-width:0; height:100%; display:flex; flex-direction:column; color:#e8edf7; background:#18202d; border:1px solid #39475d; border-radius:8px; overflow:hidden; }
-.ui-inspector-panel[hidden] { display:none; }
-.ui-inspector-resizer { display:block; grid-column:2; align-self:stretch; width:8px; cursor:col-resize; touch-action:none; background:transparent; }
+.ui-inspector-panel[hidden] { display:none !important; }
+.ui-inspector-resizer { display:none; }
+.player-main.inspector-open .ui-inspector-resizer { display:block; grid-column:2; grid-row:1; align-self:stretch; width:8px; cursor:col-resize; touch-action:none; background:transparent; }
 .ui-inspector-resizer:hover,.ui-inspector-resizer.dragging { background:#165dff; }
 .ui-inspector-head,.ui-inspector-tabs { padding:12px 16px; display:flex; align-items:center; gap:8px; }
 .ui-inspector-head { justify-content:space-between; border-bottom:1px solid #303b4d; }
@@ -96,3 +97,73 @@
     border-color: #9ee5bd;
     background: rgba(158, 229, 189, 0.1);
 }
+
+/* 操作日志 Tab */
+.ui-oplog-list {
+  margin-top: 12px;
+  border: 1px solid #303b4d;
+  border-radius: 8px;
+  overflow-y: auto;
+  max-height: clamp(200px, 50vh, 600px);
+  overscroll-behavior: contain;
+  font: 12px/1.6 ui-monospace, monospace;
+}
+.ui-oplog-placeholder {
+  padding: 16px;
+  text-align: center;
+}
+.ui-oplog-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #232e3d;
+  color: #b9c7dc;
+  transition: background 0.12s;
+  min-width: 0;
+}
+.ui-oplog-row:last-child { border-bottom: none; }
+.ui-oplog-row:hover { background: #222d3f; color: #e8edf7; }
+/* 文本区 */
+.ui-oplog-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 描述模式：显示 desc，隐藏 adb */
+.ui-oplog-adb { display: none; }
+.ui-oplog-desc { display: block; }
+/* ADB 模式：显示 adb，隐藏 desc */
+.ui-oplog-list.mode-adb .ui-oplog-adb { display: block; color: #9ee5bd; }
+.ui-oplog-list.mode-adb .ui-oplog-desc { display: none; }
+/* 操作按钮区：hover 行时出现 */
+.ui-oplog-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 1px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.ui-oplog-row:hover .ui-oplog-actions { opacity: 1; }
+.ui-oplog-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: #7a90ad;
+  cursor: pointer;
+  line-height: 0;
+  transition: background 0.1s, color 0.1s;
+}
+.ui-oplog-btn:hover { background: #2e3f55; color: #e8edf7; }
+.ui-oplog-btn-del:hover { color: #ff9d9d; }
+.ui-oplog-btn-ok { color: #9ee5bd !important; }
+
+
