@@ -241,6 +241,11 @@ body {
   grid-column: 1;
   justify-self: start;
 }
+.player-main.right-panel-open { display:grid; grid-template-columns:minmax(0,1fr) 8px var(--right-width, minmax(420px,1fr)); align-items:center; padding:12px; }
+.right-panel-resizer { display:none; width:8px; align-self:stretch; cursor:col-resize; }
+.right-panel { min-width:0; height:100%; background:#18202d; overflow:auto; }
+.player-main.right-panel-open .right-panel-resizer { display:block; }
+.right-panel-resizer:hover { background:#165dff; }
 .screen-wrap {
   position: relative;
   border-radius: 8px;
@@ -1600,4 +1605,3 @@ body {
     grid-template-columns: 1fr;
   }
 }
-
