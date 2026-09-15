@@ -35,23 +35,57 @@ var upgrader = websocket.Upgrader{
 
 // Hub 管理所有设备的 scrcpy server 会话。
 type Hub struct {
-	adbPath    string
-	jarPath    string
-	portMu     sync.Mutex
-	nextPort   int
-	resultMu   sync.Mutex
-	results    map[string]map[chan vision.Message]string
-	lastResult map[string]vision.Message
-	touchMu    sync.Mutex
-	touchSubs  map[string]map[chan TouchEventMessage]string
-	events     *debuglog.Ring
-	sessionMu  sync.Mutex
-	sessions   map[string]*managedSession
-	recordings *recordingManager
-	replays    *replayManager
-	gates      map[string]*devicegate.Gate
-	gateMu     sync.Mutex
-	commands   *adbcommand.Manager
+	adbPath         string
+	jarPath         string
+	portMu          sync.Mutex
+	nextPort        int
+	resultMu        sync.Mutex
+	results         map[string]map[chan vision.Message]string
+	lastResult      map[string]vision.Message
+	touchMu         sync.Mutex
+	touchSubs       map[string]map[chan TouchEventMessage]string
+	events          *debuglog.Ring
+	sessionMu       sync.Mutex
+	sessions        map[string]*managedSession
+	recordings      *recordingManager
+	replays         *replayManager
+	gates           map[string]*devicegate.Gate
+	gateMu          sync.Mutex
+	commands        *adbcommand.Manager
+	frameConsumerMu sync.RWMutex
+	frameConsumer   VideoFrameConsumer
+}
+
+// VideoFrame is an encoded frame exactly as it arrived from the active scrcpy
+// session. Consumers must return quickly; the hub keeps video fan-out live.
+type VideoFrame struct {
+	DeviceID   string
+	SessionID  string
+	FrameID    uint64
+	PTS        uint64
+	CapturedAt time.Time
+	Kind       scrcpy.FrameKind
+	Width      uint32
+	Height     uint32
+	Payload    []byte
+}
+
+// VideoFrameConsumer receives live scrcpy frames inside the Go process.
+type VideoFrameConsumer interface{ ConsumeVideoFrame(VideoFrame) }
+
+func (h *Hub) SetVideoFrameConsumer(consumer VideoFrameConsumer) {
+	h.frameConsumerMu.Lock()
+	h.frameConsumer = consumer
+	h.frameConsumerMu.Unlock()
+}
+
+func (h *Hub) consumeVideoFrame(frame VideoFrame) {
+	h.frameConsumerMu.RLock()
+	consumer := h.frameConsumer
+	h.frameConsumerMu.RUnlock()
+	if consumer != nil {
+		consumer.ConsumeVideoFrame(frame)
+	}
 }
 
 func NewHub(adbPath, jarPath string) *Hub {

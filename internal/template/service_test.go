@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"image"
+	"math"
 	"os"
 	"sync"
 	"testing"
@@ -334,3 +335,82 @@ func TestService_CaptureScreenDefaultFail(t *testing.T) {
 		t.Errorf("expected captureScreen error on invalid adb binary")
 	}
 }
+
+func TestService_PhysicalResolutionDownscaleAndMatch(t *testing.T) {
+	storage, dir := setupTestStorage(t)
+	defer os.RemoveAll(dir)
+
+	pub := newMockPublisher()
+	svc := NewService("mock_adb", storage, pub)
+	svc.SetInterval(30 * time.Millisecond)
+
+	// Template created based on 1024-scale canvas (e.g. 461x1024)
+	tmplImg := createDistinctiveTemplate(22, 22)
+	tmpl, err := storage.CreateTemplate(CreateTemplateRequest{
+		Name:        "login_btn_1024",
+		Serial:      "dev-hd",
+		Threshold:   0.85,
+		SceneWidth:  461,
+		SceneHeight: 1024,
+	}, tmplImg)
+	if err != nil {
+		t.Fatalf("failed to create template: %v", err)
+	}
+
+	// Verify SceneWidth and SceneHeight persisted
+	savedTmpl, err := storage.GetTemplate(tmpl.ID)
+	if err != nil {
+		t.Fatalf("failed to get template: %v", err)
+	}
+	if savedTmpl.SceneWidth != 461 || savedTmpl.SceneHeight != 1024 {
+		t.Errorf("expected scene dimensions 461x1024, got %dx%d", savedTmpl.SceneWidth, savedTmpl.SceneHeight)
+	}
+
+	// Simulated physical screen at 1080x2400 (scaled ~2.34x)
+	// When downscaled by captureScreenDefault (or scaleImage down to 1024 max dimension),
+	// height becomes 1024, width becomes 461.
+	scene1024 := createPatternImage(461, 1024)
+	pasteImage(scene1024, tmplImg, 100, 200)
+
+	// In the physical screen, everything is 2400/1024 = 2.34375 times larger
+	physicalScreen := scaleImage(scene1024, 1080, 2400)
+
+	// Mock screencap that returns the downscaled image (simulating captureScreenDefault downscaling)
+	svc.SetCaptureScreenFn(func(ctx context.Context, serial string) (image.Image, error) {
+		bounds := physicalScreen.Bounds()
+		maxDim := bounds.Dx()
+		if bounds.Dy() > maxDim {
+			maxDim = bounds.Dy()
+		}
+		if maxDim > 1024 {
+			scale := 1024.0 / float64(maxDim)
+			targetW := int(math.Round(float64(bounds.Dx()) * scale))
+			targetH := int(math.Round(float64(bounds.Dy()) * scale))
+			return scaleImage(physicalScreen, targetW, targetH), nil
+		}
+		return physicalScreen, nil
+	})
+
+	err = svc.SetDeviceMatching("dev-hd", true)
+	if err != nil {
+		t.Fatalf("failed to enable matching: %v", err)
+	}
+
+	msg, err := pub.waitMessage(2 * time.Second)
+	if err != nil {
+		t.Fatalf("timeout waiting for match result: %v", err)
+	}
+
+	if len(msg.Objects) == 0 {
+		t.Fatalf("expected matches after 1024 downscaling, got 0")
+	}
+	if msg.Objects[0].Label != "login_btn_1024" {
+		t.Errorf("expected label login_btn_1024, got %s", msg.Objects[0].Label)
+	}
+	if msg.Objects[0].Confidence < 0.85 {
+		t.Errorf("expected confidence >= 0.85, got %f", msg.Objects[0].Confidence)
+	}
+
+	svc.Stop()
+}
+

@@ -34,18 +34,21 @@ type PixelBox struct {
 
 // Template represents a registered image template for computer vision matching.
 type Template struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Serial    string    `json:"serial"` // "" or "global" denotes global template
-	Threshold float64   `json:"threshold"`
-	Method    string    `json:"method"`
-	Grayscale bool      `json:"grayscale"`
-	Scales    []float64 `json:"scales,omitempty"`
-	Enabled   bool      `json:"enabled"`
-	Width     int       `json:"width"`
-	Height    int       `json:"height"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Serial      string    `json:"serial"` // "" or "global" denotes global template
+	Threshold   float64   `json:"threshold"`
+	Method      string    `json:"method"`
+	Grayscale   bool      `json:"grayscale"`
+	Scales      []float64 `json:"scales,omitempty"`
+	Enabled     bool      `json:"enabled"`
+	Width       int       `json:"width"`
+	Height      int       `json:"height"`
+	ImageCount  int       `json:"image_count"`
+	SceneWidth  int       `json:"scene_width,omitempty"`
+	SceneHeight int       `json:"scene_height,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 // Clone returns a deep copy of the template.
@@ -92,6 +95,8 @@ type CreateTemplateRequest struct {
 	Grayscale   *bool     `json:"grayscale,omitempty"`
 	Scales      []float64 `json:"scales,omitempty"`
 	Enabled     *bool     `json:"enabled,omitempty"`
+	SceneWidth  int       `json:"scene_width,omitempty"`
+	SceneHeight int       `json:"scene_height,omitempty"`
 	ImageBase64 string    `json:"image_base64,omitempty"`
 }
 
@@ -104,6 +109,8 @@ type UpdateTemplateRequest struct {
 	Grayscale   *bool      `json:"grayscale,omitempty"`
 	Scales      *[]float64 `json:"scales,omitempty"`
 	Enabled     *bool      `json:"enabled,omitempty"`
+	SceneWidth  *int       `json:"scene_width,omitempty"`
+	SceneHeight *int       `json:"scene_height,omitempty"`
 	ImageBase64 *string    `json:"image_base64,omitempty"`
 }
 
@@ -163,4 +170,3 @@ type ClickResult struct {
 	Mode         string  `json:"mode"`
 	Executed     bool    `json:"executed"`
 }
-

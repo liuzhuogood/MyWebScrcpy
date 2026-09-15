@@ -422,3 +422,55 @@ func TestMatcherEdgeCases(t *testing.T) {
 		t.Errorf("Expected 0 matches for zero-variance template, got %d", len(solidRes))
 	}
 }
+
+func TestSceneResolutionAdaptiveMatching(t *testing.T) {
+	matcher := NewMatcher()
+
+	// Base template created from a 100x100 canvas
+	tmplImg := createDistinctiveTemplate(20, 20)
+
+	// Actual scene is 200x200 (2x resolution)
+	scene := createPatternImage(200, 200)
+	targetImg := scaleImage(tmplImg, 40, 40)
+	pasteImage(scene, targetImg, 60, 80)
+
+	// Case 1: Template without SceneHeight - scale is 1.0, does not match 2x target
+	tmplNoScene := &Template{
+		ID:        "tmpl-no-scene",
+		Name:      "icon",
+		Threshold: 0.85,
+		Scales:    []float64{1.0},
+	}
+	resNoScene, err := matcher.Match(scene, tmplNoScene, tmplImg, MatchOptions{})
+	if err != nil {
+		t.Fatalf("Match failed: %v", err)
+	}
+	if len(resNoScene) > 0 && resNoScene[0].Score >= 0.85 {
+		t.Errorf("Expected scale 1.0 template not to match 2x target with >=0.85, got score %f", resNoScene[0].Score)
+	}
+
+	// Case 2: Template with SceneHeight: 100 -> auto scales by 200/100 = 2.0
+	tmplAdaptive := &Template{
+		ID:          "tmpl-adaptive",
+		Name:        "icon",
+		Threshold:   0.85,
+		Scales:      []float64{1.0},
+		SceneWidth:  100,
+		SceneHeight: 100,
+	}
+	resAdaptive, err := matcher.Match(scene, tmplAdaptive, tmplImg, MatchOptions{})
+	if err != nil {
+		t.Fatalf("Match failed: %v", err)
+	}
+	if len(resAdaptive) == 0 {
+		t.Fatalf("Expected adaptive resolution match, got 0 matches")
+	}
+	if resAdaptive[0].Score < 0.85 {
+		t.Errorf("Expected score >= 0.85, got %f", resAdaptive[0].Score)
+	}
+	box := resAdaptive[0].PixelBox
+	if math.Abs(float64(box.X-60)) > 2 || math.Abs(float64(box.Y-80)) > 2 {
+		t.Errorf("Expected box around (60,80), got (%d, %d)", box.X, box.Y)
+	}
+}
+

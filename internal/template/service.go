@@ -1,20 +1,22 @@
 package template
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"image"
-	"image/png"
+	_ "image/jpeg"
+	_ "image/png"
 	"math/rand"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/Eyevinn/mp4ff/avc"
+	go264 "github.com/oops1/go.264"
 	"mywebscrcpy/internal/action"
 	"mywebscrcpy/internal/vision"
+	"mywebscrcpy/internal/ws"
 )
 
 const (
@@ -41,20 +43,38 @@ type deviceWorker struct {
 	mu            sync.RWMutex
 	lastMatches   []MatchResult
 	lastMatchTime time.Time
+	latestFrame   image.Image
+	liveMu        sync.Mutex
+	livePending   *liveFrame
+	liveRunning   bool
+}
+
+type liveFrame struct {
+	image      image.Image
+	frameID    uint64
+	capturedAt time.Time
+}
+
+type streamDecoder struct {
+	sessionID string
+	decoder   *go264.Decoder
 }
 
 // Service orchestrates template management, screen capture, matching workers, and vision publishing.
 type Service struct {
-	adbPath   string
-	storage   *Storage
-	matcher   *Matcher
-	publisher VisionPublisher
-	submitter ActionSubmitter
-	interval  time.Duration
+	adbPath      string
+	storage      *Storage
+	matcher      *Matcher
+	publisher    VisionPublisher
+	submitter    ActionSubmitter
+	interval     time.Duration
+	autoMatching bool
 
-	mu      sync.RWMutex
-	workers map[string]*deviceWorker
-	closed  bool
+	mu       sync.RWMutex
+	workers  map[string]*deviceWorker
+	closed   bool
+	streamMu sync.Mutex
+	streams  map[string]*streamDecoder
 
 	captureScreenFn func(ctx context.Context, serial string) (image.Image, error)
 }
@@ -69,14 +89,155 @@ func NewService(adbPath string, storage *Storage, publisher VisionPublisher) *Se
 		submitter = sub
 	}
 	return &Service{
-		adbPath:   adbPath,
-		storage:   storage,
-		matcher:   NewMatcher(),
-		publisher: publisher,
-		submitter: submitter,
-		interval:  defaultMatchInterval,
-		workers:   make(map[string]*deviceWorker),
+		adbPath:      adbPath,
+		storage:      storage,
+		matcher:      NewMatcher(),
+		publisher:    publisher,
+		submitter:    submitter,
+		interval:     defaultMatchInterval,
+		autoMatching: true,
+		workers:      make(map[string]*deviceWorker),
+		streams:      make(map[string]*streamDecoder),
 	}
+}
+
+// ConsumeVideoFrame receives H.264 directly from the in-process scrcpy hub.
+// Decoding remains ordered; matching is deliberately latest-frame-only below.
+func (s *Service) ConsumeVideoFrame(frame ws.VideoFrame) {
+	if frame.Kind != 0 && frame.Kind != 1 && frame.Kind != 2 {
+		return
+	}
+	s.streamMu.Lock()
+	state := s.streams[frame.DeviceID]
+	if state == nil || state.sessionID != frame.SessionID {
+		if state != nil {
+			_ = state.decoder.Close()
+		}
+		state = &streamDecoder{sessionID: frame.SessionID, decoder: go264.NewDecoderWithConfig(go264.DecoderConfig{ForceSoftware: true})}
+		s.streams[frame.DeviceID] = state
+	}
+	annexB, err := h264ToAnnexB(frame.Payload, frame.Kind == 0)
+	if err != nil {
+		s.streamMu.Unlock()
+		return
+	}
+	decoded, err := state.decoder.Decode(annexB)
+	s.streamMu.Unlock()
+	if err != nil {
+		return
+	}
+	for _, decodedFrame := range decoded {
+		if decodedFrame == nil || decodedFrame.Width <= 0 || decodedFrame.Height <= 0 || len(decodedFrame.Y) == 0 {
+			continue
+		}
+		gray := image.NewGray(image.Rect(0, 0, decodedFrame.Width, decodedFrame.Height))
+		for y := 0; y < decodedFrame.Height; y++ {
+			copy(gray.Pix[y*gray.Stride:y*gray.Stride+decodedFrame.Width], decodedFrame.Y[y*decodedFrame.StrideY:y*decodedFrame.StrideY+decodedFrame.Width])
+		}
+		s.submitLiveFrame(frame.DeviceID, &liveFrame{image: gray, frameID: frame.FrameID, capturedAt: frame.CapturedAt})
+	}
+}
+
+func h264ToAnnexB(payload []byte, config bool) ([]byte, error) {
+	if len(payload) < 1 {
+		return nil, errors.New("empty h264 payload")
+	}
+	if len(payload) >= 4 && payload[0] == 0 && payload[1] == 0 && (payload[2] == 1 || payload[2] == 0 && payload[3] == 1) {
+		return append([]byte(nil), payload...), nil
+	}
+	if config {
+		rec, err := avc.DecodeAVCDecConfRec(payload)
+		if err != nil {
+			return nil, err
+		}
+		var out []byte
+		for _, nals := range [][][]byte{rec.SPSnalus, rec.PPSnalus} {
+			for _, nal := range nals {
+				out = append(out, 0, 0, 0, 1)
+				out = append(out, nal...)
+			}
+		}
+		return out, nil
+	}
+	var out []byte
+	for offset := 0; offset+4 <= len(payload); {
+		size := int(payload[offset])<<24 | int(payload[offset+1])<<16 | int(payload[offset+2])<<8 | int(payload[offset+3])
+		offset += 4
+		if size < 1 || offset+size > len(payload) {
+			return nil, errors.New("invalid avcc frame")
+		}
+		out = append(out, 0, 0, 0, 1)
+		out = append(out, payload[offset:offset+size]...)
+		offset += size
+	}
+	return out, nil
+}
+
+func (s *Service) submitLiveFrame(serial string, frame *liveFrame) {
+	s.mu.RLock()
+	w := s.workers[serial]
+	auto := s.autoMatching
+	s.mu.RUnlock()
+	if w == nil && auto {
+		_ = s.SetDeviceMatching(serial, true)
+		s.mu.RLock()
+		w = s.workers[serial]
+		s.mu.RUnlock()
+	}
+	if w == nil || !w.enabled {
+		return
+	}
+	w.liveMu.Lock()
+	w.livePending = frame
+	if w.liveRunning {
+		w.liveMu.Unlock()
+		return
+	}
+	w.liveRunning = true
+	w.liveMu.Unlock()
+	go func() {
+		for {
+			w.liveMu.Lock()
+			next := w.livePending
+			w.livePending = nil
+			w.liveMu.Unlock()
+			if next == nil {
+				w.liveMu.Lock()
+				w.liveRunning = false
+				w.liveMu.Unlock()
+				return
+			}
+			matches, _ := s.Detect(context.Background(), serial, next.image)
+			w.mu.Lock()
+			w.latestFrame = next.image
+			w.lastMatches = matches
+			w.lastMatchTime = time.Now()
+			w.mu.Unlock()
+			s.broadcastMatchesForFrame(serial, matches, next.frameID, next.capturedAt)
+		}
+	}()
+}
+
+func (s *Service) broadcastMatchesForFrame(serial string, matches []MatchResult, frameID uint64, capturedAt time.Time) {
+	objects := make([]vision.Object, len(matches))
+	for i, m := range matches {
+		objects[i] = vision.Object{Label: m.Name, Confidence: m.Score, X: m.X, Y: m.Y, W: m.W, H: m.H}
+	}
+	s.broadcastResultWithFrame(serial, objects, frameID, capturedAt)
+}
+
+// SetAutoMatching configures whether device matching is enabled automatically on first status inquiry.
+func (s *Service) SetAutoMatching(enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.autoMatching = enabled
+}
+
+// AutoMatching returns whether autoMatching is enabled.
+func (s *Service) AutoMatching() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.autoMatching
 }
 
 // SetActionSubmitter injects an ActionSubmitter instance into Service.
@@ -120,45 +281,72 @@ func (s *Service) CaptureScreen(ctx context.Context, serial string) (image.Image
 	return s.captureScreenDefault(ctx, serial)
 }
 
-// captureScreenDefault executes adb screencap to get a PNG image.
-func (s *Service) captureScreenDefault(ctx context.Context, serial string) (image.Image, error) {
-	var lastErr error
-	for attempt := 0; attempt < 2; attempt++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		capCtx, capCancel := context.WithTimeout(ctx, defaultScreenTimeout)
-		cmd := exec.CommandContext(capCtx, s.adbPath, "-s", serial, "exec-out", "screencap", "-p")
-		var out bytes.Buffer
-		cmd.Stdout = &out
-		err := cmd.Run()
-		capCancel()
-
-		if err != nil {
-			lastErr = err
-			time.Sleep(50 * time.Millisecond)
-			continue
-		}
-
-		data := out.Bytes()
-		if len(data) == 0 {
-			lastErr = errors.New("screencap returned empty output")
-			continue
-		}
-
-		img, err := png.Decode(bytes.NewReader(data))
-		if err != nil {
-			lastErr = fmt.Errorf("failed to decode screencap png: %w", err)
-			continue
-		}
-
-		return img, nil
+// ProcessLiveFrame accepts a live frame from the device video stream, runs pure Go matching, and broadcasts results.
+func (s *Service) ProcessLiveFrame(serial string, img image.Image) ([]MatchResult, error) {
+	if img == nil {
+		return nil, ErrInvalidImage
+	}
+	serial = strings.TrimSpace(serial)
+	if serial == "" {
+		return nil, errors.New("serial is required")
 	}
 
-	return nil, fmt.Errorf("captureScreen failed after retries: %w", lastErr)
+	s.mu.RLock()
+	w, exists := s.workers[serial]
+	autoMatch := s.autoMatching
+	s.mu.RUnlock()
+
+	if (!exists || !w.enabled) && autoMatch {
+		_ = s.SetDeviceMatching(serial, true)
+		s.mu.RLock()
+		w = s.workers[serial]
+		exists = w != nil
+		s.mu.RUnlock()
+	}
+
+	if !exists || !w.enabled {
+		return []MatchResult{}, nil
+	}
+
+	w.mu.Lock()
+	w.latestFrame = img
+	w.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	matches, err := s.Detect(ctx, serial, img)
+	if err != nil {
+		return nil, err
+	}
+
+	w.mu.Lock()
+	w.lastMatches = matches
+	w.lastMatchTime = time.Now()
+	w.mu.Unlock()
+
+	s.BroadcastMatches(serial, matches)
+	return matches, nil
+}
+
+// GetLatestFrame returns the latest live frame received for a device.
+func (s *Service) GetLatestFrame(serial string) image.Image {
+	s.mu.RLock()
+	w, exists := s.workers[serial]
+	s.mu.RUnlock()
+
+	if !exists || w == nil {
+		return nil
+	}
+
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	return w.latestFrame
+}
+
+// captureScreenDefault returns an error indicating adb screencap has been replaced by the real-time video stream engine.
+func (s *Service) captureScreenDefault(ctx context.Context, serial string) (image.Image, error) {
+	return nil, errors.New("adb screencap disabled: please use real-time stream engine")
 }
 
 // SetDeviceMatching enables or disables background template matching for a device.
@@ -211,9 +399,15 @@ func (s *Service) SetDeviceMatching(serial string, enabled bool) error {
 		lastMatches: []MatchResult{},
 	}
 	s.workers[serial] = worker
+	hasMockCapture := s.captureScreenFn != nil
 	s.mu.Unlock()
 
-	go s.runWorker(ctx, worker)
+	if hasMockCapture {
+		go s.runWorker(ctx, worker)
+	} else {
+		close(worker.done)
+	}
+
 	return nil
 }
 
@@ -287,6 +481,10 @@ func (s *Service) BroadcastMatches(serial string, matches []MatchResult) {
 
 // broadcastResult sends detected objects to the publisher.
 func (s *Service) broadcastResult(serial string, objects []vision.Object) {
+	s.broadcastResultWithFrame(serial, objects, 0, time.Now())
+}
+
+func (s *Service) broadcastResultWithFrame(serial string, objects []vision.Object, frameID uint64, capturedAt time.Time) {
 	if s.publisher == nil {
 		return
 	}
@@ -297,7 +495,8 @@ func (s *Service) broadcastResult(serial string, objects []vision.Object) {
 		Type:      "detection.result",
 		DeviceID:  serial,
 		SessionID: "",
-		Timestamp: time.Now().UnixMilli(),
+		FrameID:   frameID,
+		Timestamp: capturedAt.UnixMilli(),
 		Objects:   objects,
 	}
 	s.publisher.PublishVisionResult(serial, msg)
@@ -316,7 +515,10 @@ func (s *Service) Detect(ctx context.Context, serial string, img image.Image) ([
 // DetectWithOptions runs detection on an image with specific template IDs and matching options.
 func (s *Service) DetectWithOptions(ctx context.Context, serial string, img image.Image, templateIDs []string, opts MatchOptions) ([]MatchResult, error) {
 	if img == nil {
-		return nil, ErrInvalidImage
+		img = s.GetLatestFrame(serial)
+		if img == nil {
+			return nil, ErrInvalidImage
+		}
 	}
 	if s.storage == nil {
 		return []MatchResult{}, nil
@@ -359,21 +561,22 @@ func (s *Service) DetectWithOptions(ctx context.Context, serial string, img imag
 		default:
 		}
 
-		tmplImg, err := s.storage.GetTemplateImage(t.ID)
+		images, err := s.storage.GetTemplateImages(t.ID)
 		if err != nil {
 			continue
 		}
-
 		mOpts := opts
 		if mOpts.MinScore <= 0 {
 			mOpts.MinScore = t.Threshold
 		}
-
-		matches, err := s.matcher.MatchWithScene(sc, img, t, tmplImg, mOpts)
-		if err != nil {
-			continue
+		var best []MatchResult
+		for _, tmplImg := range images {
+			matches, matchErr := s.matcher.MatchWithScene(sc, img, t, tmplImg, mOpts)
+			if matchErr == nil && len(matches) > 0 && (len(best) == 0 || matches[0].Score > best[0].Score) {
+				best = matches
+			}
 		}
-		allMatches = append(allMatches, matches...)
+		allMatches = append(allMatches, best...)
 	}
 
 	if allMatches == nil {
@@ -386,7 +589,16 @@ func (s *Service) DetectWithOptions(ctx context.Context, serial string, img imag
 func (s *Service) GetDeviceStatus(serial string) DeviceStatus {
 	s.mu.RLock()
 	w, exists := s.workers[serial]
+	auto := s.autoMatching
 	s.mu.RUnlock()
+
+	if !exists && auto {
+		_ = s.SetDeviceMatching(serial, true)
+		s.mu.RLock()
+		w = s.workers[serial]
+		exists = true
+		s.mu.RUnlock()
+	}
 
 	status := DeviceStatus{
 		Serial:      serial,
@@ -599,4 +811,3 @@ func (s *Service) ClickTemplate(ctx context.Context, serial, nameOrID string, op
 		Executed:     executed,
 	}, nil
 }
-

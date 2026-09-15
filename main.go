@@ -40,6 +40,7 @@ var defaultKey []byte
 
 func main() {
 	httpsFlag := flag.Bool("https", false, "启用 HTTPS（使用内置证书）")
+	templateMatchingFlag := flag.Bool("template-matching", true, "模板匹配是否默认自动开启（--template-matching=false 可关闭）")
 	flag.Parse()
 
 	adbPath := findADB()
@@ -91,6 +92,8 @@ func main() {
 		log.Printf("警告: 初始化模板存储失败: %v", err)
 	}
 	templateService := template.NewService(adbPath, templateStorage, hub)
+	templateService.SetAutoMatching(*templateMatchingFlag)
+	hub.SetVideoFrameConsumer(templateService)
 	defer templateService.Stop()
 	template.RegisterRoutes(mux, templateService)
 

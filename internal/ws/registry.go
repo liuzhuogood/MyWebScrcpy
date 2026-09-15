@@ -203,8 +203,16 @@ func (h *Hub) readSharedSession(serial string, ms *managedSession) {
 			ms.sess.close()
 			return
 		}
+		capturedAt := time.Now()
 		buf := encodeFrame(f)
 		cacheAndBroadcast(ms, f, buf)
+		if f.Kind == scrcpy.FrameConfig || f.Kind == scrcpy.FrameKey || f.Kind == scrcpy.FrameDelta {
+			ms.mu.Lock()
+			frameID := ms.frames
+			width, height := ms.width, ms.height
+			ms.mu.Unlock()
+			h.consumeVideoFrame(VideoFrame{DeviceID: serial, SessionID: ms.meta.SessionID, FrameID: frameID, PTS: f.PTS, CapturedAt: capturedAt, Kind: f.Kind, Width: width, Height: height, Payload: append([]byte(nil), f.Payload...)})
+		}
 	}
 }
 
@@ -563,4 +571,3 @@ func (e deviceActionExecutor) executeADB(ctx context.Context, r action.Request) 
 		return errors.New("unsupported_action_for_adb_mode")
 	}
 }
-

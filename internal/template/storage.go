@@ -25,6 +25,7 @@ type Storage struct {
 	mu        sync.RWMutex
 	templates map[string]*Template
 	images    map[string]image.Image
+	variants  map[string][]image.Image
 }
 
 // NewStorage initializes a template storage engine using baseDir.
@@ -42,13 +43,21 @@ func NewStorage(baseDir string) (*Storage, error) {
 		baseDir:   baseDir,
 		templates: make(map[string]*Template),
 		images:    make(map[string]image.Image),
+		variants:  make(map[string][]image.Image),
 	}
 
 	if err := s.loadExisting(); err != nil {
-		return nil, fmt.Errorf("failed to load existing templates: %w", err)
+		return nil, fmt.Errorf("failed to load templates: %w", err)
 	}
 
 	return s, nil
+}
+
+// BaseDir returns the root directory where templates are stored.
+func (s *Storage) BaseDir() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.baseDir
 }
 
 // loadExisting traverses baseDir and populates the in-memory cache.
@@ -98,6 +107,26 @@ func (s *Storage) loadExisting() error {
 
 			s.templates[tmpl.ID] = &tmpl
 			s.images[tmpl.ID] = img
+			variants := []image.Image{img}
+			variantDir := filepath.Join(tmplDir, "variants")
+			if entries, readErr := os.ReadDir(variantDir); readErr == nil {
+				for _, entry := range entries {
+					if entry.IsDir() || filepath.Ext(entry.Name()) != ".png" {
+						continue
+					}
+					f, openErr := os.Open(filepath.Join(variantDir, entry.Name()))
+					if openErr != nil {
+						continue
+					}
+					variant, decodeErr := png.Decode(f)
+					_ = f.Close()
+					if decodeErr == nil {
+						variants = append(variants, variant)
+					}
+				}
+			}
+			s.variants[tmpl.ID] = variants
+			tmpl.ImageCount = len(variants)
 		}
 	}
 
@@ -170,18 +199,21 @@ func (s *Storage) CreateTemplate(req CreateTemplateRequest, img image.Image) (*T
 
 	now := time.Now().UTC()
 	tmpl := &Template{
-		ID:        id,
-		Name:      req.Name,
-		Serial:    serial,
-		Threshold: threshold,
-		Method:    method,
-		Grayscale: grayscale,
-		Scales:    scales,
-		Enabled:   enabled,
-		Width:     w,
-		Height:    h,
-		CreatedAt: now,
-		UpdatedAt: now,
+		ID:          id,
+		Name:        req.Name,
+		Serial:      serial,
+		Threshold:   threshold,
+		Method:      method,
+		Grayscale:   grayscale,
+		Scales:      scales,
+		Enabled:     enabled,
+		Width:       w,
+		Height:      h,
+		ImageCount:  1,
+		SceneWidth:  req.SceneWidth,
+		SceneHeight: req.SceneHeight,
+		CreatedAt:   now,
+		UpdatedAt:   now,
 	}
 
 	s.mu.Lock()
@@ -203,6 +235,7 @@ func (s *Storage) CreateTemplate(req CreateTemplateRequest, img image.Image) (*T
 
 	s.templates[id] = tmpl
 	s.images[id] = img
+	s.variants[id] = []image.Image{img}
 
 	return tmpl.Clone(), nil
 }
@@ -229,6 +262,58 @@ func (s *Storage) GetTemplateImage(id string) (image.Image, error) {
 		return nil, ErrTemplateNotFound
 	}
 	return img, nil
+}
+
+// GetTemplateImages returns every reference image for a template. The first is
+// the original image retained for backwards-compatible downloads.
+func (s *Storage) GetTemplateImages(id string) ([]image.Image, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	images, ok := s.variants[id]
+	if !ok {
+		return nil, ErrTemplateNotFound
+	}
+	return append([]image.Image(nil), images...), nil
+}
+
+func (s *Storage) AddTemplateImage(id string, img image.Image) (*Template, error) {
+	if img == nil || img.Bounds().Dx() < 2 || img.Bounds().Dy() < 2 {
+		return nil, ErrInvalidImage
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tmpl, ok := s.templates[id]
+	if !ok {
+		return nil, ErrTemplateNotFound
+	}
+	variantID := generateID()
+	dir := filepath.Join(s.getTemplateDir(tmpl.Serial, id), "variants")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return nil, err
+	}
+	f, err := os.Create(filepath.Join(dir, variantID+".png"))
+	if err != nil {
+		return nil, err
+	}
+	err = png.Encode(f, img)
+	closeErr := f.Close()
+	if err != nil {
+		return nil, err
+	}
+	if closeErr != nil {
+		return nil, closeErr
+	}
+	s.variants[id] = append(s.variants[id], img)
+	tmpl.ImageCount = len(s.variants[id])
+	tmpl.UpdatedAt = time.Now().UTC()
+	meta, err := json.MarshalIndent(tmpl, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if err = os.WriteFile(filepath.Join(s.getTemplateDir(tmpl.Serial, id), "meta.json"), meta, 0644); err != nil {
+		return nil, err
+	}
+	return tmpl.Clone(), nil
 }
 
 // ListTemplates returns templates accessible to a given device serial, including global templates.
@@ -364,6 +449,14 @@ func (s *Storage) UpdateTemplate(id string, req UpdateTemplateRequest, newImg im
 		updated.Enabled = *req.Enabled
 	}
 
+	if req.SceneWidth != nil {
+		updated.SceneWidth = *req.SceneWidth
+	}
+
+	if req.SceneHeight != nil {
+		updated.SceneHeight = *req.SceneHeight
+	}
+
 	cachedImg := s.images[id]
 	if newImg != nil {
 		bounds := newImg.Bounds()
@@ -397,6 +490,10 @@ func (s *Storage) UpdateTemplate(id string, req UpdateTemplateRequest, newImg im
 
 	s.templates[id] = updated
 	s.images[id] = cachedImg
+	if newImg != nil {
+		s.variants[id] = []image.Image{cachedImg}
+		updated.ImageCount = 1
+	}
 
 	return updated.Clone(), nil
 }
@@ -418,6 +515,7 @@ func (s *Storage) DeleteTemplate(id string) error {
 
 	delete(s.templates, id)
 	delete(s.images, id)
+	delete(s.variants, id)
 
 	return nil
 }
@@ -460,6 +558,17 @@ func writeTemplateFiles(dir string, tmpl *Template, img image.Image) error {
 	}
 	if err := os.WriteFile(metaPath, metaBytes, 0644); err != nil {
 		return fmt.Errorf("failed to write meta.json: %w", err)
+	}
+
+	targetConfig := map[string]interface{}{
+		"name":      tmpl.Name,
+		"threshold": tmpl.Threshold,
+		"grayscale": tmpl.Grayscale,
+		"scales":    tmpl.Scales,
+		"enabled":   tmpl.Enabled,
+	}
+	if targetBytes, err := json.MarshalIndent(targetConfig, "", "  "); err == nil {
+		_ = os.WriteFile(filepath.Join(dir, "target.json"), targetBytes, 0644)
 	}
 
 	imgPath := filepath.Join(dir, "template.png")
@@ -573,5 +682,3 @@ func (s *Storage) FindTemplate(serial, nameOrID string) (*Template, error) {
 
 	return nil, ErrTemplateNotFound
 }
-
-

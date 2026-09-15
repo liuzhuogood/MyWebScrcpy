@@ -55,7 +55,7 @@
     }[s]));
   }
 
-  // ===== 1. 模板匹配总开关控制 (默认不开启) =====
+  // ===== 1. 模板匹配总开关控制 (默认自动开启，可通过启动参数关闭) =====
   function updateMatchingUI(enabled) {
     matchingEnabled = !!enabled;
     if (matchSwitch) {
@@ -68,12 +68,14 @@
   }
 
   async function initMatchingStatus() {
-    updateMatchingUI(false);
     try {
       const res = await fetch(`/api/templates/status?serial=${encodeURIComponent(serial)}`);
       if (!res.ok) return;
       const data = await res.json();
       updateMatchingUI(data.enabled);
+      if (data.enabled) {
+        startMatchesPolling();
+      }
     } catch (err) {
       console.warn('获取模板匹配状态失败:', err);
     }
@@ -196,6 +198,12 @@
       formData.append('serial', targetSerial);
       formData.append('threshold', String(th));
 
+      const screenCanvas = document.getElementById('screen');
+      if (screenCanvas && screenCanvas.width && screenCanvas.height) {
+        formData.append('scene_width', String(screenCanvas.width));
+        formData.append('scene_height', String(screenCanvas.height));
+      }
+
       const submitBtn = document.getElementById('template-save-confirm');
       if (submitBtn) submitBtn.disabled = true;
 
@@ -277,7 +285,7 @@
         <div class="template-card-main">
           <div class="template-card-title-row">
             <span class="template-card-title" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span>
-            <span class="template-card-dim">${t.width || 0}×${t.height || 0}</span>
+            <span class="template-card-dim">${t.width || 0}×${t.height || 0} · ${t.image_count || 1} 图</span>
           </div>
           <div class="template-card-controls">
             <div class="template-card-slider-group">
@@ -291,6 +299,7 @@
               </label>
               <div class="template-card-btns">
                 ${scopeBtnHtml}
+                <button type="button" class="template-card-add-image-btn" data-id="${t.id}" title="添加参考图">＋图</button>
                 <button type="button" class="template-card-click-btn" data-id="${t.id}" data-name="${escapeHtml(t.name)}" title="点击目标 (在屏幕上定位此模板并点击)">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
@@ -355,6 +364,14 @@
         if (success) {
           loadTemplates();
         }
+      });
+    });
+
+    grid.querySelectorAll('.template-card-add-image-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/png,image/jpeg';
+        input.onchange = async () => { const file = input.files && input.files[0]; if (!file) return; const body = new FormData(); body.append('image', file); btn.disabled = true; try { const res = await fetch(`/api/templates/${encodeURIComponent(btn.dataset.id)}/images`, { method:'POST', body }); if (!res.ok) throw new Error(); await loadTemplates(); } catch (_) { alert('添加参考图失败，请重试'); } finally { btn.disabled = false; } };
+        input.click();
       });
     });
 
@@ -496,8 +513,8 @@
       const moreMenu = document.getElementById('more-menu');
       if (moreMenu) moreMenu.hidden = true;
 
-      if (manageDialog && typeof manageDialog.showModal === 'function') {
-        manageDialog.showModal();
+      if (manageDialog) {
+        if (window.RightPanel) { manageDialog.close?.(); manageDialog.hidden = true; window.RightPanel.open(manageDialog); } else manageDialog.showModal?.();
         initMatchingStatus();
         loadTemplates();
       }
@@ -506,7 +523,7 @@
 
   if (manageClose) {
     manageClose.addEventListener('click', () => {
-      if (manageDialog) manageDialog.close();
+      if (manageDialog) { if (window.RightPanel) window.RightPanel.close(manageDialog); else manageDialog.close(); }
     });
   }
 

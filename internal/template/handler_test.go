@@ -16,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 // encodeImageToBase64 encodes an image to base64 PNG string.
@@ -265,6 +267,8 @@ func TestHandler_StatusAndMatches(t *testing.T) {
 	defer ts.Close()
 	defer os.RemoveAll(dir)
 
+	svc.SetAutoMatching(false)
+
 	client := ts.Client()
 
 	// Query status without serial should fail 400
@@ -342,6 +346,32 @@ func TestHandler_StatusAndMatches(t *testing.T) {
 	resp.Body.Close()
 
 	svc.Stop()
+}
+
+func TestHandler_AutoMatching(t *testing.T) {
+	ts, svc, dir := setupTestServer(t)
+	defer ts.Close()
+	defer os.RemoveAll(dir)
+
+	// svc.autoMatching is true by default
+	if !svc.AutoMatching() {
+		t.Fatalf("expected AutoMatching to be true by default")
+	}
+
+	client := ts.Client()
+
+	// Initial query for dev-auto should auto-enable matching
+	resp, err := client.Get(ts.URL + "/api/templates/status?serial=dev-auto")
+	if err != nil {
+		t.Fatalf("GET status failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var status DeviceStatus
+	_ = json.NewDecoder(resp.Body).Decode(&status)
+	if !status.Enabled {
+		t.Errorf("expected enabled true automatically on first status inquiry")
+	}
 }
 
 func TestHandler_Detect(t *testing.T) {
@@ -872,3 +902,74 @@ func TestHandler_CreateTemplate_AutoNameFromFile(t *testing.T) {
 		t.Errorf("expected template name '自定义名称', got %q", created2.Name)
 	}
 }
+
+func TestHandler_FeedWS(t *testing.T) {
+	ts, svc, dir := setupTestServer(t)
+	defer ts.Close()
+	defer os.RemoveAll(dir)
+
+	serial := "dev-feed"
+
+	// Create a distinctive template
+	tmplImg := createDistinctiveTemplate(20, 20)
+	_, err := svc.storage.CreateTemplate(CreateTemplateRequest{
+		Name:      "target_feed",
+		Serial:    serial,
+		Threshold: 0.88,
+	}, tmplImg)
+	if err != nil {
+		t.Fatalf("failed to create template: %v", err)
+	}
+
+	wsURL := "ws" + strings.TrimPrefix(ts.URL, "http") + "/api/templates/feed?serial=" + serial
+	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("failed to dial feed ws: %v", err)
+	}
+	defer ws.Close()
+
+	// Compose screen image containing the template at (30, 40)
+	screenImg := createPatternImage(100, 100)
+	pasteImage(screenImg, tmplImg, 30, 40)
+	var screenBuf bytes.Buffer
+	_ = png.Encode(&screenBuf, screenImg)
+
+	// Send binary frame
+	if err := ws.WriteMessage(websocket.BinaryMessage, screenBuf.Bytes()); err != nil {
+		t.Fatalf("failed to send binary frame: %v", err)
+	}
+
+	// Read response matches JSON
+	_ = ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	msgType, respData, err := ws.ReadMessage()
+	if err != nil {
+		t.Fatalf("failed to read from feed ws: %v", err)
+	}
+	if msgType != websocket.TextMessage {
+		t.Errorf("expected text message, got %d", msgType)
+	}
+
+	var res struct {
+		Type    string         `json:"type"`
+		Count   int            `json:"count"`
+		Matches []*MatchResult `json:"matches"`
+	}
+	if err := json.Unmarshal(respData, &res); err != nil {
+		t.Fatalf("failed to unmarshal ws response: %v", err)
+	}
+	if res.Count < 1 || len(res.Matches) < 1 {
+		t.Fatalf("expected at least 1 match, got %d", res.Count)
+	}
+	if res.Matches[0].Name != "target_feed" {
+		t.Errorf("expected match target_feed, got %q", res.Matches[0].Name)
+	}
+
+	// Verify latest frame was cached in service
+	cachedFrame := svc.GetLatestFrame(serial)
+	if cachedFrame == nil {
+		t.Errorf("expected cached frame in service, got nil")
+	}
+}
+
+
+

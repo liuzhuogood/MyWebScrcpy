@@ -15,7 +15,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
+
+var feedUpgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
 
 // Handler provides HTTP endpoints for template management and detection.
 type Handler struct {
@@ -42,8 +48,34 @@ func RegisterRoutes(mux *http.ServeMux, s *Service) *Handler {
 	mux.HandleFunc("PUT /api/templates/{id}", h.handleUpdateTemplate)
 	mux.HandleFunc("DELETE /api/templates/{id}", h.handleDeleteTemplate)
 	mux.HandleFunc("GET /api/templates/{id}/image", h.handleGetTemplateImage)
+	mux.HandleFunc("POST /api/templates/{id}/images", h.handleAddTemplateImage)
 	mux.HandleFunc("POST /api/templates/click", h.handleClickTemplate)
+	mux.HandleFunc("GET /api/templates/feed", h.handleFeedWS)
 	return h
+}
+
+func (h *Handler) handleAddTemplateImage(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_form", err.Error())
+		return
+	}
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "missing_image", "image is required")
+		return
+	}
+	defer file.Close()
+	img, _, err := image.Decode(file)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_image", "failed to decode uploaded image")
+		return
+	}
+	tmpl, err := h.service.Storage().AddTemplateImage(r.PathValue("id"), img)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "add_template_image_failed", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, tmpl)
 }
 
 // writeJSON marshals value to JSON and writes HTTP response.
@@ -111,6 +143,12 @@ func (h *Handler) handleCreateTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 		if scalesStr := r.FormValue("scales"); scalesStr != "" {
 			req.Scales = parseScales(scalesStr)
+		}
+		if swStr := r.FormValue("scene_width"); swStr != "" {
+			req.SceneWidth, _ = strconv.Atoi(swStr)
+		}
+		if shStr := r.FormValue("scene_height"); shStr != "" {
+			req.SceneHeight, _ = strconv.Atoi(shStr)
 		}
 
 		file, fileHeader, fileErr := r.FormFile("image")
@@ -206,6 +244,16 @@ func (h *Handler) handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		if scalesStr := r.FormValue("scales"); scalesStr != "" {
 			sc := parseScales(scalesStr)
 			req.Scales = &sc
+		}
+		if swStr := r.FormValue("scene_width"); swStr != "" {
+			if sw, parseErr := strconv.Atoi(swStr); parseErr == nil {
+				req.SceneWidth = &sw
+			}
+		}
+		if shStr := r.FormValue("scene_height"); shStr != "" {
+			if sh, parseErr := strconv.Atoi(shStr); parseErr == nil {
+				req.SceneHeight = &sh
+			}
 		}
 
 		file, _, fileErr := r.FormFile("image")
@@ -406,10 +454,13 @@ func (h *Handler) handleDetect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if img == nil && req.Serial != "" {
-		img, err = h.service.CaptureScreen(r.Context(), req.Serial)
-		if err != nil {
-			writeError(w, http.StatusBadGateway, "capture_screen_failed", err.Error())
-			return
+		img = h.service.GetLatestFrame(req.Serial)
+		if img == nil {
+			img, err = h.service.CaptureScreen(r.Context(), req.Serial)
+			if err != nil {
+				writeError(w, http.StatusBadGateway, "capture_screen_failed", err.Error())
+				return
+			}
 		}
 	}
 
@@ -737,3 +788,36 @@ func (h *Handler) handleClickTemplate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
+// handleFeedWS upgrades to WebSocket and processes live image frames from frontend canvas.
+func (h *Handler) handleFeedWS(w http.ResponseWriter, r *http.Request) {
+	serial := strings.TrimSpace(r.URL.Query().Get("serial"))
+	if serial == "" {
+		http.Error(w, "serial is required", http.StatusBadRequest)
+		return
+	}
+
+	conn, err := feedUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+	defer conn.Close()
+
+	for {
+		messageType, data, err := conn.ReadMessage()
+		if err != nil {
+			break
+		}
+
+		if (messageType == websocket.BinaryMessage || messageType == websocket.TextMessage) && len(data) > 0 {
+			img, _, err := image.Decode(bytes.NewReader(data))
+			if err == nil && img != nil {
+				matches, _ := h.service.ProcessLiveFrame(serial, img)
+				_ = conn.WriteJSON(map[string]interface{}{
+					"type":    "matches",
+					"count":   len(matches),
+					"matches": matches,
+				})
+			}
+		}
+	}
+}
