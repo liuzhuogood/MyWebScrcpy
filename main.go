@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"mywebscrcpy/internal/adbshell"
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/scripts"
@@ -211,6 +212,12 @@ func main() {
 	hub.RegisterReplayRoutes(mux)
 	hub.RegisterADBCommandRoutes(mux)
 	hub.RegisterSendKeyRoute(mux)
+
+	// ADB Shell 终端：WebSocket PTY 桥接，每个 serial 独立 session。
+	mux.HandleFunc("/ws/adb-shell", adbshell.Handler(adbPath, func(serial string) bool {
+		_, ok := dm.GetDevice(serial)
+		return ok
+	}))
 	// Python Vision 双向帧/结果通道，以及浏览器检测结果通道。
 	mux.HandleFunc("/api/vision/stream", hub.ServeVisionWS)
 	mux.HandleFunc("/api/vision/results", hub.ServeVisionResults)

@@ -1,0 +1,209 @@
+/* ===== ADB Shell 侧边面板 =====
+ * 布局模式：.player-main.shell-open 激活单行 grid 布局。
+ * 列 1: screen-wrap（投屏自适应居中）
+ * 列 2: adb-shell-resizer（拖拽调节宽度）
+ * 列 3: adb-shell-panel（终端面板，100% 占满工作区高度）
+ */
+
+/* 默认未打开时隐藏 resizer 与 panel */
+.adb-shell-resizer { display: none; }
+.adb-shell-panel[hidden] { display: none !important; }
+
+/* --- 激活布局：player-main grid --- */
+.player-main.shell-open {
+  display: grid;
+  grid-template-columns: max-content 8px minmax(360px, 1fr);
+  grid-template-rows: 100%;
+  height: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 0;
+  overflow: hidden;
+}
+
+.player-main.shell-open.shell-resized {
+  grid-template-columns: minmax(0, 1fr) 8px max(360px, var(--shell-width));
+}
+
+/* 投屏画面容器：位于第 1 列第 1 行，左侧对齐，垂直居中 */
+.player-main.shell-open .screen-wrap {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  justify-self: start;
+  max-height: 100%;
+  min-width: 0;
+}
+
+/* --- Resizer 拖拽把手 --- */
+.player-main.shell-open .adb-shell-resizer {
+  display: block;
+  grid-column: 2;
+  grid-row: 1;
+  align-self: stretch;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  z-index: 10;
+  position: relative;
+}
+.player-main.shell-open .adb-shell-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.15s;
+}
+.player-main.shell-open .adb-shell-resizer:hover::after,
+.player-main.shell-open .adb-shell-resizer.dragging::after {
+  background: #165dff;
+}
+
+/* --- 面板容器：位于第 3 列第 1 行，100% 占满工作区高度 --- */
+.adb-shell-panel {
+  position: relative;
+  grid-column: 3;
+  grid-row: 1;
+  align-self: stretch;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  color: #e8edf7;
+  background: #18202d;
+  border: 1px solid #39475d;
+  border-radius: 8px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* --- 面板头部 --- */
+.adb-shell-head {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid #303b4d;
+  flex-shrink: 0;
+}
+.adb-shell-head strong {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.adb-shell-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #86909c;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.adb-shell-status-dot.connected { background: #00b42a; }
+.adb-shell-status-dot.error     { background: #f53f3f; }
+
+.adb-shell-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.adb-shell-head button {
+  font: inherit;
+  color: #e8edf7;
+  background: #27344a;
+  border: 1px solid #465873;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  line-height: 1.2;
+  font-size: 12px;
+}
+.adb-shell-head button:hover {
+  background: #31405a;
+  border-color: #6680a3;
+}
+
+/* --- xterm.js 容器 --- */
+.adb-shell-xterm-wrap {
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+/* xterm.js 根元素：撑满 wrap */
+.adb-shell-xterm-wrap .xterm {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+/* xterm viewport 需要跟随 */
+.adb-shell-xterm-wrap .xterm-viewport,
+.adb-shell-xterm-wrap .xterm-screen {
+  min-height: 0;
+}
+
+/* --- 断连/错误状态覆盖层 --- */
+.adb-shell-overlay {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  position: absolute;
+  inset: 0;
+  background: rgba(24, 32, 45, 0.88);
+  border-radius: 8px;
+  z-index: 10;
+}
+.adb-shell-overlay.visible { display: flex; }
+.adb-shell-overlay-msg {
+  color: #aebbd0;
+  font-size: 13px;
+  text-align: center;
+}
+.adb-shell-overlay button {
+  font: inherit;
+  color: #e8edf7;
+  background: #27344a;
+  border: 1px solid #465873;
+  border-radius: 6px;
+  padding: 7px 16px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.adb-shell-overlay button:hover { background: #31405a; border-color: #6680a3; }
+
+/* --- 移动端：堆叠在画布下方 --- */
+@media (max-width: 820px) {
+  .adb-shell-resizer { display: none; }
+  .adb-shell-panel {
+    width: 100%;
+    height: min(50vh, 420px);
+    margin-top: 12px;
+    flex: none;
+    align-self: auto;
+  }
+  .player-main.shell-open {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow-y: auto;
+  }
+  .player-main.shell-open .screen-wrap {
+    align-self: center;
+    flex: 0 0 auto;
+  }
+}
