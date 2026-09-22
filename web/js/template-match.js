@@ -1,6 +1,6 @@
 /**
  * template-match.js
- * 负责投屏播放器中的模板管理交互、选区直存模板与实时匹配状态展示。
+ * 负责投屏播放器中的模板资产管理与选区直存模板。
  */
 (() => {
   const params = new URLSearchParams(location.search);
@@ -9,7 +9,6 @@
 
   // DOM Elements
   const btnManage = document.getElementById('btn-template-match') || document.getElementById('btn-template-manage');
-  const matchSwitch = document.getElementById('template-matching-switch');
   const btnSaveTemplate = document.getElementById('capture-save-template');
 
   // Save Dialog Elements
@@ -21,14 +20,11 @@
   const previewSize = document.getElementById('template-preview-size');
   const nameInput = document.getElementById('template-name-input');
   const scopeSelect = document.getElementById('template-scope-select');
-  const thresholdInput = document.getElementById('template-threshold-input');
-  const thresholdDisplay = document.getElementById('template-threshold-display');
 
   // Manage Dialog Elements
   const manageDialog = document.getElementById('template-manage-dialog');
   const manageClose = document.getElementById('template-manage-dialog-close');
   const manageRefresh = document.getElementById('template-manage-refresh');
-  const liveStatus = document.getElementById('template-match-live-status');
   const listContainer = document.getElementById('template-list-container');
   const filterTabs = document.querySelectorAll('.template-tab-btn');
   const btnUpload = document.getElementById('template-btn-upload');
@@ -37,11 +33,8 @@
   const importInput = document.getElementById('template-import-input');
   const btnExport = document.getElementById('template-btn-export');
 
-  // State (matching defaults to false / disabled)
-  let matchingEnabled = false;
   let currentCaptureBlob = null;
   let currentPreviewUrl = null;
-  let matchPollTimer = null;
   let allTemplates = [];
   let currentFilter = 'all';
 
@@ -55,64 +48,7 @@
     }[s]));
   }
 
-  // ===== 1. 模板匹配总开关控制 (默认自动开启，可通过启动参数关闭) =====
-  function updateMatchingUI(enabled) {
-    matchingEnabled = !!enabled;
-    if (matchSwitch) {
-      matchSwitch.checked = matchingEnabled;
-    }
-    if (!matchingEnabled && liveStatus) {
-      liveStatus.className = 'template-live-status';
-      liveStatus.textContent = '未开启';
-    }
-  }
-
-  async function initMatchingStatus() {
-    try {
-      const res = await fetch(`/api/templates/status?serial=${encodeURIComponent(serial)}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      updateMatchingUI(data.enabled);
-      if (data.enabled) {
-        startMatchesPolling();
-      }
-    } catch (err) {
-      console.warn('获取模板匹配状态失败:', err);
-    }
-  }
-
-  if (matchSwitch) {
-    matchSwitch.addEventListener('change', async () => {
-      const targetState = matchSwitch.checked;
-      matchSwitch.disabled = true;
-      try {
-        const res = await fetch('/api/templates/status', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ serial, enabled: targetState }),
-        });
-        if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
-        }
-        const data = await res.json();
-        updateMatchingUI(data.enabled);
-        if (matchingEnabled) {
-          startMatchesPolling();
-        } else {
-          stopMatchesPolling();
-        }
-      } catch (err) {
-        console.error('切换模板匹配状态失败:', err);
-        matchSwitch.checked = !targetState;
-        matchingEnabled = !targetState;
-        alert('切换模板匹配状态失败，请重试');
-      } finally {
-        matchSwitch.disabled = false;
-      }
-    });
-  }
-
-  // ===== 2. 区域截图存为模板 =====
+  // ===== 区域截图存为模板 =====
   if (btnSaveTemplate) {
     btnSaveTemplate.addEventListener('click', async () => {
       const createFn = window.createCaptureCanvas || (typeof createCaptureCanvas === 'function' ? createCaptureCanvas : null);
@@ -148,18 +84,10 @@
         setTimeout(() => nameInput.focus(), 50);
       }
       if (scopeSelect) scopeSelect.value = 'device';
-      if (thresholdInput) thresholdInput.value = '0.80';
-      if (thresholdDisplay) thresholdDisplay.textContent = '0.80';
 
       if (saveDialog && typeof saveDialog.showModal === 'function') {
         saveDialog.showModal();
       }
-    });
-  }
-
-  if (thresholdInput && thresholdDisplay) {
-    thresholdInput.addEventListener('input', () => {
-      thresholdDisplay.textContent = Number(thresholdInput.value).toFixed(2);
     });
   }
 
@@ -190,14 +118,10 @@
 
       const scope = scopeSelect ? scopeSelect.value : 'device';
       const targetSerial = scope === 'global' ? 'global' : serial;
-      const th = thresholdInput ? parseFloat(thresholdInput.value) : 0.8;
-
       const formData = new FormData();
       formData.append('image', currentCaptureBlob, 'template.png');
       formData.append('name', name);
       formData.append('serial', targetSerial);
-      formData.append('threshold', String(th));
-
       const screenCanvas = document.getElementById('screen');
       if (screenCanvas && screenCanvas.width && screenCanvas.height) {
         formData.append('scene_width', String(screenCanvas.width));
@@ -233,7 +157,7 @@
     });
   }
 
-  // ===== 3. 模板管理弹窗与实时匹配状态 =====
+  // ===== 模板管理弹窗 =====
   function getFilteredTemplates() {
     if (currentFilter === 'device') {
       return allTemplates.filter((t) => t.serial === serial);
@@ -262,8 +186,6 @@
       card.dataset.id = t.id;
 
       const isGlobal = t.serial === 'global';
-      const thVal = Number(t.threshold || 0.8).toFixed(2);
-
       const scopeBtnHtml = isGlobal
         ? `<button type="button" class="template-card-scope-btn" data-id="${t.id}" data-action="to-device" title="转为当前设备模板">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -290,24 +212,10 @@
             <span class="template-card-dim">${t.width || 0}×${t.height || 0} · ${t.image_count || 1} 图</span>
           </div>
           <div class="template-card-controls">
-            <div class="template-card-slider-group">
-              <label>阈值 <span class="template-card-th-val" id="th-val-${t.id}">${thVal}</span></label>
-              <input type="range" class="template-card-slider" min="0.50" max="0.99" step="0.01" value="${thVal}" data-id="${t.id}" />
-            </div>
             <div class="template-card-actions">
-              <label class="toggle-switch-ui" title="${t.enabled ? '已启用' : '已停用'}">
-                <input type="checkbox" class="template-card-toggle" data-id="${t.id}" ${t.enabled ? 'checked' : ''} />
-                <span class="slider"></span>
-              </label>
               <div class="template-card-btns">
                 ${scopeBtnHtml}
                 <button type="button" class="template-card-add-image-btn" data-id="${t.id}" title="添加参考图" aria-label="添加参考图"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="13" height="13" rx="2"/><circle cx="7.5" cy="8.5" r="1"/><path d="m4 15 4-4 3 3 2-2 3 3"/><path d="M19 12v7M15.5 15.5h7"/></svg></button>
-                <button type="button" class="template-card-click-btn" data-id="${t.id}" data-name="${escapeHtml(t.name)}" title="点击目标 (在屏幕上定位此模板并点击)">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <circle cx="12" cy="12" r="3"></circle>
-                  </svg>
-                </button>
                 <a href="/api/templates/${encodeURIComponent(t.id)}/image?download=1" class="template-card-dl-btn" title="下载原图" download="${escapeHtml(t.name)}.png">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"></path>
@@ -331,32 +239,6 @@
     listContainer.appendChild(grid);
 
     // 绑定卡片内事件
-    grid.querySelectorAll('.template-card-slider').forEach((slider) => {
-      const id = slider.dataset.id;
-      const displaySpan = document.getElementById(`th-val-${id}`);
-      slider.addEventListener('input', () => {
-        if (displaySpan) displaySpan.textContent = Number(slider.value).toFixed(2);
-      });
-      slider.addEventListener('change', async () => {
-        const th = parseFloat(slider.value);
-        await updateTemplate(id, { threshold: th });
-      });
-    });
-
-    grid.querySelectorAll('.template-card-toggle').forEach((chk) => {
-      const id = chk.dataset.id;
-      chk.addEventListener('change', async () => {
-        const enabled = chk.checked;
-        const success = await updateTemplate(id, { enabled });
-        if (success) {
-          const card = grid.querySelector(`.template-card[data-id="${id}"]`);
-          if (card) card.classList.toggle('disabled', !enabled);
-        } else {
-          chk.checked = !enabled;
-        }
-      });
-    });
-
     grid.querySelectorAll('.template-card-scope-btn').forEach((btn) => {
       const id = btn.dataset.id;
       const action = btn.dataset.action;
@@ -374,38 +256,6 @@
         const input = document.createElement('input'); input.type = 'file'; input.accept = 'image/png,image/jpeg';
         input.onchange = async () => { const file = input.files && input.files[0]; if (!file) return; const body = new FormData(); body.append('image', file); btn.disabled = true; try { const res = await fetch(`/api/templates/${encodeURIComponent(btn.dataset.id)}/images`, { method:'POST', body }); if (!res.ok) throw new Error(); await loadTemplates(); } catch (_) { alert('添加参考图失败，请重试'); } finally { btn.disabled = false; } };
         input.click();
-      });
-    });
-
-    grid.querySelectorAll('.template-card-click-btn').forEach((btn) => {
-      const id = btn.dataset.id;
-      const name = btn.dataset.name;
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        const origColor = btn.style.color;
-        btn.style.color = '#10b981';
-        try {
-          const res = await fetch('/api/templates/click', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ serial, template_id: id, random_offset: false, mode: 'sdk' }),
-          });
-          const data = await res.json();
-          if (!res.ok) {
-            if (data.error === 'template_not_matched') {
-              alert(`未在当前画面匹配到模板 “${name}”`);
-            } else {
-              alert(`点击失败: ${data.message || data.error}`);
-            }
-            return;
-          }
-        } catch (err) {
-          console.error('模板点击失败:', err);
-          alert('请求失败，请重试');
-        } finally {
-          btn.style.color = origColor;
-          btn.disabled = false;
-        }
       });
     });
 
@@ -467,53 +317,6 @@
     }
   }
 
-  // 轮询命中状态
-  async function pollMatches() {
-    if (!liveStatus) return;
-    if (!matchingEnabled) {
-      liveStatus.className = 'template-live-status';
-      liveStatus.textContent = '未开启';
-      return;
-    }
-    try {
-      const res = await fetch(`/api/templates/matches?serial=${encodeURIComponent(serial)}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      const matches = Array.isArray(data.matches) ? data.matches : [];
-      if (matches.length > 0) {
-        liveStatus.className = 'template-live-status active';
-        const m = matches[0];
-        const pct = Math.round((m.score || 0) * 100);
-        const label = m.name || m.template_name || m.label || m.template_id || '未知目标';
-        const fx = Number(m.x);
-        const fy = Number(m.y);
-        const pos = Number.isFinite(fx) && Number.isFinite(fy) ? ` @ (${fx.toFixed(3)}, ${fy.toFixed(3)})` : '';
-        let text = `命中: ${label} (${pct}%)${pos}`;
-        if (matches.length > 1) {
-          text += ` 等 ${matches.length} 处`;
-        }
-        liveStatus.textContent = text;
-      } else {
-        liveStatus.className = 'template-live-status';
-        liveStatus.textContent = '未匹配到目标';
-      }
-    } catch (_) {}
-  }
-
-  function startMatchesPolling() {
-    stopMatchesPolling();
-    if (!matchingEnabled) return;
-    pollMatches();
-    matchPollTimer = setInterval(pollMatches, 1000);
-  }
-
-  function stopMatchesPolling() {
-    if (matchPollTimer) {
-      clearInterval(matchPollTimer);
-      matchPollTimer = null;
-    }
-  }
-
   if (btnManage) {
     btnManage.addEventListener('click', () => {
       const moreMenu = document.getElementById('more-menu');
@@ -521,7 +324,6 @@
 
       if (manageDialog) {
         if (window.RightPanel) { manageDialog.close?.(); manageDialog.hidden = true; window.RightPanel.open(manageDialog); } else manageDialog.showModal?.();
-        initMatchingStatus();
         loadTemplates();
       }
     });
@@ -533,16 +335,9 @@
     });
   }
 
-  if (manageDialog) {
-    manageDialog.addEventListener('close', () => {
-      stopMatchesPolling();
-    });
-  }
-
   if (manageRefresh) {
     manageRefresh.addEventListener('click', () => {
       loadTemplates();
-      pollMatches();
     });
   }
 

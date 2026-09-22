@@ -10,29 +10,18 @@ const (
 	MethodTmCcoeffNormed = "TM_CCOEFF_NORMED"
 	MethodTmSqdiffNormed = "TM_SQDIFF_NORMED"
 
-	DefaultThreshold    = 0.88
-	DefaultIoUThreshold = 0.35
-	DefaultMaxResults   = 10
-	GlobalSerial        = "global"
+	DefaultThreshold = 0.88
+	GlobalSerial     = "global"
 )
 
 var (
-	ErrTemplateNotFound   = errors.New("template not found")
-	ErrTemplateNotMatched = errors.New("template not matched on screen")
-	ErrInvalidImage       = errors.New("invalid image")
-	ErrInvalidTemplate    = errors.New("invalid template")
-	ErrTemplateExists     = errors.New("template already exists")
+	ErrTemplateNotFound = errors.New("template not found")
+	ErrInvalidImage     = errors.New("invalid image")
+	ErrInvalidTemplate  = errors.New("invalid template")
+	ErrTemplateExists   = errors.New("template already exists")
 )
 
-// PixelBox represents pixel coordinates and dimensions of a matched bounding box.
-type PixelBox struct {
-	X      int `json:"x"`
-	Y      int `json:"y"`
-	Width  int `json:"width"`
-	Height int `json:"height"`
-}
-
-// Template represents a registered image template for computer vision matching.
+// Template represents a registered image asset.
 type Template struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
@@ -64,29 +53,6 @@ func (t *Template) Clone() *Template {
 	return &cp
 }
 
-// MatchResult represents a single detection result of a template in a scene.
-type MatchResult struct {
-	TemplateID string   `json:"template_id"`
-	Name       string   `json:"name"`
-	Score      float64  `json:"score"`
-	X          float64  `json:"x"` // normalized top-left x in [0, 1]
-	Y          float64  `json:"y"` // normalized top-left y in [0, 1]
-	W          float64  `json:"w"` // normalized width in [0, 1]
-	H          float64  `json:"h"` // normalized height in [0, 1]
-	PixelBox   PixelBox `json:"pixel_box"`
-}
-
-// DeviceStatus tracks template matching execution status for a specific device.
-type DeviceStatus struct {
-	Serial          string        `json:"serial"`
-	Enabled         bool          `json:"enabled"`
-	ActiveTemplates int           `json:"active_templates"`
-	LastMatchTime   time.Time     `json:"last_match_time,omitempty"`
-	LastMatches     []MatchResult `json:"last_matches,omitempty"`
-	PythonReady     bool          `json:"python_ready"`             // Python 匹配进程是否就绪
-	PythonError     string        `json:"python_error,omitempty"`   // 未就绪时的原因
-}
-
 // CreateTemplateRequest carries parameters to create a new template.
 type CreateTemplateRequest struct {
 	ID          string    `json:"id,omitempty"`
@@ -116,22 +82,6 @@ type UpdateTemplateRequest struct {
 	ImageBase64 *string    `json:"image_base64,omitempty"`
 }
 
-// MatchRequest carries parameters for detecting templates in an image.
-type MatchRequest struct {
-	Serial      string   `json:"serial,omitempty"`
-	TemplateIDs []string `json:"template_ids,omitempty"`
-	MinScore    float64  `json:"min_score,omitempty"`
-	MaxResults  int      `json:"max_results,omitempty"`
-	ImageBase64 string   `json:"image_base64,omitempty"`
-}
-
-// MatchOptions configures matching execution behavior.
-type MatchOptions struct {
-	MinScore     float64
-	MaxResults   int
-	IoUThreshold float64
-}
-
 // NormalizeSerial returns GlobalSerial if serial is empty or matches GlobalSerial.
 func NormalizeSerial(serial string) string {
 	s := strings.TrimSpace(serial)
@@ -139,36 +89,4 @@ func NormalizeSerial(serial string) string {
 		return GlobalSerial
 	}
 	return s
-}
-
-// ClickOptions configures template click execution behavior.
-type ClickOptions struct {
-	RandomOffset bool   `json:"random_offset"`
-	Mode         string `json:"mode,omitempty"`
-	Humanize     bool   `json:"humanize,omitempty"`
-	DurationMS   int64  `json:"duration_ms,omitempty"`
-}
-
-// ClickRequest carries HTTP request parameters for clicking a template.
-type ClickRequest struct {
-	Serial       string `json:"serial"`
-	Name         string `json:"name"`
-	TemplateID   string `json:"template_id,omitempty"`
-	RandomOffset bool   `json:"random_offset,omitempty"`
-	Mode         string `json:"mode,omitempty"`
-	Humanize     bool   `json:"humanize,omitempty"`
-	DurationMS   int64  `json:"duration_ms,omitempty"`
-}
-
-// ClickResult describes the outcome of a template click action.
-type ClickResult struct {
-	OK           bool    `json:"ok"`
-	TemplateID   string  `json:"template_id"`
-	TemplateName string  `json:"template_name"`
-	Score        float64 `json:"score"`
-	X            float64 `json:"x"`
-	Y            float64 `json:"y"`
-	RandomOffset bool    `json:"random_offset"`
-	Mode         string  `json:"mode"`
-	Executed     bool    `json:"executed"`
 }

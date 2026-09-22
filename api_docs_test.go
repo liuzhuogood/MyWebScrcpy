@@ -73,16 +73,12 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"/api/vision/results",
 		"/api/vision/stats",
 		"/api/vision/debug",
-		// 模板匹配
+		// 模板管理
 		"/api/templates",
 		"/api/templates/export",
 		"/api/templates/import",
 		"/api/templates/{id}",
 		"/api/templates/{id}/image",
-		"/api/templates/status",
-		"/api/templates/matches",
-		"/api/templates/detect",
-		"/api/templates/click",
 		// 系统元接口
 		"/api/openapi.json",
 	}
@@ -145,12 +141,6 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"TemplatesListResponse",
 		"CreateTemplateRequest",
 		"UpdateTemplateRequest",
-		"TemplateStatusResponse",
-		"UpdateTemplateStatusRequest",
-		"TemplateMatchResult",
-		"TemplateMatchesResponse",
-		"TemplateDetectRequest",
-		"TemplateDetectResponse",
 	}
 
 	for _, schemaName := range expectedSchemas {

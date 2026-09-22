@@ -2301,7 +2301,7 @@
     "/api/templates": {
       "get": {
         "tags": [
-          "模板匹配"
+          "模板管理"
         ],
         "summary": "获取模板列表",
         "description": "查询指定设备关联及全局共享的所有模板列表，支持通过 serial 过滤（默认包含当前设备与 global 模板）。",
@@ -2331,10 +2331,10 @@
       },
       "post": {
         "tags": [
-          "模板匹配"
+          "模板管理"
         ],
         "summary": "创建模板",
-        "description": "创建新的匹配模板。支持 multipart/form-data 文件上传或 JSON/Base64 图片，可设定名称、所属设备、匹配阈值与多尺度列表。",
+        "description": "创建模板图片资产。支持 multipart/form-data 文件上传或 JSON/Base64 图片，可设定名称和所属设备。",
         "requestBody": {
           "required": true,
           "content": {
@@ -2387,7 +2387,7 @@
     "/api/templates/export": {
       "get": {
         "tags": [
-          "模板匹配"
+          "模板管理"
         ],
         "summary": "导出模板 ZIP 压缩包",
         "description": "按设备 serial 与生效范围 scope（all / device / global）导出模板 PNG 压缩包。",
@@ -2434,7 +2434,7 @@
     "/api/templates/import": {
       "post": {
         "tags": [
-          "模板匹配"
+          "模板管理"
         ],
         "summary": "导入模板 ZIP 压缩包",
         "description": "解压上传的 ZIP 包（内含 PNG 图像），自动注册为指定设备或全局模板。",
@@ -2508,7 +2508,7 @@
     "/api/templates/{id}": {
       "get": {
         "tags": [
-          "模板匹配"
+          "模板管理"
         ],
         "summary": "获取模板详情",
         "description": "根据模板 ID 查询详细配置参数。",
@@ -2548,10 +2548,10 @@
       },
       "put": {
         "tags": [
-          "模板匹配"
+          "模板管理"
         ],
         "summary": "更新模板",
-        "description": "根据模板 ID 更新名称、所属设备、匹配阈值、多尺度或启用状态。",
+        "description": "根据模板 ID 更新名称、所属设备或图片等资产元数据。",
         "parameters": [
           {
             "name": "id",
@@ -2608,7 +2608,7 @@
       },
       "delete": {
         "tags": [
-          "模板匹配"
+          "模板管理"
         ],
         "summary": "删除模板",
         "description": "删除指定模板及其持久化文件。",
@@ -2650,7 +2650,7 @@
     "/api/templates/{id}/image": {
       "get": {
         "tags": [
-          "模板匹配"
+          "模板管理"
         ],
         "summary": "获取模板图像",
         "description": "返回指定模板的原始 PNG 图像二进制数据。",
@@ -2688,219 +2688,6 @@
           },
           "404": {
             "description": "模板未找到",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/templates/status": {
-      "get": {
-        "tags": [
-          "模板匹配"
-        ],
-        "summary": "查询设备模板匹配状态",
-        "description": "查询指定设备后台匹配 Worker 的运行状态与活跃模板数量。",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/serial"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "设备匹配状态",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateStatusResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "缺少 serial 参数",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "模板匹配"
-        ],
-        "summary": "控制设备模板匹配开关",
-        "description": "开启或停止针对指定设备的后台模板匹配服务。",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateTemplateStatusRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "更新后的设备匹配状态",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateStatusResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "缺少 serial 或参数错误",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/templates/matches": {
-      "get": {
-        "tags": [
-          "模板匹配"
-        ],
-        "summary": "获取设备最新匹配命中结果",
-        "description": "查询指定设备最新一次匹配的命中目标列表及置信度、坐标数据。",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/serial"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "匹配命中列表",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateMatchesResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "缺少 serial 参数",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/templates/detect": {
-      "post": {
-        "tags": [
-          "模板匹配"
-        ],
-        "summary": "执行即时模板匹配检测",
-        "description": "在上传的图片或指定设备当前屏幕截图上执行即时模板匹配，返回匹配命中结果。",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TemplateDetectRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "即时匹配结果",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateDetectResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "缺少图片或设备",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/templates/click": {
-      "post": {
-        "tags": [
-          "模板匹配"
-        ],
-        "summary": "根据模板名称或ID在屏幕上匹配并点击目标",
-        "description": "根据模板名称或ID在设备屏幕上执行匹配。若命中则自动点击其几何中心；支持开启随机小范围微偏移（保持在模板边界内）；支持选择 sdk（默认）或 adb 点击模式（包含拟人化物理手指微偏移与按压时长）。未匹配返回 422 报错。",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TemplateClickRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "点击成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TemplateClickResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "缺少设备号或模板标识",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "模板不存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "当前画面未匹配到该模板",
             "content": {
               "application/json": {
                 "schema": {
@@ -4571,7 +4358,7 @@
               "type": "number"
             },
             "example": [
-              1.0
+              1
             ]
           },
           "enabled": {
@@ -4705,286 +4492,6 @@
             "type": "string"
           }
         }
-      },
-      "TemplateStatusResponse": {
-        "type": "object",
-        "description": "设备模板匹配状态",
-        "properties": {
-          "serial": {
-            "type": "string",
-            "example": "emulator-5554"
-          },
-          "enabled": {
-            "type": "boolean",
-            "example": true
-          },
-          "active_templates": {
-            "type": "integer",
-            "example": 3
-          },
-          "last_match_time": {
-            "type": "string",
-            "example": "2026-09-14T23:00:00Z"
-          }
-        },
-        "required": [
-          "serial",
-          "enabled"
-        ]
-      },
-      "UpdateTemplateStatusRequest": {
-        "type": "object",
-        "description": "修改设备模板匹配开关",
-        "properties": {
-          "serial": {
-            "type": "string",
-            "example": "emulator-5554"
-          },
-          "enabled": {
-            "type": "boolean",
-            "example": true
-          }
-        },
-        "required": [
-          "serial",
-          "enabled"
-        ]
-      },
-      "TemplateMatchResult": {
-        "type": "object",
-        "description": "单项模板匹配结果",
-        "properties": {
-          "template_id": {
-            "type": "string",
-            "example": "tpl_1710400000_abcd1234"
-          },
-          "template_name": {
-            "type": "string",
-            "example": "确认按钮"
-          },
-          "score": {
-            "type": "number",
-            "example": 0.94
-          },
-          "x": {
-            "type": "integer",
-            "example": 100
-          },
-          "y": {
-            "type": "integer",
-            "example": 200
-          },
-          "width": {
-            "type": "integer",
-            "example": 80
-          },
-          "height": {
-            "type": "integer",
-            "example": 36
-          },
-          "normalized_x": {
-            "type": "number",
-            "example": 0.0925
-          },
-          "normalized_y": {
-            "type": "number",
-            "example": 0.0833
-          },
-          "normalized_w": {
-            "type": "number",
-            "example": 0.074
-          },
-          "normalized_h": {
-            "type": "number",
-            "example": 0.015
-          },
-          "matched_at": {
-            "type": "integer",
-            "example": 1710400000000
-          }
-        },
-        "required": [
-          "template_id",
-          "template_name",
-          "score",
-          "x",
-          "y",
-          "width",
-          "height"
-        ]
-      },
-      "TemplateMatchesResponse": {
-        "type": "object",
-        "description": "设备实时模板匹配命中列表",
-        "properties": {
-          "serial": {
-            "type": "string",
-            "example": "emulator-5554"
-          },
-          "matches": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TemplateMatchResult"
-            }
-          },
-          "count": {
-            "type": "integer",
-            "example": 1
-          }
-        },
-        "required": [
-          "serial",
-          "matches",
-          "count"
-        ]
-      },
-      "TemplateDetectRequest": {
-        "type": "object",
-        "description": "即时模板匹配检测请求",
-        "properties": {
-          "serial": {
-            "type": "string",
-            "example": "emulator-5554"
-          },
-          "image_base64": {
-            "type": "string"
-          },
-          "template_ids": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "min_score": {
-            "type": "number",
-            "example": 0.8
-          },
-          "max_results": {
-            "type": "integer",
-            "example": 10
-          }
-        }
-      },
-      "TemplateDetectResponse": {
-        "type": "object",
-        "description": "即时模板匹配检测响应",
-        "properties": {
-          "matches": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TemplateMatchResult"
-            }
-          },
-          "count": {
-            "type": "integer",
-            "example": 1
-          }
-        },
-        "required": [
-          "matches",
-          "count"
-        ]
-      },
-      "TemplateClickRequest": {
-        "type": "object",
-        "description": "模板匹配并点击请求参数",
-        "properties": {
-          "serial": {
-            "type": "string",
-            "description": "设备序列号",
-            "example": "10.0.0.30:5555"
-          },
-          "name": {
-            "type": "string",
-            "description": "模板名称",
-            "example": "确认按钮"
-          },
-          "template_id": {
-            "type": "string",
-            "description": "模板 ID（与 name 二选一）",
-            "example": "tmpl_1710400000_a1b2c3"
-          },
-          "random_offset": {
-            "type": "boolean",
-            "default": false,
-            "description": "是否在模板目标区域内施加随机微偏移（默认点击精确几何中心）"
-          },
-          "mode": {
-            "type": "string",
-            "enum": [
-              "sdk",
-              "adb"
-            ],
-            "default": "sdk",
-            "description": "点击执行通道：sdk（默认）或 adb"
-          },
-          "humanize": {
-            "type": "boolean",
-            "default": false,
-            "description": "是否开启拟人化触摸（adb 模式下产生手指高斯接触微偏移与真实按压时长）"
-          },
-          "duration_ms": {
-            "type": "integer",
-            "description": "滑动或按压时长毫秒数"
-          }
-        },
-        "required": [
-          "serial"
-        ]
-      },
-      "TemplateClickResponse": {
-        "type": "object",
-        "description": "模板点击执行响应结果",
-        "properties": {
-          "ok": {
-            "type": "boolean",
-            "example": true
-          },
-          "template_id": {
-            "type": "string",
-            "example": "tmpl_1710400000_a1b2c3"
-          },
-          "template_name": {
-            "type": "string",
-            "example": "确认按钮"
-          },
-          "score": {
-            "type": "number",
-            "example": 0.96
-          },
-          "x": {
-            "type": "number",
-            "description": "实际点击落点 X 归一化坐标",
-            "example": 0.65
-          },
-          "y": {
-            "type": "number",
-            "description": "实际点击落点 Y 归一化坐标",
-            "example": 0.72
-          },
-          "random_offset": {
-            "type": "boolean",
-            "example": false
-          },
-          "mode": {
-            "type": "string",
-            "example": "sdk"
-          },
-          "executed": {
-            "type": "boolean",
-            "example": true
-          }
-        },
-        "required": [
-          "ok",
-          "template_id",
-          "template_name",
-          "score",
-          "x",
-          "y",
-          "mode",
-          "executed"
-        ]
       }
     }
   }

@@ -159,28 +159,6 @@ Go 返回：
 {"type":"action.request","request_id":"tap-human-001","action":"tap","x":0.5,"y":0.4,"humanize":true,"expires_ms":1000}
 ```
 
-### 模板自动定位点击 API
-
-支持直接传入模板名称或模板 ID，服务端在设备屏幕上自动定位匹配并触发点击：
-
-```http
-POST /api/templates/click
-Content-Type: application/json
-
-{
-  "serial": "10.0.0.30:5555",
-  "name": "确认按钮",
-  "random_offset": false,
-  "mode": "sdk"
-}
-```
-
-- `name` / `template_id`：模板名称或模板 ID；
-- `random_offset`：布尔值（默认 `false`）。为 `true` 时在模板目标框内做随机小范围微偏移（严格限制在目标框内部），模拟人手点击按钮不同位置；
-- `mode`：`"sdk"`（默认）或 `"adb"`；
-- 若未在当前画面匹配到该模板，接口返回 `422 Unprocessable Entity`（`"error": "template_not_matched"`）；模板不存在返回 `404 Not Found`。
-
-
 ## 6. Python 核心循环：直接处理视频流帧
 
 Python 收到 binary 视频包后，先用 PyAV 解码为内存中的 BGR 图像，再把 `image` 直接交给识别器。下面的 `detect(image)` 可以替换为 OpenCV 模板匹配、YOLO 或 OCR；整个过程不产生本地帧文件。

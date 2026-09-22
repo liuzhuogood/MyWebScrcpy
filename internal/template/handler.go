@@ -15,15 +15,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
 
-var feedUpgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool { return true },
-}
-
-// Handler provides HTTP endpoints for template management and detection.
+// Handler provides HTTP endpoints for template asset management.
 type Handler struct {
 	service *Service
 }
@@ -40,17 +34,11 @@ func RegisterRoutes(mux *http.ServeMux, s *Service) *Handler {
 	mux.HandleFunc("POST /api/templates", h.handleCreateTemplate)
 	mux.HandleFunc("GET /api/templates/export", h.handleExportTemplates)
 	mux.HandleFunc("POST /api/templates/import", h.handleImportTemplates)
-	mux.HandleFunc("GET /api/templates/status", h.handleGetStatus)
-	mux.HandleFunc("PUT /api/templates/status", h.handleSetStatus)
-	mux.HandleFunc("GET /api/templates/matches", h.handleGetMatches)
-	mux.HandleFunc("POST /api/templates/detect", h.handleDetect)
 	mux.HandleFunc("GET /api/templates/{id}", h.handleGetTemplate)
 	mux.HandleFunc("PUT /api/templates/{id}", h.handleUpdateTemplate)
 	mux.HandleFunc("DELETE /api/templates/{id}", h.handleDeleteTemplate)
 	mux.HandleFunc("GET /api/templates/{id}/image", h.handleGetTemplateImage)
 	mux.HandleFunc("POST /api/templates/{id}/images", h.handleAddTemplateImage)
-	mux.HandleFunc("POST /api/templates/click", h.handleClickTemplate)
-	mux.HandleFunc("GET /api/templates/feed", h.handleFeedWS)
 	return h
 }
 
@@ -75,7 +63,6 @@ func (h *Handler) handleAddTemplateImage(w http.ResponseWriter, r *http.Request)
 		writeError(w, http.StatusBadRequest, "add_template_image_failed", err.Error())
 		return
 	}
-	h.service.TriggerRedetect(tmpl.Serial)
 	writeJSON(w, http.StatusCreated, tmpl)
 }
 
@@ -189,7 +176,6 @@ func (h *Handler) handleCreateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.service.TriggerRedetect(tmpl.Serial)
 	writeJSON(w, http.StatusCreated, tmpl)
 }
 
@@ -279,7 +265,6 @@ func (h *Handler) handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	oldTmpl, _ := h.service.Storage().GetTemplate(id)
 	updated, err := h.service.Storage().UpdateTemplate(id, req, img)
 	if err != nil {
 		status := http.StatusBadRequest
@@ -290,17 +275,12 @@ func (h *Handler) handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if oldTmpl != nil && oldTmpl.Serial != updated.Serial {
-		h.service.TriggerRedetect(oldTmpl.Serial)
-	}
-	h.service.TriggerRedetect(updated.Serial)
 	writeJSON(w, http.StatusOK, updated)
 }
 
 // handleDeleteTemplate DELETE /api/templates/{id}
 func (h *Handler) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	oldTmpl, _ := h.service.Storage().GetTemplate(id)
 	err := h.service.Storage().DeleteTemplate(id)
 	if err != nil {
 		if errors.Is(err, ErrTemplateNotFound) {
@@ -311,11 +291,6 @@ func (h *Handler) handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if oldTmpl != nil {
-		h.service.TriggerRedetect(oldTmpl.Serial)
-	} else {
-		h.service.TriggerRedetectAll()
-	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "id": id})
 }
 
@@ -353,155 +328,6 @@ func (h *Handler) handleGetTemplateImage(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "image/png")
 	_ = png.Encode(w, img)
-}
-
-// handleGetStatus GET /api/templates/status?serial=...
-func (h *Handler) handleGetStatus(w http.ResponseWriter, r *http.Request) {
-	serial := strings.TrimSpace(r.URL.Query().Get("serial"))
-	if serial == "" {
-		writeError(w, http.StatusBadRequest, "missing_serial", "serial query parameter is required")
-		return
-	}
-	status := h.service.GetDeviceStatus(serial)
-	writeJSON(w, http.StatusOK, status)
-}
-
-// handleSetStatus PUT /api/templates/status
-func (h *Handler) handleSetStatus(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Serial  string `json:"serial"`
-		Enabled bool   `json:"enabled"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
-		return
-	}
-	body.Serial = strings.TrimSpace(body.Serial)
-	if body.Serial == "" {
-		writeError(w, http.StatusBadRequest, "missing_serial", "serial is required")
-		return
-	}
-	if err := h.service.SetDeviceMatching(body.Serial, body.Enabled); err != nil {
-		writeError(w, http.StatusInternalServerError, "set_matching_failed", err.Error())
-		return
-	}
-	status := h.service.GetDeviceStatus(body.Serial)
-	writeJSON(w, http.StatusOK, status)
-}
-
-// handleGetMatches GET /api/templates/matches?serial=...
-func (h *Handler) handleGetMatches(w http.ResponseWriter, r *http.Request) {
-	serial := strings.TrimSpace(r.URL.Query().Get("serial"))
-	if serial == "" {
-		writeError(w, http.StatusBadRequest, "missing_serial", "serial query parameter is required")
-		return
-	}
-	matches := h.service.GetLatestMatches(serial)
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"serial":  serial,
-		"matches": matches,
-		"count":   len(matches),
-	})
-}
-
-// handleDetect POST /api/templates/detect
-func (h *Handler) handleDetect(w http.ResponseWriter, r *http.Request) {
-	contentType := r.Header.Get("Content-Type")
-	var req MatchRequest
-	var img image.Image
-	var err error
-
-	if strings.HasPrefix(contentType, "multipart/form-data") {
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_form", err.Error())
-			return
-		}
-		req.Serial = r.FormValue("serial")
-		if thStr := r.FormValue("min_score"); thStr != "" {
-			if th, parseErr := strconv.ParseFloat(thStr, 64); parseErr == nil {
-				req.MinScore = th
-			}
-		}
-		if mrStr := r.FormValue("max_results"); mrStr != "" {
-			if mr, parseErr := strconv.Atoi(mrStr); parseErr == nil {
-				req.MaxResults = mr
-			}
-		}
-		if idsStr := r.FormValue("template_ids"); idsStr != "" {
-			if strings.HasPrefix(idsStr, "[") {
-				_ = json.Unmarshal([]byte(idsStr), &req.TemplateIDs)
-			} else {
-				for _, id := range strings.Split(idsStr, ",") {
-					if trimmed := strings.TrimSpace(id); trimmed != "" {
-						req.TemplateIDs = append(req.TemplateIDs, trimmed)
-					}
-				}
-			}
-		}
-		file, _, fileErr := r.FormFile("image")
-		if fileErr != nil {
-			file, _, fileErr = r.FormFile("file")
-		}
-		if fileErr == nil {
-			defer file.Close()
-			img, _, err = image.Decode(file)
-			if err != nil {
-				writeError(w, http.StatusBadRequest, "invalid_image", "failed to decode uploaded image")
-				return
-			}
-		} else if b64 := r.FormValue("image_base64"); b64 != "" {
-			req.ImageBase64 = b64
-		}
-	} else {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
-			return
-		}
-	}
-
-	if img == nil && req.ImageBase64 != "" {
-		img, err = decodeBase64Image(req.ImageBase64)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_image_base64", err.Error())
-			return
-		}
-	}
-
-	if img == nil && req.Serial != "" {
-		img = h.service.GetLatestFrame(req.Serial)
-		if img == nil {
-			img, err = h.service.CaptureScreen(r.Context(), req.Serial)
-			if err != nil {
-				writeError(w, http.StatusBadGateway, "capture_screen_failed", err.Error())
-				return
-			}
-		}
-	}
-
-	if img == nil {
-		writeError(w, http.StatusBadRequest, "missing_image", "image or valid serial is required")
-		return
-	}
-
-	opts := MatchOptions{
-		MinScore:   req.MinScore,
-		MaxResults: req.MaxResults,
-	}
-
-	matches, err := h.service.DetectWithOptions(r.Context(), req.Serial, img, req.TemplateIDs, opts)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "detect_failed", err.Error())
-		return
-	}
-
-	if req.Serial != "" {
-		h.service.BroadcastMatches(req.Serial, matches)
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"matches": matches,
-		"count":   len(matches),
-	})
 }
 
 // parseScales parses comma-separated or JSON float numbers.
@@ -673,8 +499,6 @@ func (h *Handler) handleImportTemplates(w http.ResponseWriter, r *http.Request) 
 		imported = append(imported, tmpl)
 	}
 
-	h.service.TriggerRedetect(serial)
-
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":   true,
 		"imported":  len(imported),
@@ -733,107 +557,4 @@ func sanitizeFilename(name string) string {
 		}
 	}
 	return strings.TrimSpace(b.String())
-}
-
-// handleClickTemplate POST /api/templates/click
-func (h *Handler) handleClickTemplate(w http.ResponseWriter, r *http.Request) {
-	var req ClickRequest
-
-	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_json", err.Error())
-			return
-		}
-	} else {
-		_ = r.ParseForm()
-		req.Serial = r.FormValue("serial")
-		req.Name = r.FormValue("name")
-		req.TemplateID = r.FormValue("template_id")
-		if r.FormValue("random_offset") == "true" || r.FormValue("random_offset") == "1" {
-			req.RandomOffset = true
-		}
-		req.Mode = r.FormValue("mode")
-		if r.FormValue("humanize") == "true" || r.FormValue("humanize") == "1" {
-			req.Humanize = true
-		}
-		if dStr := r.FormValue("duration_ms"); dStr != "" {
-			if d, err := strconv.ParseInt(dStr, 10, 64); err == nil {
-				req.DurationMS = d
-			}
-		}
-	}
-
-	if req.Serial == "" {
-		req.Serial = r.URL.Query().Get("serial")
-	}
-	if req.Serial == "" {
-		writeError(w, http.StatusBadRequest, "missing_serial", "serial parameter is required")
-		return
-	}
-
-	target := req.Name
-	if target == "" {
-		target = req.TemplateID
-	}
-	if target == "" {
-		writeError(w, http.StatusBadRequest, "missing_template_name", "name or template_id is required")
-		return
-	}
-
-	opts := ClickOptions{
-		RandomOffset: req.RandomOffset,
-		Mode:         req.Mode,
-		Humanize:     req.Humanize,
-		DurationMS:   req.DurationMS,
-	}
-
-	res, err := h.service.ClickTemplate(r.Context(), req.Serial, target, opts)
-	if err != nil {
-		if errors.Is(err, ErrTemplateNotFound) {
-			writeError(w, http.StatusNotFound, "template_not_found", fmt.Sprintf("template %q not found", target))
-			return
-		}
-		if errors.Is(err, ErrTemplateNotMatched) {
-			writeError(w, http.StatusUnprocessableEntity, "template_not_matched", fmt.Sprintf("template %q not matched on screen", target))
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "click_failed", err.Error())
-		return
-	}
-
-	writeJSON(w, http.StatusOK, res)
-}
-
-// handleFeedWS upgrades to WebSocket and processes live image frames from frontend canvas.
-func (h *Handler) handleFeedWS(w http.ResponseWriter, r *http.Request) {
-	serial := strings.TrimSpace(r.URL.Query().Get("serial"))
-	if serial == "" {
-		http.Error(w, "serial is required", http.StatusBadRequest)
-		return
-	}
-
-	conn, err := feedUpgrader.Upgrade(w, r, nil)
-	if err != nil {
-		return
-	}
-	defer conn.Close()
-
-	for {
-		messageType, data, err := conn.ReadMessage()
-		if err != nil {
-			break
-		}
-
-		if (messageType == websocket.BinaryMessage || messageType == websocket.TextMessage) && len(data) > 0 {
-			img, _, err := image.Decode(bytes.NewReader(data))
-			if err == nil && img != nil {
-				matches, _ := h.service.ProcessLiveFrame(serial, img)
-				_ = conn.WriteJSON(map[string]interface{}{
-					"type":    "matches",
-					"count":   len(matches),
-					"matches": matches,
-				})
-			}
-		}
-	}
 }
