@@ -384,7 +384,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     else {
       endDrag(x, y)
       op('swipe', { x1: start.x, y1: start.y, x2: x, y2: y, duration, path: dragPath })
-      opts.onTouch?.({ kind: 'swipe', x: start.x / packer.deviceWidth, y: start.y / packer.deviceHeight, x2: x / packer.deviceWidth, y2: y / packer.deviceHeight })
+      // down/move/up 已反显实际轨迹，松开时不再补播首尾直线动画。
     }
   }
 
