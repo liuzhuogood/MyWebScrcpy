@@ -6,7 +6,7 @@
 # 部署方式：替换二进制 + 重启 systemd 服务。
 #
 # 用法：
-#   1. 先在本机构建：GOOS=linux GOARCH=amd64 go build -o mywebscrcpy-linux-amd64 .
+#   1. 先在本机构建：GOOS=linux GOARCH=amd64 bash scripts/build.sh -o mywebscrcpy-linux-amd64
 #   2. 运行部署：
 #      DEPLOY_HOST=10.0.0.6 DEPLOY_USER=liuzhuo \
 #        bash scripts/deploy/deploy-prod.sh
@@ -45,7 +45,7 @@ SERVICE_NAME="${SERVICE_NAME:-mywebscrcpy.service}"
 LOCAL_BINARY="./${BINARY_NAME}"
 if [[ ! -f "$LOCAL_BINARY" ]]; then
   error "本地二进制文件不存在：${LOCAL_BINARY}"
-  error "请先构建：GOOS=linux GOARCH=amd64 go build -o ${BINARY_NAME} ."
+  error "请先构建：GOOS=linux GOARCH=amd64 bash scripts/build.sh -o ${BINARY_NAME}"
   exit 1
 fi
 

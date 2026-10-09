@@ -1,5 +1,7 @@
 # v1.4.0-feature 版本说明
 
+> 2026-10-09 状态核对：**已完成；部分延期**。共享会话、Vision 和 ActionQueue 的本版实施已收口。原 `[~]` 项为延期范围：鉴权、互斥租约、尺寸/质量协商、Go JPEG 推流对比及持续链路指标等，不能勾为已实现。
+
 1. 基于 MyWebScrcpy `v1.3.2` 现状，启动 Go 设备级 Session/FrameHub、Python Vision 订阅、检测结果广播、前端 Canvas overlay 和统一 ActionQueue 的渐进式改造。
 2. MVP 优先复用现有 scrcpy 二进制帧格式与 JSON 元数据，新增 Python Vision 双向 WebSocket、检测结果广播、动作校验/队列和播放器 Canvas overlay；Go 侧 JPEG 转码留待后续优化。
 3. 低延迟阶段再评估编码帧旁路、采样/背压、frame_id 时效和端到端指标；多设备阶段补充 SessionRegistry、鉴权、调试与结构化关联日志。

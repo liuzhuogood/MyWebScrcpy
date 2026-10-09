@@ -1,5 +1,7 @@
 # v1.7.0-feature 实施任务
 
+> 2026-10-09 状态核对：**已完成**。详见 [版本摘要](version.md) 与 [统一状态总览](../README.md)；原文件路径与已完成勾选保留为历史记录。
+
 ## 1. 规格与设计
 - [x] 1.1 完成 session/design/tasks/version 初稿。
 - [x] 1.2 明确 Tab 文案与字段排版细节（包名、Activity、Component、Window、分辨率、DPI、方向）。

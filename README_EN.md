@@ -8,15 +8,19 @@ An open-source Android device mirroring and control tool built with Go and WebCo
 
 **Device List**
 
-![Device List](screenshots/device-list.png)
+![Device List](screenshots/device-list.jpg)
 
 **Screen Mirroring & Control**
 
-![Screen Mirroring](screenshots/player.png)
+![Screen Mirroring](screenshots/player.jpg)
 
-**Multi-device Monitoring**
+**Player Inspector**
 
-![Multi-device Monitoring](screenshots/dashboard.png)
+![Player Inspector](screenshots/ui-inspector.jpg)
+
+**Multi-device Monitoring (detail)**
+
+![Multi-device Monitoring detail](screenshots/dashboard.jpg)
 
 **File Manager**
 
@@ -59,7 +63,7 @@ The Go backend handles:
 
 ## Requirements
 
-- Go 1.21+
+- Go 1.25.5+
 - ADB (Android Debug Bridge)
 - Chrome 94+ (WebCodecs support required)
 - Android device with USB debugging enabled or connected via network ADB
@@ -71,14 +75,19 @@ The Go backend handles:
 git clone https://github.com/liuzhuogood/MyWebScrcpy.git
 cd MyWebScrcpy
 
-# Build
-go build -o mywebscrcpy .
+# Build (Node.js 24 and pnpm 11.7.0 required)
+bash scripts/build.sh
 
 # Run
 ./mywebscrcpy
 ```
 
 Open `http://localhost:8080` in your browser, click a device to start mirroring.
+
+The Vue frontend is served at `/`, with player, dashboard and file pages at `/player`, `/dashboard` and `/files`.
+For frontend development, run `pnpm --dir frontend dev` after installing dependencies with
+`pnpm --dir frontend install --frozen-lockfile`. Open `http://localhost:5173/` with the Go backend running on port 8080.
+The build script compiles the frontend into `web/dist/` before embedding it in the Go binary. Node.js is not required at runtime.
 
 Open the file manager from the player's “More” menu. It operates on the selected phone's shared `/storage/emulated/0` storage, so each player page remains bound to its own device in multi-device use.
 
@@ -226,22 +235,15 @@ MyWebScrcpy/
 │   │   └── control.go         # Control message packing
 │   └── ws/hub.go              # WebSocket management
 └── web/
-    ├── index.html             # Device list page
-    ├── player.html            # Screen mirroring player
-    ├── dashboard.html         # Multi-device monitoring page
-    ├── files.html              # File manager
-    ├── css/style.css
-    └── js/
-        ├── decoder.js         # WebCodecs H.264 decoder
-        ├── control.js          # Browser-side control message packing
-        ├── dashboard.js        # Multi-device monitoring logic
-        └── files.js            # File manager logic
+    ├── dist/                  # Generated Vue assets (embedded in the binary)
+    ├── api-docs.html          # API documentation
+    └── openapi.json           # OpenAPI specification
 ```
 
 ## Tech Stack
 
 - **Backend**: Go + gorilla/websocket
-- **Frontend**: Vanilla JS + WebCodecs API + Canvas
+- **Frontend**: Vue 3 + TypeScript + Vite + WebCodecs API + Canvas
 - **Mirroring protocol**: scrcpy 4.0
 - **Video codec**: H.264 (Baseline)
 

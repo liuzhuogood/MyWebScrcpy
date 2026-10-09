@@ -23,3 +23,6 @@ recordings/
 data/
 .zcode/
 .openchamber/
+
+# Generated Vue frontend assets
+web/dist/

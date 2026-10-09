@@ -39,6 +39,16 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '11.7.0'
+
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
@@ -46,7 +56,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           output_name="mywebscrcpy-${{ matrix.suffix }}"
-          go build -ldflags="-s -w" -o "${output_name}" .
+          bash scripts/build.sh -ldflags="-s -w" -o "${output_name}"
           echo "BINARY_NAME=${output_name}" >> $GITHUB_ENV
 
       - name: Upload artifact

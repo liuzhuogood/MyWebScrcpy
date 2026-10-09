@@ -27,7 +27,7 @@ import (
 //go:embed assets/scrcpy-server
 var serverJarFS []byte
 
-//go:embed all:web
+//go:embed all:web/dist web/api-docs.html
 var webFS embed.FS
 
 //go:embed web/openapi.json
@@ -228,8 +228,16 @@ func main() {
 	mux.HandleFunc("/api/vision/debug", hub.ServeVisionDebug)
 
 	// 静态资源
-	webRoot, _ := fs.Sub(webFS, "web")
-	mux.Handle("/", http.FileServer(http.FS(webRoot)))
+	webRoot, err := fs.Sub(webFS, "web")
+	if err != nil {
+		log.Fatalf("初始化 Web 资源失败: %v", err)
+	}
+	appRoot, err := fs.Sub(webRoot, "dist")
+	if err != nil {
+		log.Fatalf("初始化前端资源失败: %v", err)
+	}
+	mux.Handle("/api-docs.html", http.FileServer(http.FS(webRoot)))
+	mux.Handle("/", newAppHandler(appRoot))
 
 	port := strings.TrimPrefix(addr, "0.0.0.0:")
 	log.Printf("adb 路径: %s", adbPath)

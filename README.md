@@ -8,19 +8,19 @@
 
 **设备列表**
 
-![设备列表](screenshots/device-list.png)
+![设备列表](screenshots/device-list.jpg)
 
 **投屏操控**
 
-![投屏操控](screenshots/player.png)
+![投屏操控](screenshots/player.jpg)
 
 **播放器检查器**
 
 ![播放器检查器](screenshots/ui-inspector.jpg)
 
-**大屏监控**
+**大屏监控（局部）**
 
-![大屏监控](screenshots/dashboard.png)
+![大屏监控局部](screenshots/dashboard.jpg)
 
 **文件管理**
 
@@ -89,7 +89,7 @@ Vision 接口当前支持协议版本 `1`。显式发送未知版本会收到
 
 ## 环境要求
 
-- Go 1.21+
+- Go 1.25.5+
 - ADB（Android Debug Bridge）
 - Chrome 94+（需要 WebCodecs 支持）
 - Android 设备已开启 USB 调试或已通过网络 ADB 连接
@@ -101,14 +101,33 @@ Vision 接口当前支持协议版本 `1`。显式发送未知版本会收到
 git clone https://github.com/liuzhuogood/MyWebScrcpy.git
 cd MyWebScrcpy
 
-# 构建
-go build -o mywebscrcpy .
+# 构建（需要 Node.js 24 和 pnpm 11.7.0）
+bash scripts/build.sh
 
 # 运行
 ./mywebscrcpy
 ```
 
 浏览器打开 `http://localhost:8080`，点击设备即可投屏。
+
+首页直接使用 Vue 界面，投屏、监控和文件管理地址分别为 `/player`、`/dashboard`、`/files`。
+
+### 前端开发
+
+在 Go 后端运行后，执行：
+
+```bash
+pnpm --dir frontend install --frozen-lockfile
+pnpm --dir frontend dev
+```
+
+打开 `http://localhost:5173/`。开发服务器将 HTTP API 和 WebSocket 请求代理到 `http://localhost:8080`。
+发布时使用 `bash scripts/build.sh`：前端产物写入 `web/dist/`，随后嵌入 Go 程序；运行时无需 Node.js。
+直接运行 `go build` 不会更新前端产物。跨平台构建示例：
+
+```bash
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 bash scripts/build.sh -o mywebscrcpy-linux-amd64
+```
 
 文件管理从投屏页面“更多”菜单打开，操作对象是当前选定手机的 `/storage/emulated/0` 共享存储。多手机场景下，每个投屏页面都会绑定自己的设备。
 
@@ -134,11 +153,11 @@ go build -o mywebscrcpy .
 
 ### 播放器检查器
 
-在投屏页面打开“更多”中的“检查”。检查器会和投屏并排显示：投屏保持靠左的原始显示宽度，检查面板自动占用剩余空间；拖动中间分隔线可调整面板宽度。窄屏设备会自动改为上下布局。
+在投屏页面打开“更多”中的“检查”。检查器会和投屏并排显示：投屏在左侧自适应显示，检查面板占用右侧空间；拖动中间分隔线可调整面板宽度。窄屏设备会自动改为上下布局。
 
 #### 取色坐标
 
-- 鼠标移动时显示画布坐标、HEX、RGB、十字线和 13 × 13 像素放大镜。
+- 鼠标移动时显示画布坐标、HEX、RGB、十字线和 240px 放大镜（取样区域 20 × 20 像素）。
 - 首次点击投屏画面会固定十字线与读数，便于复制；再次点击会解除固定并恢复跟随。读数同时展示像素坐标和 0～1 的归一化坐标。
 - 检查器打开期间的取色操作不会发送到 Android 设备。
 
@@ -315,6 +334,7 @@ server {
 ```
 MyWebScrcpy/
 ├── main.go                    # 入口，HTTP 服务
+├── frontend/                  # Vue 3、TypeScript 前端源码和版本记录
 ├── assets/
 │   └── scrcpy-server          # scrcpy server jar（内嵌）
 ├── internal/
@@ -328,25 +348,15 @@ MyWebScrcpy/
 │   │   └── control.go         # 控制消息打包
 │   └── ws/hub.go              # WebSocket 管理
 └── web/
-    ├── index.html             # 设备列表页
-    ├── player.html            # 投屏播放器页
-    ├── dashboard.html         # 大屏监控页
-    ├── files.html              # 文件管理页
-    ├── css/
-    │   ├── style.css            # 播放器与通用样式
-    │   └── ui-inspector.css     # 检查器样式
-    └── js/
-        ├── decoder.js         # WebCodecs H.264 解码器
-        ├── control.js         # 浏览器端控制消息打包
-        ├── dashboard.js        # 大屏监控逻辑
-        ├── files.js            # 文件管理逻辑
-        └── ui-inspector.js     # 取色、XML 树和 XPath 检查器
+    ├── dist/                  # Vue 构建产物（不提交，构建后嵌入程序）
+    ├── api-docs.html          # API 文档
+    └── openapi.json           # OpenAPI 规范
 ```
 
 ## 技术栈
 
 - **后端**: Go + gorilla/websocket
-- **前端**: 原生 JavaScript + WebCodecs API + Canvas
+- **前端**: Vue 3 + TypeScript + Vite；投屏使用 WebCodecs API + Canvas
 - **投屏协议**: scrcpy 4.0
 - **视频编码**: H.264 (Baseline)
 

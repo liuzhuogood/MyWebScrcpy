@@ -1,5 +1,7 @@
 # v1.10.0-feature 版本说明
 
+> 2026-10-09 状态核对：**已实现；专项交互待验收**。终端实施、提交和部署已有证据，远端 `v1.10.0` 标签已确认。原全空清单已更新；Ctrl+C、Tab、方向键、进程回收和 resize 的逐项真机验收缺少明确结果，保留待验收。旧 HTML/CDN 实现已由 Vue 与本地 xterm 依赖替代。
+
 1. 播放器"更多"菜单新增"终端"入口，点击后在右侧展开可拖拽宽度的 ADB Shell 侧边面板。
 2. 后端新增 `GET /ws/adb-shell?serial=xxx` WebSocket 端点，通过 `creack/pty`（MIT）为 `adb -s <serial> shell` 分配真实 PTY；支持 Ctrl+C、Tab 补全、方向键历史和彩色输出。
 3. 前端引入 xterm.js v5（MIT，CDN）渲染终端，`FitAddon` 随面板尺寸自动 reflow。
