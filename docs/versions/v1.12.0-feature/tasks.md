@@ -22,8 +22,8 @@
 
 - ⬜ 3.1 完成三项遗留问题的浏览器和接口验收，再更新对应状态。
 - ⬜ 3.2 完成前端 v0.7 的真机录制/回放/截图/存模板闭环；其他专项验收见 [统一状态总览](../README.md)。
-- ✅ 3.3 已按用户授权收口本版提交内容和正式版本 `v1.12.0`；推送及标签远端指向按 Git 记录核对。
-- ⬜ 3.4 推送 `v1.12.0` 标签后核对 GitHub Actions 和构建产物；工作流成功前不将此项标为已验收。
+- ✅ 3.3 重构代码、版本记录和五张 README 截图已提交为 `a7bb1e6` 并推送 main；附注标签 `v1.12.0` 的远端提交指向已核对一致。
+- ✅ 3.4 标签触发的 [GitHub Actions](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/37914234053) 全部成功；五个平台构建、Release 与 Docker 发布均通过，[v1.12.0 Release](https://github.com/liuzhuogood/MyWebScrcpy/releases/tag/v1.12.0) 已包含五个程序文件。
 
 ## 4. 延期需求
 

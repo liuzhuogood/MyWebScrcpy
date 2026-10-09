@@ -77,3 +77,5 @@
 **处理**：补齐有证据的任务与摘要，保留真实未实施项及验收边界，并用以上总览统一说明历史版本与当前部署的关系。
 
 **2026-10-09 范围调整**：用户将 v1.12 改为 Web 端重构，并指定分割线、图标统一与模板匹配不可用三项遗留问题。已同步四件套和本总览，原方案保留为延期记录。
+
+**2026-10-09 发布验收**：重构提交 `a7bb1e6` 与标签 `v1.12.0` 已推送，远端提交指向一致。[GitHub Actions](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/37914234053) 的五个平台构建、Release 和 Docker 任务全部成功；[v1.12.0 Release](https://github.com/liuzhuogood/MyWebScrcpy/releases/tag/v1.12.0) 已发布五个程序文件。三项遗留问题保持待处理。
