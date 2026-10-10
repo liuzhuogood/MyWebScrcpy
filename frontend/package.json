@@ -7,7 +7,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "proto": "vite --config vite.prototype.config.ts",
+    "proto:check": "vue-tsc --project ../prototypes/tsconfig.json --noEmit && tsc --project ../prototypes/tsconfig.config.json",
+    "proto:build": "pnpm proto:check && vite build --config vite.prototype.config.ts",
+    "proto:preview": "vite preview --config vite.prototype.config.ts"
   },
   "dependencies": {
     "@vueuse/core": "^14.4.0",

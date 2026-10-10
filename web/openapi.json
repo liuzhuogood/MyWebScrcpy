@@ -2797,6 +2797,21 @@
             "type": "string",
             "description": "ADB transport_id",
             "example": "1"
+          },
+          "source": {
+            "type": "string",
+            "description": "设备来源 (auto: 自动发现, manual: 手动添加)",
+            "example": "manual"
+          },
+          "alias": {
+            "type": "string",
+            "description": "设备别名/自定义备注",
+            "example": "客厅电视"
+          },
+          "auto_reconnect": {
+            "type": "boolean",
+            "description": "手动设备是否开启断线自动重连",
+            "example": true
           }
         },
         "required": [

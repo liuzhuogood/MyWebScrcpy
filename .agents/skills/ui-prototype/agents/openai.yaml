@@ -1,0 +1,3 @@
+interface:
+  display_name: "界面原型"
+  short_description: "复用当前项目的 Vue 组件与主题，独立预览可交互原型并保留方案版本"

@@ -1,0 +1,8 @@
+{
+  "extends": "../frontend/tsconfig.node.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "../frontend/node_modules/.tmp/tsconfig.prototypes-config.tsbuildinfo",
+    "types": ["../frontend/node_modules/@types/node"]
+  },
+  "include": ["../frontend/vite.prototype.config.ts"]
+}

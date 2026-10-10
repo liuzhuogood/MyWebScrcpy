@@ -1,37 +1,48 @@
 package device
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
+
+	"mywebscrcpy/internal/db"
 )
 
-// Device 表示一台通过 adb 连接的设备。
+// Device 表示一台设备，融合了 adb 动态状态与持久化配置。
 type Device struct {
-	Serial      string `json:"serial"`
-	State       string `json:"state"`
-	Product     string `json:"product"`
-	Model       string `json:"model"`
-	DeviceName  string `json:"device"`
-	TransportID string `json:"transport_id"`
+	Serial        string `json:"serial"`
+	State         string `json:"state"` // "device", "offline", "connecting", "unauthorized" 等
+	Source        string `json:"source"` // "auto" (自动发现) 或 "manual" (手动添加)
+	Alias         string `json:"alias,omitempty"`
+	Product       string `json:"product,omitempty"`
+	Model         string `json:"model,omitempty"`
+	DeviceName    string `json:"device,omitempty"`
+	TransportID   string `json:"transport_id,omitempty"`
+	AutoReconnect bool   `json:"auto_reconnect"`
 }
 
-// Manager 负责跟踪 adb 设备列表。
+// Manager 负责跟踪 adb 设备列表并守护手动添加设备的连接与持久化。
 type Manager struct {
-	adbPath string
-	mu      sync.RWMutex
-	devices []Device
-	stop    chan struct{}
+	adbPath  string
+	db       *db.DB
+	mu       sync.RWMutex
+	devices  []Device
+	stop     chan struct{}
 }
 
-// NewManager 创建设备管理器。adbPath 为 adb 可执行文件路径。
-func NewManager(adbPath string) *Manager {
-	return &Manager{adbPath: adbPath, stop: make(chan struct{})}
+// NewManager 创建设备管理器。
+func NewManager(adbPath string, database *db.DB) *Manager {
+	return &Manager{
+		adbPath: adbPath,
+		db:      database,
+		stop:    make(chan struct{}),
+	}
 }
 
-// Start 启动后台轮询，定期刷新设备列表。
+// Start 启动后台轮询，定期刷新设备列表和自动重连守护。
 func (m *Manager) Start() {
 	go m.loop()
 }
@@ -42,29 +53,208 @@ func (m *Manager) Stop() {
 }
 
 func (m *Manager) loop() {
-	// 首次立即刷新
 	m.refresh()
 	ticker := time.NewTicker(2 * time.Second)
+	reconnectTicker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
+	defer reconnectTicker.Stop()
+
 	for {
 		select {
 		case <-m.stop:
 			return
 		case <-ticker.C:
 			m.refresh()
+		case <-reconnectTicker.C:
+			m.reconnectOfflineManualDevices()
 		}
 	}
 }
 
-// refresh 执行 adb devices -l 并解析输出。
+// refresh 执行 adb devices -l 并与 SQLite 手动设备合并。
 func (m *Manager) refresh() {
-	devices, err := m.ListDevices()
+	adbDevs, err := m.ListDevices()
+	if err != nil {
+		adbDevs = nil
+	}
+
+	adbMap := make(map[string]Device)
+	for _, d := range adbDevs {
+		adbMap[d.Serial] = d
+	}
+
+	var manualList []db.DeviceRecord
+	if m.db != nil {
+		manualList, _ = m.db.ListManualDevices()
+	}
+
+	manualMap := make(map[string]db.DeviceRecord)
+	for _, rec := range manualList {
+		manualMap[rec.Serial] = rec
+	}
+
+	var combined []Device
+	seen := make(map[string]bool)
+
+	// 1. 处理数据库中的手动设备
+	for _, rec := range manualList {
+		seen[rec.Serial] = true
+		d := Device{
+			Serial:        rec.Serial,
+			Source:        "manual",
+			Alias:         rec.Alias,
+			State:         "offline",
+			Product:       rec.Product,
+			Model:         rec.Model,
+			DeviceName:    rec.DeviceName,
+			TransportID:   rec.TransportID,
+			AutoReconnect: rec.AutoReconnect == 1,
+		}
+
+		if adbDev, ok := adbMap[rec.Serial]; ok {
+			d.State = adbDev.State
+			if adbDev.Product != "" {
+				d.Product = adbDev.Product
+			}
+			if adbDev.Model != "" {
+				d.Model = adbDev.Model
+			}
+			if adbDev.DeviceName != "" {
+				d.DeviceName = adbDev.DeviceName
+			}
+			if adbDev.TransportID != "" {
+				d.TransportID = adbDev.TransportID
+			}
+
+			// 异步回写 DB 最新状态
+			if m.db != nil && (rec.State != d.State || rec.Model != d.Model) {
+				go m.db.UpdateDeviceStatus(d.Serial, d.State, d.Product, d.Model, d.DeviceName, d.TransportID, d.State == "device")
+			}
+		} else {
+			if m.db != nil && rec.State != "offline" && rec.State != "connecting" {
+				go m.db.UpdateDeviceStatus(d.Serial, "offline", "", "", "", "", false)
+			}
+		}
+		combined = append(combined, d)
+	}
+
+	// 2. 处理 ADB 自动发现的设备（未在手动列表中的）
+	for _, adbDev := range adbDevs {
+		if !seen[adbDev.Serial] {
+			adbDev.Source = "auto"
+			combined = append(combined, adbDev)
+		}
+	}
+
+	m.mu.Lock()
+	m.devices = combined
+	m.mu.Unlock()
+}
+
+// reconnectOfflineManualDevices 扫描开启了 auto_reconnect 且离线的手动设备，执行 adb connect
+func (m *Manager) reconnectOfflineManualDevices() {
+	if m.db == nil {
+		return
+	}
+	manuals, err := m.db.ListManualDevices()
 	if err != nil {
 		return
 	}
-	m.mu.Lock()
-	m.devices = devices
-	m.mu.Unlock()
+
+	for _, rec := range manuals {
+		if rec.AutoReconnect == 1 && rec.State == "offline" {
+			go m.Connect(rec.Serial)
+		}
+	}
+}
+
+// Connect 调用 adb connect <serial>
+func (m *Manager) Connect(serial string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, m.adbPath, "connect", serial)
+	out, err := cmd.CombinedOutput()
+	output := string(out)
+
+	if err != nil {
+		return fmt.Errorf("adb connect 错误: %s (%w)", strings.TrimSpace(output), err)
+	}
+
+	// adb connect 成功通常输出: connected to ... 或 already connected to ...
+	if strings.Contains(output, "failed") || strings.Contains(output, "cannot connect") {
+		return fmt.Errorf("adb connect 失败: %s", strings.TrimSpace(output))
+	}
+
+	// 触发一次即刻刷新
+	m.refresh()
+	return nil
+}
+
+// AddManualDevice 添加手动设备并尝试首次连接
+func (m *Manager) AddManualDevice(serial, alias string) (*Device, error) {
+	serial = strings.TrimSpace(serial)
+	if serial == "" {
+		return nil, fmt.Errorf("设备地址不能为空")
+	}
+
+	if m.db == nil {
+		return nil, fmt.Errorf("数据库未初始化")
+	}
+
+	rec, err := m.db.UpsertManualDevice(serial, alias, 1)
+	if err != nil {
+		return nil, fmt.Errorf("保存手动设备失败: %w", err)
+	}
+
+	// 异步尝试 ADB 连接，不阻塞响应
+	go func() {
+		_ = m.Connect(serial)
+	}()
+
+	dev := &Device{
+		Serial:        rec.Serial,
+		Source:        "manual",
+		Alias:         rec.Alias,
+		State:         "connecting",
+		AutoReconnect: true,
+	}
+
+	m.refresh()
+	return dev, nil
+}
+
+// RemoveManualDevice 移除手动设备
+func (m *Manager) RemoveManualDevice(serial string) error {
+	if m.db == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+
+	if err := m.db.DeleteManualDevice(serial); err != nil {
+		return err
+	}
+
+	// 可选尝试断开 adb disconnect
+	go func() {
+		exec.Command(m.adbPath, "disconnect", serial).Run()
+	}()
+
+	m.refresh()
+	return nil
+}
+
+// UpdateAlias 更新别名
+func (m *Manager) UpdateAlias(serial, alias string) error {
+	if m.db == nil {
+		return fmt.Errorf("数据库未初始化")
+	}
+
+	if err := m.db.UpdateAlias(serial, alias); err != nil {
+		return err
+	}
+
+	m.refresh()
+	return nil
 }
 
 // ListDevices 执行一次 adb devices -l 并返回解析结果。
@@ -77,10 +267,6 @@ func (m *Manager) ListDevices() ([]Device, error) {
 }
 
 // parseDevices 解析 adb devices -l 的输出。
-// 输出格式示例：
-//
-//	List of devices attached
-//	10.0.0.104:5555        device product:PD2072 model:V2072A device:PD2072 transport_id:1
 func parseDevices(s string) []Device {
 	var devices []Device
 	lines := strings.Split(s, "\n")
@@ -89,12 +275,15 @@ func parseDevices(s string) []Device {
 		if line == "" || strings.HasPrefix(line, "List of devices") {
 			continue
 		}
-		// 第一个 token 是 serial，第二个是 state，其余是 key:value
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
 			continue
 		}
-		d := Device{Serial: fields[0], State: fields[1]}
+		d := Device{
+			Serial: fields[0],
+			State:  fields[1],
+			Source: "auto",
+		}
 		for _, f := range fields[2:] {
 			kv := strings.SplitN(f, ":", 2)
 			if len(kv) != 2 {
@@ -116,18 +305,13 @@ func parseDevices(s string) []Device {
 	return devices
 }
 
-// Devices 返回当前缓存的设备列表（只含 online 的 device 状态）。
+// Devices 返回当前缓存的全部设备列表（在线或配置的手动设备）。
 func (m *Manager) Devices() []Device {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	var online []Device
-	for _, d := range m.devices {
-		if d.State == "device" {
-			// 返回副本
-			online = append(online, d)
-		}
-	}
-	return online
+	res := make([]Device, len(m.devices))
+	copy(res, m.devices)
+	return res
 }
 
 // GetDevice 返回指定 serial 的设备。

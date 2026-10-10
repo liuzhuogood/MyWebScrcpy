@@ -1,0 +1,14 @@
+{
+  "extends": "../frontend/tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "../frontend/node_modules/.tmp/tsconfig.prototypes.tsbuildinfo",
+    "baseUrl": "..",
+    "types": ["../frontend/node_modules/vite/client"],
+    "paths": {
+      "@/*": ["frontend/src/*"],
+      "*": ["frontend/node_modules/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.vue"],
+  "exclude": ["dist", "artifacts"]
+}

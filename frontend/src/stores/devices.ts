@@ -1,6 +1,13 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { type Device, fetchDevices } from '@/api/devices'
+import {
+  type Device,
+  addManualDevice,
+  fetchDevices,
+  reconnectDevice,
+  removeManualDevice,
+  updateDeviceAlias,
+} from '@/api/devices'
 import { MOCK_DEVICES } from '@/mocks/devices'
 
 const ALIAS_KEY = 'device_aliases'
@@ -21,18 +28,24 @@ export const useDeviceStore = defineStore('devices', () => {
   const loading = ref(false)
   const error = ref('')
   const keyword = ref('')
+  const sourceFilter = ref<'all' | 'auto' | 'manual'>('all')
   const editingSerial = ref<string | null>(null)
   const aliases = ref<Record<string, string>>(readAliases())
   const mockEnabled = ref(import.meta.env.DEV && localStorage.getItem(MOCK_KEY) === '1')
   let timer: number | undefined
 
-  const displayName = (d: Device) => aliases.value[d.serial]?.trim() || d.model || '未知设备'
+  const displayName = (d: Device) => d.alias?.trim() || aliases.value[d.serial]?.trim() || d.model || '未知设备'
 
   const filtered = computed(() => {
+    let list = devices.value
+    if (sourceFilter.value !== 'all') {
+      list = list.filter(d => (d.source || 'auto') === sourceFilter.value)
+    }
+
     const k = keyword.value.trim().toLowerCase()
     if (!k)
-      return devices.value
-    return devices.value.filter(d =>
+      return list
+    return list.filter(d =>
       [displayName(d), d.serial, d.model, d.product].filter(Boolean)
         .join(' ').toLowerCase().includes(k),
     )
@@ -82,7 +95,7 @@ export const useDeviceStore = defineStore('devices', () => {
     timer = undefined
   }
 
-  function saveAlias(serial: string, name: string, originalModel: string) {
+  async function saveAlias(serial: string, name: string, originalModel: string) {
     const next = { ...aliases.value }
     const v = name.trim()
     if (!v || v === originalModel)
@@ -91,10 +104,34 @@ export const useDeviceStore = defineStore('devices', () => {
       next[serial] = v.slice(0, 20)
     aliases.value = next
     localStorage.setItem(ALIAS_KEY, JSON.stringify(next))
+
+    try {
+      await updateDeviceAlias(serial, v)
+      await load(true)
+    }
+    catch {
+      // 容错处理
+    }
+  }
+
+  async function addDevice(serial: string, alias?: string) {
+    await addManualDevice(serial, alias)
+    await load(true)
+  }
+
+  async function removeDevice(serial: string) {
+    await removeManualDevice(serial)
+    await load(true)
+  }
+
+  async function reconnect(serial: string) {
+    await reconnectDevice(serial)
+    await load(true)
   }
 
   return {
-    devices, loading, error, keyword, editingSerial, aliases, mockEnabled,
+    devices, loading, error, keyword, sourceFilter, editingSerial, aliases, mockEnabled,
     filtered, displayName, load, startPolling, stopPolling, saveAlias, setMock,
+    addDevice, removeDevice, reconnect,
   }
 })

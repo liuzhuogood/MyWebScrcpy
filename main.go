@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"mywebscrcpy/internal/adbshell"
+	"mywebscrcpy/internal/db"
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/scripts"
@@ -60,7 +61,16 @@ func main() {
 	}
 	defer os.Remove(jarPath)
 
-	dm := device.NewManager(adbPath)
+	// 初始化 SQLite 数据库
+	dbPath := filepath.Join("data", "mywebscrcpy.db")
+	database, err := db.Open(dbPath)
+	if err != nil {
+		log.Printf("警告: 初始化 SQLite 数据库失败: %v，将在无持久化模式下运行", err)
+	} else {
+		defer database.Close()
+	}
+
+	dm := device.NewManager(adbPath, database)
 	dm.Start()
 	defer dm.Stop()
 
@@ -114,14 +124,90 @@ func main() {
 	defer templateService.Stop()
 	template.RegisterRoutes(mux, templateService)
 
-	// API: 设备列表
+	// API: 设备管理
 	mux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) {
-		devices := dm.Devices()
-		w.Header().Set("Content-Type", "application/json")
-		if devices == nil {
-			devices = []device.Device{}
+		switch r.Method {
+		case http.MethodGet:
+			devices := dm.Devices()
+			w.Header().Set("Content-Type", "application/json")
+			if devices == nil {
+				devices = []device.Device{}
+			}
+			json.NewEncoder(w).Encode(devices)
+		case http.MethodPost:
+			var body struct {
+				Serial string `json:"serial"`
+				Alias  string `json:"alias"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+			dev, err := dm.AddManualDevice(body.Serial, body.Alias)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(dev)
+		default:
+			w.Header().Set("Allow", "GET, POST")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
-		json.NewEncoder(w).Encode(devices)
+	})
+
+	// API: 单设备操作 (/api/devices/{serial} 或 /api/devices/{serial}/connect)
+	mux.HandleFunc("/api/devices/", func(w http.ResponseWriter, r *http.Request) {
+		path := strings.TrimPrefix(r.URL.Path, "/api/devices/")
+		parts := strings.Split(path, "/")
+		serial := parts[0]
+		if serial == "" {
+			http.Error(w, "missing serial", http.StatusBadRequest)
+			return
+		}
+
+		if len(parts) == 2 && parts[1] == "connect" {
+			if r.Method != http.MethodPost {
+				w.Header().Set("Allow", http.MethodPost)
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			if err := dm.Connect(serial); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+			return
+		}
+
+		switch r.Method {
+		case http.MethodPatch:
+			var body struct {
+				Alias string `json:"alias"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				http.Error(w, "invalid request body", http.StatusBadRequest)
+				return
+			}
+			if err := dm.UpdateAlias(serial, body.Alias); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		case http.MethodDelete:
+			if err := dm.RemoveManualDevice(serial); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+		default:
+			w.Header().Set("Allow", "PATCH, DELETE")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
 	})
 
 	// API: 获取当前设备的 Android UI XML 快照（只读，按请求执行）。

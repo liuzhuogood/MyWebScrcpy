@@ -1,0 +1,21 @@
+# v1.14.0-feature 任务清单：手动添加设备与 SQLite 持久化
+
+- [x] 后端基础架构：引入 SQLite 数据库支撑
+  - [x] 选型与引入纯 Go / CGO-free 的 SQLite 驱动（`modernc.org/sqlite`），确保跨平台交叉编译无 CGO 依赖
+  - [x] 初始化数据库模块 `internal/db`，建立 `devices` 表及索引
+  - [x] 编写设备存储与 CRUD / 状态更新接口及单元测试
+- [x] 设备管理联动：`internal/device`
+  - [x] 改造 `Manager`，在扫描 ADB 自动发现设备的同时，融合 SQLite 中的手动添加设备
+  - [x] 实现后台手动设备自动重连机制（`adb connect <serial>`）
+  - [x] 提供新增手动设备 API（`POST /api/devices`）、删除手动设备 API（`DELETE /api/devices/{serial}`）及修改别名 API（`PATCH /api/devices/{serial}`）
+  - [x] 编写接口与重连逻辑单元测试
+- [x] 前端适配：
+  - [x] 更新 `Device` 接口定义，包含 `source`、`alias`、`auto_reconnect` 等字段
+  - [x] 首页 `HomeView.vue` 与 `DeviceCard.vue` 支持来源标识徽章（自动发现 vs 手动添加）
+  - [x] 首页增加「添加网络设备」弹窗，调用后端新增接口
+  - [x] 手动添加设备支持重连与删除操作
+  - [x] 前端 TypeScript 类型检查与构建验证
+- [x] 回归测试与文档：
+  - [x] 自动化测试全部通过（Go tests + Vue build）
+  - [x] 更新 OpenAPI / API 文档
+  - [x] 记录版本验收与交付

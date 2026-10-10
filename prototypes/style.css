@@ -1,0 +1,5 @@
+@import "../frontend/src/style.css";
+
+/* 正式主题只读；原型的样式扫描由这个入口额外声明。 */
+@source "./";
+@source "../frontend/src/components";
