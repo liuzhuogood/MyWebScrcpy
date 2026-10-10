@@ -420,7 +420,7 @@ async function onReboot() {
       <template #main><div class="flex h-full min-h-0 flex-col gap-3 overflow-auto bg-muted/40 p-0">
       <main class="relative flex min-h-80 min-w-0 flex-1 items-center justify-center">
         <div class="relative">
-          <canvas :ref="p.canvasRef" class="touch-none rounded-sm bg-black select-none" aria-label="设备投屏画面" />
+          <canvas :ref="p.canvasRef" class="block touch-none rounded-sm bg-black select-none" aria-label="设备投屏画面" />
           <canvas
             :ref="ins.overlayRef"
             class="pointer-events-none absolute inset-0 h-full w-full"
@@ -437,21 +437,21 @@ async function onReboot() {
             actions-target="#capture-actions-host"
             @close="captureOpen = false"
           />
-        </div>
 
-        <!-- 加载中 -->
-        <div v-if="p.loading.value" class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
-          <Loader2 class="h-8 w-8 animate-spin text-white" />
-          <p class="text-sm text-white/80">{{ p.statusText.value }}</p>
-        </div>
+          <!-- 加载中 -->
+          <div v-if="p.loading.value" class="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-sm bg-black/60">
+            <Loader2 class="h-8 w-8 animate-spin text-white" />
+            <p class="text-sm text-white/80">{{ p.statusText.value }}</p>
+          </div>
 
-        <!-- 连接失败 -->
-        <div v-if="p.errorMsg.value" class="absolute inset-0 flex items-center justify-center bg-black/70 p-4">
-          <div class="flex max-w-sm flex-col items-center gap-2 rounded-xl bg-card p-6 text-center">
-            <TriangleAlert class="h-8 w-8 text-destructive" />
-            <p class="text-base font-semibold">连接失败</p>
-            <p class="text-sm text-muted-foreground">{{ p.errorMsg.value }}</p>
-            <Button class="mt-2" @click="p.retry()">重新连接</Button>
+          <!-- 连接失败 -->
+          <div v-if="p.errorMsg.value" class="absolute inset-0 flex items-center justify-center rounded-sm bg-black/70 p-4">
+            <div class="flex max-w-sm flex-col items-center gap-2 rounded-xl bg-card p-6 text-center">
+              <TriangleAlert class="h-8 w-8 text-destructive" />
+              <p class="text-base font-semibold">连接失败</p>
+              <p class="text-sm text-muted-foreground">{{ p.errorMsg.value }}</p>
+              <Button class="mt-2" @click="p.retry()">重新连接</Button>
+            </div>
           </div>
         </div>
 

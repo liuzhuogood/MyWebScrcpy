@@ -21,8 +21,12 @@ import (
 	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/uipage"
 	"mywebscrcpy/internal/uixml"
+	"mywebscrcpy/internal/updater"
 	"mywebscrcpy/internal/ws"
 )
+
+//go:embed VERSION
+var versionBytes []byte
 
 //go:embed assets/scrcpy-server
 var serverJarFS []byte
@@ -85,6 +89,15 @@ func main() {
 	scripts.RegisterRoutes(mux)
 	// 文件管理 API：每个请求都携带当前投屏页面选定的设备 serial，操作手机共享存储。
 	files.RegisterRoutes(mux, fileManager)
+
+	// 自动更新 API
+	currentVersionStr := strings.TrimSpace(string(versionBytes))
+	updaterService, err := updater.NewService(currentVersionStr)
+	if err != nil {
+		log.Printf("警告: 初始化更新器失败: %v", err)
+	} else {
+		updater.RegisterRoutes(mux, updaterService)
+	}
 
 	// 模板管理与匹配 API
 	templateStorage, err := template.NewStorage("")

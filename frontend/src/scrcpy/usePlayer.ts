@@ -23,6 +23,30 @@ const MAX_RECONNECT = 20
 const CONNECT_TIMEOUT_MS = 10000
 const NO_FRAME_TIMEOUT_MS = 5000
 const SCREEN_STATE_POLL_MS = 2000
+const DEFAULT_VIDEO_WIDTH = 472
+const DEFAULT_VIDEO_HEIGHT = 1024
+
+function loadCachedVideoSize(serial: string): { w: number, h: number } {
+  try {
+    const raw = localStorage.getItem(`scrcpy:video-size:${serial}`)
+    if (raw) {
+      const parsed = JSON.parse(raw) as { w?: number, h?: number }
+      if (parsed.w && parsed.w > 0 && parsed.h && parsed.h > 0)
+        return { w: parsed.w, h: parsed.h }
+    }
+  }
+  catch {}
+  return { w: DEFAULT_VIDEO_WIDTH, h: DEFAULT_VIDEO_HEIGHT }
+}
+
+function saveCachedVideoSize(serial: string, w: number, h: number) {
+  if (w <= 0 || h <= 0)
+    return
+  try {
+    localStorage.setItem(`scrcpy:video-size:${serial}`, JSON.stringify({ w, h }))
+  }
+  catch {}
+}
 
 interface WsMeta {
   type: string
@@ -283,6 +307,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     errorMsg.value = ''
     const w = msg.width ?? 0
     const h = msg.height ?? 0
+    saveCachedVideoSize(serial, w, h)
     if (msg.audio_available === false)
       audio?.serverStatus({ status: 'unavailable', reason: msg.audio_reason || '设备音频不可用' })
     packer.setDeviceSize(w, h)
@@ -806,12 +831,18 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     const canvas = canvasRef.value
     if (!canvas)
       return
+    const initialSize = loadCachedVideoSize(serial)
+    canvas.width = initialSize.w
+    canvas.height = initialSize.h
+    fitCanvas()
+
     decoder = new ScrcpyDecoder(canvas)
     decoder.onDecodedFrame = () => {
       lastActivityAt = Date.now()
     }
     decoder.onFps = v => (fps.value = v)
     decoder.onDeviceResize = (w, h) => {
+      saveCachedVideoSize(serial, w, h)
       packer.setDeviceSize(w, h)
       videoSize.value = { w, h }
       fitCanvas()

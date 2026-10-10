@@ -30,19 +30,25 @@ onUnmounted(() => store.stopPolling())
 <template>
   <div class="min-h-screen">
     <AppHeader :device-count-text="countText" />
-      <main class="w-full px-4 py-6">
-      <div class="mb-4 flex items-center gap-2">
-        <div class="relative max-w-sm flex-1">
-          <Search class="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input v-model="store.keyword" placeholder="搜索名称 / serial / 型号" aria-label="搜索设备" class="pl-8" />
+    <main class="w-full px-4 py-6">
+      <div class="mb-4 flex items-center justify-between gap-3">
+        <div class="flex items-center gap-2 flex-1 max-w-sm">
+          <div class="relative flex-1">
+            <Search class="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input v-model="store.keyword" placeholder="搜索名称 / serial / 型号" aria-label="搜索设备" class="pl-8" />
+          </div>
+          <Button variant="outline" size="icon" aria-label="刷新设备列表" @click="store.load(true)">
+            <RefreshCw class="h-4 w-4" />
+          </Button>
         </div>
-        <Button variant="outline" size="icon" aria-label="刷新设备列表" @click="store.load(true)">
-          <RefreshCw class="h-4 w-4" />
-        </Button>
-        <label v-if="isDevelopment" class="ml-auto flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
-          Mock
-          <Switch :model-value="store.mockEnabled" aria-label="Mock 数据开关" @update:model-value="(v) => store.setMock(!!v)" />
-        </label>
+
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-muted-foreground">{{ countText }}</span>
+          <label v-if="isDevelopment" class="flex cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+            Mock
+            <Switch :model-value="store.mockEnabled" aria-label="Mock 数据开关" @update:model-value="(v) => store.setMock(!!v)" />
+          </label>
+        </div>
       </div>
 
       <!-- 初次加载骨架 -->
