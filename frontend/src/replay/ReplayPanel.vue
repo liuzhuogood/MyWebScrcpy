@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { Download, Play, Trash2, X } from 'lucide-vue-next'
+import { Download, Play, Trash2 } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
+import SidePanelHeader from '@/components/layout/SidePanelHeader.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -91,14 +92,15 @@ function onBarDown(e: PointerEvent) {
 </script>
 
 <template>
-  <aside class="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border bg-card" aria-label="重放控制面板">
-    <div class="flex items-center gap-2 border-b px-3 py-2">
-      <strong class="text-sm">重放控制</strong>
-      <Badge v-if="replaying && loopChecked">循环</Badge>
-      <Button variant="ghost" size="icon" class="ml-auto h-7 w-7" aria-label="关闭重放面板" @click="emit('close')">
-        <X class="h-4 w-4" />
-      </Button>
-    </div>
+  <aside class="flex h-full min-h-0 w-full flex-col overflow-hidden bg-card" aria-label="重放控制面板">
+    <SidePanelHeader title="重放控制" @close="emit('close')">
+      <template #title>
+        <div class="flex min-w-0 items-center gap-2">
+          <strong class="truncate text-sm font-semibold">重放控制</strong>
+          <Badge v-if="replaying && loopChecked">循环</Badge>
+        </div>
+      </template>
+    </SidePanelHeader>
 
     <div class="min-h-0 flex-1 space-y-3 overflow-auto p-3">
       <p class="truncate font-mono text-xs text-muted-foreground" :title="currentName">{{ currentName || '--' }}</p>

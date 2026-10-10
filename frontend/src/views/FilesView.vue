@@ -16,6 +16,7 @@ import {
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { toast } from 'vue-sonner'
+import SidePanelHeader from '@/components/layout/SidePanelHeader.vue'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -265,9 +266,14 @@ onMounted(() => {
 
 <template>
   <div class="flex flex-col" :class="props.embedded ? 'h-full min-h-0' : 'min-h-screen'">
-    <header v-if="props.embedded" class="flex h-11 shrink-0 items-center gap-2 border-b px-3">
-      <FolderIcon class="h-4 w-4" /><strong class="text-sm">文件管理</strong>
-    </header>
+    <SidePanelHeader v-if="props.embedded" title="文件管理" @close="emit('close')">
+      <template #title>
+        <div class="flex min-w-0 items-center gap-2">
+          <FolderIcon class="h-4 w-4 shrink-0 text-muted-foreground" />
+          <strong class="truncate text-sm font-semibold">文件管理</strong>
+        </div>
+      </template>
+    </SidePanelHeader>
     <header v-if="!props.embedded" class="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
       <div class="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
         <Button variant="ghost" size="icon" aria-label="返回" as-child>

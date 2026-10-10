@@ -73,7 +73,7 @@ func TestBuiltAppUsesRootAssetPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read embedded frontend: %v", err)
 	}
-	if !strings.Contains(string(page), `/assets/`) || !strings.Contains(string(page), `/favicon.svg`) || strings.Contains(string(page), `/app/`) {
+	if !strings.Contains(string(page), `/assets/`) || !strings.Contains(string(page), `/app-icon.png`) || strings.Contains(string(page), `/app/`) {
 		t.Fatal("built frontend must use root asset paths")
 	}
 	err = fs.WalkDir(webFS, ".", func(path string, entry fs.DirEntry, err error) error {

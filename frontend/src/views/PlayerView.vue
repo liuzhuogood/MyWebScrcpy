@@ -107,7 +107,24 @@ onMounted(() => {
   }
 })
 
+function closeSidePanels() {
+  filesOpen.value = false
+  shellOpen.value = false
+  if (inspectorVisible.value) {
+    inspectorVisible.value = false
+    setInspector(false)
+    ins.closeInspector()
+  }
+  if (replayOpen.value) {
+    replayOpen.value = false
+    replay.panelOpen.value = false
+  }
+  templateOpen.value = false
+  settingsOpen.value = false
+}
+
 function openReplayPanel() {
+  closeSidePanels()
   replayOpen.value = true
   replay.panelOpen.value = true
   void replay.restore()
@@ -145,20 +162,23 @@ async function confirmDeleteRecording() {
 }
 
 function toggleInspector() {
-  inspectorVisible.value = !inspectorVisible.value
-  setInspector(inspectorVisible.value)
-  if (!inspectorVisible.value)
-    ins.closeInspector()
-}
-
-function openShell() {
   if (inspectorVisible.value) {
     inspectorVisible.value = false
     setInspector(false)
     ins.closeInspector()
+    return
   }
-  if (replayOpen.value)
-    toggleReplayPanel()
+  closeSidePanels()
+  inspectorVisible.value = true
+  setInspector(true)
+}
+
+function openShell() {
+  if (shellOpen.value) {
+    shellOpen.value = false
+    return
+  }
+  closeSidePanels()
   shellOpen.value = true
 }
 
@@ -167,12 +187,17 @@ function openFiles() {
     filesOpen.value = false
     return
   }
-  shellOpen.value = false
-  inspectorVisible.value = false
-  setInspector(false)
-  replayOpen.value = false
-  replay.panelOpen.value = false
+  closeSidePanels()
   filesOpen.value = true
+}
+
+function openTemplate() {
+  if (templateOpen.value) {
+    templateOpen.value = false
+    return
+  }
+  closeSidePanels()
+  templateOpen.value = true
 }
 
 function setTouchVisible(on: boolean) {
@@ -181,13 +206,11 @@ function setTouchVisible(on: boolean) {
 }
 
 function openSettings() {
-  filesOpen.value = false
-  shellOpen.value = false
-  inspectorVisible.value = false
-  setInspector(false)
-  replayOpen.value = false
-  replay.panelOpen.value = false
-  templateOpen.value = false
+  if (settingsOpen.value) {
+    settingsOpen.value = false
+    return
+  }
+  closeSidePanels()
   settingsOpen.value = true
 }
 
@@ -238,7 +261,7 @@ async function onReboot() {
         <Button variant="ghost" size="icon" title="切换任务" aria-label="切换任务" @click="p.pressRecents()">
           <GalleryHorizontal class="h-5 w-5" />
         </Button>
-        <Button variant="ghost" size="icon" title="解锁屏幕" aria-label="解锁屏幕" @click="p.pressPower()">
+        <Button variant="ghost" size="icon" title="电源键" aria-label="电源键" :disabled="p.powerBusy.value" @click="p.pressPower()">
           <Power class="h-5 w-5" />
         </Button>
         <Button variant="ghost" size="icon" title="横竖屏" aria-label="横竖屏" @click="p.rotate()">
@@ -328,8 +351,9 @@ async function onReboot() {
         </Button>
         <Button
           variant="ghost" size="icon"
-          title="模板匹配" aria-label="模板匹配"
-          @click="templateOpen = true"
+          title="模板管理" aria-label="模板管理"
+          :class="{ 'bg-accent': templateOpen }"
+          @click="openTemplate()"
         >
           <LayoutTemplate class="h-5 w-5" />
         </Button>
@@ -344,6 +368,7 @@ async function onReboot() {
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem @select="openFiles()"><FolderOpen class="h-4 w-4" />文件管理</DropdownMenuItem>
+            <DropdownMenuItem @select="openTemplate()"><LayoutTemplate class="h-4 w-4" />模板管理</DropdownMenuItem>
             <DropdownMenuItem @select="openShell()"><Terminal class="h-4 w-4" />ADB Shell</DropdownMenuItem>
             <DropdownMenuItem :disabled="!p.pipSupported.value" @select="p.togglePip()">
               <PictureInPicture2 class="h-4 w-4" />{{ p.pipActive.value ? '退出画中画' : '画中画' }}
@@ -391,7 +416,7 @@ async function onReboot() {
       </DialogContent>
     </Dialog>
     <!-- 舞台 + 侧栏 -->
-    <SplitLayout :open="filesOpen || shellOpen || inspectorVisible || replayOpen || templateOpen || settingsOpen">
+    <SplitLayout :class="{ 'capture-layout': captureOpen }" :open="captureOpen || filesOpen || shellOpen || inspectorVisible || replayOpen || templateOpen || settingsOpen">
       <template #main><div class="flex h-full min-h-0 flex-col gap-3 overflow-auto bg-muted/40 p-0">
       <main class="relative flex min-h-80 min-w-0 flex-1 items-center justify-center">
         <div class="relative">
@@ -409,6 +434,7 @@ async function onReboot() {
           <TouchVisualizer ref="touchVisualizerRef" :visible="touchVisible" :width="p.videoSize.value.w" :height="p.videoSize.value.h" />
           <CaptureLayer
             v-if="captureOpen" :serial="serial" :get-canvas="() => p.canvasRef.value"
+            actions-target="#capture-actions-host"
             @close="captureOpen = false"
           />
         </div>
@@ -442,6 +468,8 @@ async function onReboot() {
         </div>
       </main></div></template>
       <template #side>
+      <div v-if="captureOpen" id="capture-actions-host" class="h-full overflow-auto bg-card" />
+      <div v-show="!captureOpen" class="flex h-full min-h-0 flex-col">
       <FilesView v-if="filesOpen" embedded @close="filesOpen = false" />
       <InspectorPanel v-else-if="inspectorVisible" @close="inspectorVisible = false; setInspector(false)" />
       <AdbShellPanel v-else-if="shellOpen" :serial="serial" @close="shellOpen = false" />
@@ -464,14 +492,17 @@ async function onReboot() {
         @play="replay.start($event.recording_id, $event)"
         @delete="deleteRecordingTarget = $event"
       />
-      <div v-else-if="templateOpen" class="h-full overflow-auto rounded-xl border bg-card"><TemplatePanel :serial="serial" /></div>
+      <TemplatePanel v-else-if="templateOpen" :serial="serial" @close="templateOpen = false" />
       <PlayerSettingsPanel
         v-else-if="settingsOpen"
         :touch-visible="touchVisible" :boxes-visible="tm.showBoxes.value"
+        :auto-unlock-on-wake="p.autoUnlockOnWake.value"
         @update:touch-visible="setTouchVisible"
         @update:boxes-visible="tm.setShow"
+        @update:auto-unlock-on-wake="p.autoUnlockOnWake.value = $event"
         @close="settingsOpen = false"
       />
+      </div>
       </template>
     </SplitLayout>
 
@@ -498,6 +529,11 @@ async function onReboot() {
   position: fixed;
   inset: 0;
   z-index: 50;
+}
+@media (min-width: 821px) {
+  .capture-layout.split-layout-open:not(.split-layout-resized) {
+    grid-template-columns: minmax(0, 1fr) 8px 280px;
+  }
 }
 @media (max-width: 900px) {
   .toolbar-optional { display: none !important; }

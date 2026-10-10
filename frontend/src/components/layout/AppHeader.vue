@@ -1,18 +1,18 @@
 <script setup lang="ts">
-import { Github, LayoutGrid, MonitorSmartphone } from 'lucide-vue-next'
+import { Github, LayoutGrid } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 
 defineProps<{ deviceCountText: string }>()
+
+const appIconUrl = `${import.meta.env.BASE_URL}app-icon.png`
 </script>
 
 <template>
   <header class="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
     <div class="flex h-14 w-full items-center gap-3 px-4">
       <RouterLink to="/" class="flex items-center gap-2">
-        <span class="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-          <MonitorSmartphone class="h-5 w-5" />
-        </span>
+        <img :src="appIconUrl" alt="" class="h-8 w-8 shrink-0 object-contain" width="32" height="32" />
         <span class="text-base font-semibold">MyWebScrcpy</span>
       </RouterLink>
       <span class="text-sm text-muted-foreground">{{ deviceCountText }}</span>

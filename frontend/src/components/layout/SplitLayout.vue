@@ -53,20 +53,21 @@ watch(() => props.open, async () => {
 </template>
 
 <style scoped>
-.split-layout { height: 100%; max-height: 100%; min-height: 0; min-width: 0; flex: 1; overflow: hidden; }
+.split-layout { height: 100%; max-height: 100%; min-height: 0; min-width: 0; flex: 1 1 0%; overflow: hidden; }
 .split-layout:not(.split-layout-open) { display: flex; }
 .split-layout-open { display: grid; grid-template-columns: minmax(0, 1fr) 8px minmax(420px, 1fr); grid-template-rows: minmax(0, 1fr); }
 .split-layout-open.split-layout-resized { grid-template-columns: minmax(0, 1fr) 8px var(--split-width); }
 .split-layout-main { min-width: 0; min-height: 0; overflow: hidden; }
 .split-layout:not(.split-layout-open) .split-layout-main { width: 100%; height: 100%; }
 .split-layout-open .split-layout-main { grid-column: 1; grid-row: 1; width: 100%; }
-.split-layout-side { height: 100%; max-height: 100%; min-width: 0; min-height: 0; overflow: hidden; grid-column: 3; grid-row: 1; }
-.split-layout-resizer { width: 8px; cursor: col-resize; touch-action: none; position: relative; grid-column: 2; grid-row: 1; }
-.split-layout-resizer::after { content: ''; position: absolute; inset: 0 3px; background: transparent; transition: background .15s; }
+.split-layout-side { height: 100%; max-height: 100%; min-width: 0; min-height: 0; overflow: hidden; grid-column: 3; grid-row: 1; display: flex; flex-direction: column; }
+.split-layout-resizer { width: 8px; cursor: col-resize; touch-action: none; position: relative; grid-column: 2; grid-row: 1; z-index: 10; display: flex; justify-content: center; height: 100%; }
+.split-layout-resizer::before { content: ''; position: absolute; inset: 0 auto 0 3px; width: 1px; background: var(--border); }
+.split-layout-resizer::after { content: ''; position: absolute; inset: 0 2px; background: transparent; border-radius: 2px; transition: background .15s; }
 .split-layout-resizer:hover::after, .split-layout-dragging .split-layout-resizer::after { background: var(--primary); }
 @media (max-width: 820px) {
   .split-layout { display: flex; flex-direction: column; overflow: auto; }
-  .split-layout-side { width: 100%; flex: 0 0 min(52vh, 520px); }
+  .split-layout-side { width: 100%; flex: 0 0 min(52vh, 520px); border-top: 1px solid var(--border); }
   .split-layout-resizer { display: none; }
 }
 </style>

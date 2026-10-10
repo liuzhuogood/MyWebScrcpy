@@ -16,18 +16,6 @@ export interface TemplateItem {
   updated_at?: string
 }
 
-export interface TemplateMatch {
-  template_id?: string
-  name?: string
-  /** 命中框：归一化 0~1（vision 同款） */
-  x: number
-  y: number
-  w: number
-  h: number
-  confidence?: number
-  timestamp?: string | number
-}
-
 export type TemplateScope = 'all' | 'device' | 'global'
 
 async function request<T>(input: string, init: RequestInit = {}): Promise<T> {
@@ -85,17 +73,4 @@ export function templateImageUrl(id: string, updatedAt?: string): string {
 
 export function templateImageDownloadUrl(id: string): string {
   return `/api/templates/${encodeURIComponent(id)}/image?download=1`
-}
-
-export function getMatches(serial: string): Promise<{ count: number, matches: TemplateMatch[] }> {
-  return request(`/api/templates/matches?serial=${encodeURIComponent(serial)}`)
-}
-
-/** 定位并点击：后端定位模板后按 mode 注入（sdk/adb）；body 契约以服务端为准 */
-export function clickTemplate(body: { serial: string, template_id: string, mode?: 'sdk' | 'adb' }): Promise<unknown> {
-  return request('/api/templates/click', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
 }

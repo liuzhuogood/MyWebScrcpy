@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { X } from 'lucide-vue-next'
 import { onMounted, onUnmounted, watch } from 'vue'
-import { Button } from '@/components/ui/button'
+import SidePanelHeader from '@/components/layout/SidePanelHeader.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ColorTab from './ColorTab.vue'
 import { inspectorTab, setInspector } from './guard'
@@ -69,13 +68,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <aside class="flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border bg-card" aria-label="检查面板">
-    <div class="flex items-center gap-2 border-b px-3 py-2">
-      <strong class="text-sm">检查</strong>
-      <Button variant="ghost" size="icon" class="ml-auto h-7 w-7" aria-label="关闭检查面板" @click="close()">
-        <X class="h-4 w-4" />
-      </Button>
-    </div>
+  <aside class="flex h-full min-h-0 w-full flex-col overflow-hidden bg-card" aria-label="检查面板">
+    <SidePanelHeader title="检查" @close="close()" />
     <Tabs :model-value="inspectorTab" class="flex min-h-0 flex-1 flex-col overflow-hidden" @update:model-value="onTabChange">
       <TabsList class="mx-3 mt-2 grid shrink-0 grid-cols-4">
         <TabsTrigger value="color" @click="onTabClick('color')">取色</TabsTrigger>

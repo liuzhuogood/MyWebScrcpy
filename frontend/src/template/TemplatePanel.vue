@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Crosshair, Download, Globe, ImagePlus, Minus, Pencil, Plus, RefreshCw, Smartphone, Trash2, Upload } from 'lucide-vue-next'
+import { Download, Globe, ImagePlus, Minus, Plus, RefreshCw, Smartphone, Trash2, Upload } from 'lucide-vue-next'
 import { ref } from 'vue'
 import { toast } from 'vue-sonner'
 import {
@@ -18,10 +18,12 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import SidePanelHeader from '@/components/layout/SidePanelHeader.vue'
 import { exportUrl, templateImageDownloadUrl, templateImageUrl, type TemplateItem } from '@/api/templates'
 import { useTemplates } from './useTemplates'
 
 const props = defineProps<{ serial: string }>()
+const emit = defineEmits<{ close: [] }>()
 
 const t = useTemplates(props.serial)
 const deleteTarget = ref<TemplateItem | null>(null)
@@ -115,16 +117,6 @@ async function onAddImagePicked(e: Event) {
   }
 }
 
-async function onLocate(item: TemplateItem) {
-  try {
-    await t.locateClick(item, 'sdk')
-    note(`已定位点击「${item.name}」`, false)
-  }
-  catch (e) {
-    note(e instanceof Error ? e.message : '定位点击失败', true)
-  }
-}
-
 async function onDelete() {
   const id = deleteId.value
   deleteId.value = null
@@ -148,34 +140,36 @@ function askDelete(item: TemplateItem) {
 }
 
 void t.load()
-void t.refreshMatches()
 </script>
 
 <template>
-  <section class="flex h-full min-h-0 flex-col gap-3 overflow-hidden p-3" aria-label="模板管理">
-    <header>
-      <h2 class="text-sm font-semibold">模板匹配</h2>
-      <p class="text-xs text-muted-foreground">管理匹配模板；在投屏上定位点击；查看实时命中。</p>
-    </header>
-
-    <div class="flex flex-wrap items-center gap-1.5">
-      <div class="flex gap-1" role="group" aria-label="模板范围筛选">
-        <Button size="sm" :variant="t.scope.value === 'all' ? 'secondary' : 'ghost'" @click="t.scope.value = 'all'">全部</Button>
-        <Button size="sm" :variant="t.scope.value === 'device' ? 'secondary' : 'ghost'" @click="t.scope.value = 'device'">设备</Button>
-        <Button size="sm" :variant="t.scope.value === 'global' ? 'secondary' : 'ghost'" @click="t.scope.value = 'global'">全局</Button>
-      </div>
-      <div class="ml-auto flex gap-1.5">
-        <Button size="sm" variant="outline" @click="uploadInput?.click()"><Upload class="h-3.5 w-3.5" />上传单张</Button>
-        <Button size="sm" variant="outline" as-child>
-          <a :href="exportUrl(serial, t.scope.value)" target="_blank" rel="noopener"><Download class="h-3.5 w-3.5" />导出 ZIP</a>
+  <section class="flex h-full min-h-0 flex-col overflow-hidden bg-card" aria-label="模板管理">
+    <SidePanelHeader title="模板管理" @close="emit('close')">
+      <template #actions>
+        <Button size="sm" variant="ghost" class="h-7 px-2" aria-label="刷新模板列表" @click="t.load()">
+          <RefreshCw class="h-3.5 w-3.5" />
         </Button>
-        <Button size="sm" variant="outline" @click="importInput?.click()"><Plus class="h-3.5 w-3.5" />导入 ZIP</Button>
-        <Button size="sm" variant="ghost" aria-label="刷新模板列表" @click="t.load(); t.refreshMatches()"><RefreshCw class="h-3.5 w-3.5" /></Button>
+      </template>
+    </SidePanelHeader>
+
+    <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3">
+      <div class="flex flex-wrap items-center gap-1.5">
+        <div class="flex gap-1" role="group" aria-label="模板范围筛选">
+          <Button size="sm" :variant="t.scope.value === 'all' ? 'secondary' : 'ghost'" @click="t.scope.value = 'all'">全部</Button>
+          <Button size="sm" :variant="t.scope.value === 'device' ? 'secondary' : 'ghost'" @click="t.scope.value = 'device'">设备</Button>
+          <Button size="sm" :variant="t.scope.value === 'global' ? 'secondary' : 'ghost'" @click="t.scope.value = 'global'">全局</Button>
+        </div>
+        <div class="ml-auto flex gap-1.5">
+          <Button size="sm" variant="outline" @click="uploadInput?.click()"><Upload class="h-3.5 w-3.5" />上传单张</Button>
+          <Button size="sm" variant="outline" as-child>
+            <a :href="exportUrl(serial, t.scope.value)" target="_blank" rel="noopener"><Download class="h-3.5 w-3.5" />导出 ZIP</a>
+          </Button>
+          <Button size="sm" variant="outline" @click="importInput?.click()"><Plus class="h-3.5 w-3.5" />导入 ZIP</Button>
+        </div>
+        <input ref="uploadInput" type="file" accept="image/png,image/jpeg" class="hidden" @change="onUploadPicked" />
+        <input ref="importInput" type="file" accept=".zip" class="hidden" @change="onImportPicked" />
+        <input ref="addImageInput" type="file" accept="image/png,image/jpeg" class="hidden" @change="onAddImagePicked" />
       </div>
-      <input ref="uploadInput" type="file" accept="image/png,image/jpeg" class="hidden" @change="onUploadPicked" />
-      <input ref="importInput" type="file" accept=".zip" class="hidden" @change="onImportPicked" />
-      <input ref="addImageInput" type="file" accept="image/png,image/jpeg" class="hidden" @change="onAddImagePicked" />
-    </div>
 
     <div class="min-h-0 flex-1 overflow-auto">
       <p v-if="actionMsg" class="mb-2 text-xs" :class="actionMsgError ? 'text-destructive' : 'text-green-700 dark:text-green-400'">{{ actionMsg }}</p>
@@ -246,27 +240,11 @@ void t.refreshMatches()
                   <Trash2 class="h-3.5 w-3.5" />
                 </Button>
               </div>
-              <div class="mt-1.5 flex gap-1.5">
-                <Button size="sm" variant="outline" class="h-7 text-xs" :disabled="t.busyId.value === item.id" @click="onLocate(item)">
-                  <Crosshair class="h-3.5 w-3.5" />定位点击
-                </Button>
-                <Button size="sm" variant="ghost" class="h-7 text-xs" @click="t.refreshMatches()">
-                  <Pencil class="h-3.5 w-3.5" />刷新命中
-                </Button>
-              </div>
             </div>
           </CardContent>
         </Card>
       </div>
-
-      <div v-if="t.matches.value.length > 0" class="mt-3 rounded-lg border p-2">
-        <p class="mb-1 text-xs font-medium text-muted-foreground">实时命中（{{ t.matches.value.length }}）</p>
-        <ul class="space-y-1 font-mono text-xs">
-          <li v-for="(m, i) in t.matches.value" :key="i">
-            {{ m.name || m.template_id }} · 置信度 {{ m.confidence !== undefined ? Math.round(m.confidence * 100) + '%' : '—' }}
-          </li>
-        </ul>
-      </div>
+    </div>
     </div>
 
     <AlertDialog :open="deleteTarget !== null" @update:open="(v) => { if (!v) deleteTarget = null }">

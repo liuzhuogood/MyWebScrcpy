@@ -2,6 +2,7 @@
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import SidePanelHeader from '@/components/layout/SidePanelHeader.vue'
 import { Button } from '@/components/ui/button'
 import { useAdbShell } from './useAdbShell'
 import '@xterm/xterm/css/xterm.css'
@@ -37,15 +38,23 @@ onUnmounted(() => { shell.close(); observer?.disconnect(); terminal?.dispose(); 
 </script>
 
 <template>
-  <aside class="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded-xl border bg-[#18202d] text-[#e8edf7]" aria-label="ADB Shell 终端">
-    <header class="flex h-11 shrink-0 items-center gap-2 border-b border-[#303b4d] px-3">
-      <span class="h-2 w-2 rounded-full" :class="connected ? 'bg-green-500' : failed ? 'bg-red-500' : 'bg-gray-500'" />
-      <strong class="text-sm">ADB Shell</strong>
-      <div class="ml-auto flex gap-2">
-        <Button variant="ghost" size="sm" class="text-[#e8edf7] hover:bg-[#31405a]" @click="terminal?.clear()">清屏</Button>
-        <Button variant="ghost" size="sm" class="text-[#e8edf7] hover:bg-[#31405a]" @click="emit('close')">关闭</Button>
-      </div>
-    </header>
+  <aside class="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#18202d] text-[#e8edf7]" aria-label="ADB Shell 终端">
+    <SidePanelHeader
+      class="border-[#303b4d] text-[#e8edf7]"
+      title="ADB Shell"
+      button-class="text-[#e8edf7] hover:bg-[#31405a]"
+      @close="emit('close')"
+    >
+      <template #title>
+        <div class="flex min-w-0 items-center gap-2">
+          <span class="h-2 w-2 shrink-0 rounded-full" :class="connected ? 'bg-green-500' : failed ? 'bg-red-500' : 'bg-gray-500'" />
+          <strong class="truncate text-sm font-semibold">ADB Shell</strong>
+        </div>
+      </template>
+      <template #actions>
+        <Button variant="ghost" size="sm" class="h-7 px-2 text-[#e8edf7] hover:bg-[#31405a]" @click="terminal?.clear()">清屏</Button>
+      </template>
+    </SidePanelHeader>
     <div ref="terminalEl" class="min-h-0 flex-1 p-2" />
     <div v-if="failed && shell.errorMessage" class="absolute inset-0 flex items-center justify-center bg-[#18202d]/90">
       <div class="text-center text-sm"><p>{{ shell.errorMessage }}</p><Button class="mt-3" size="sm" @click="shell.retry()">重新连接</Button></div>

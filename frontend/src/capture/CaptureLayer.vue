@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Copy, Download, ImagePlus, Undo2, X } from 'lucide-vue-next'
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,6 +20,7 @@ import type { CaptureMode, CaptureShape } from './useCapture'
 const props = defineProps<{
   serial: string
   getCanvas: () => HTMLCanvasElement | null
+  actionsTarget: string
 }>()
 
 const emit = defineEmits<{ (e: 'close'): void }>()
@@ -64,6 +65,7 @@ let tplUrl: string | null = null
 let drag: { mode: 'move' | 'resize', dir?: string, startX: number, startY: number, rect: { x: number, y: number, w: number, h: number } } | null = null
 // 自由绘制进行中（指针已捕获）
 let drawing = false
+let layerObserver: ResizeObserver | undefined
 
 function layerPoint(e: PointerEvent | MouseEvent): { x: number, y: number } {
   const rect = layerRef.value?.getBoundingClientRect()
@@ -418,14 +420,44 @@ function close() {
 
 defineExpose({ open: cap.open })
 
-onMounted(() => {
+onMounted(async () => {
+  // 侧栏挂载后先让投屏适应新空间，再按实际显示尺寸初始化选区。
+  await nextTick()
+  const layer = layerRef.value
+  if (!layer)
+    return
+  window.dispatchEvent(new Event('resize'))
   const err = cap.open()
   if (err) {
     toast.error(err)
     emit('close')
     return
   }
+  let width = layer.clientWidth
+  let height = layer.clientHeight
+  // 面板伸缩或窗口变化时保留原始画布中的选区，避免显示尺寸改变后坐标漂移。
+  layerObserver = new ResizeObserver(() => {
+    const nextWidth = layer.clientWidth
+    const nextHeight = layer.clientHeight
+    if (!nextWidth || !nextHeight)
+      return
+    const r = cap.rect.value
+    if (r && width && height) {
+      cap.rect.value = {
+        x: r.x * nextWidth / width, y: r.y * nextHeight / height,
+        w: r.w * nextWidth / width, h: r.h * nextHeight / height,
+      }
+    }
+    width = nextWidth
+    height = nextHeight
+  })
+  layerObserver.observe(layer)
+  await nextTick()
   selectionRef.value?.focus({ preventScroll: true })
+})
+onUnmounted(() => {
+  layerObserver?.disconnect()
+  cap.close()
 })
 </script>
 
@@ -491,8 +523,8 @@ onMounted(() => {
       aria-hidden="true"
     />
 
-    <!-- 操作条：画布内底部悬浮，避免被右侧栏挤出可视区 -->
-    <div class="capture-actions absolute bottom-2 left-1/2 flex w-64 max-w-[calc(100%-16px)] -translate-x-1/2 flex-col items-stretch gap-1.5 rounded-lg bg-card p-3 shadow-lg">
+    <Teleport defer :to="actionsTarget">
+    <div data-capture-layer class="capture-actions flex w-full flex-col items-stretch gap-1.5 p-3">
       <span class="px-1 font-mono text-[11px] text-muted-foreground">{{ cap.sizeText.value }}</span>
       <div class="flex items-center gap-2">
         <Select :model-value="cap.shape.value" @update:model-value="(v) => cap.setShape(v as CaptureShape)">
@@ -523,6 +555,7 @@ onMounted(() => {
         v-model="bboxText" class="h-7 w-full font-mono text-[11px]" placeholder='BBOX JSON，如 {"x":0,"y":0,"width":100,"height":100}'
         aria-label="BBOX JSON" @keydown.enter.prevent="applyBbox"
       />
+      <p v-if="bboxError" class="text-[11px] text-destructive">{{ bboxError }}</p>
       <Button size="sm" variant="secondary" class="h-7 text-xs" @click="applyBbox()">应用</Button>
       <Button size="sm" variant="secondary" class="h-7 text-xs" @click="saveDownload()"><Download class="h-3.5 w-3.5" />保存</Button>
       <Button size="sm" variant="secondary" class="h-7 text-xs" :disabled="cap.shape.value !== 'freehand' || !cap.canUndo.value" @click="cap.undo()"><Undo2 class="h-3.5 w-3.5" />撤销</Button>
@@ -531,14 +564,14 @@ onMounted(() => {
       <Button size="sm" variant="secondary" class="h-7 text-xs" @click="openSaveTemplate()"><ImagePlus class="h-3.5 w-3.5" />存为模板</Button>
       <Button size="sm" variant="ghost" class="h-7 text-xs" @click="close()"><X class="h-3.5 w-3.5" />取消</Button>
     </div>
-    <p v-if="bboxError" class="absolute bottom-16 left-1/2 -translate-x-1/2 rounded bg-destructive px-2 py-1 text-[11px] text-destructive-foreground">{{ bboxError }}</p>
+    </Teleport>
 
     <!-- 存为模板 -->
     <Dialog v-model:open="saveOpen">
       <DialogContent @pointerdown.stop @pointermove.stop @pointerup.stop>
         <DialogHeader>
           <DialogTitle>存为模板</DialogTitle>
-          <DialogDescription>将当前选区存为匹配模板（关闭 v0.6 预留项）。</DialogDescription>
+          <DialogDescription>将当前选区存为匹配模板。</DialogDescription>
         </DialogHeader>
         <img v-if="tplPreview" :src="tplPreview" alt="模板预览" class="mx-auto max-h-48 rounded-md border object-contain" />
         <p class="font-mono text-xs text-muted-foreground">{{ tplSize }}</p>

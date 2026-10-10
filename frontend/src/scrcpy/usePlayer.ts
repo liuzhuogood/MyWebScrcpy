@@ -1,9 +1,12 @@
 import { onMounted, onUnmounted, ref } from 'vue'
+import { useStorage } from '@vueuse/core'
+import { toast } from 'vue-sonner'
 import { inspectorOpen, inspectorTab, xmlHitTest } from '@/inspector/guard'
 import { type OpPayload, type OpType } from '@/inspector/opLog'
 import { DeviceAudio, type AudioStatus } from './audio'
 import { ScrcpyDecoder } from './decoder'
 import { PictureInPicture } from './pip'
+import { pressPowerWithUnlock } from './screenPower'
 import {
   ACTION_DOWN,
   ACTION_MOVE,
@@ -61,6 +64,10 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   const pipActive = ref(false)
   const fullscreen = ref(false)
   const rebooting = ref(false)
+  const autoUnlockOnWake = useStorage('auto-unlock-on-wake', false)
+  const powerBusy = ref(false)
+  let powerAbort: AbortController | undefined
+  let powerDisposed = false
 
   const packer = new ControlPacker()
   let decoder: ScrcpyDecoder | null = null
@@ -603,9 +610,39 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     op('key', { label: '最近应用', keycode: 'KEYCODE_APP_SWITCH' })
   }
 
-  function pressPower() {
-    keyPress(AKEYCODE.POWER)
-    op('key', { label: '电源键', keycode: 'KEYCODE_POWER' })
+  async function pressPower() {
+    if (powerBusy.value)
+      return
+    powerBusy.value = true
+    const controller = new AbortController()
+    powerAbort = controller
+    let timedOut = false
+    const timeout = window.setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 15000)
+    try {
+      const woke = await pressPowerWithUnlock(serial, autoUnlockOnWake.value, () => {
+        keyPress(AKEYCODE.POWER)
+        op('key', { label: '电源键', keycode: 'KEYCODE_POWER' })
+      }, controller.signal)
+      if (woke) {
+        screenOffDetected = false
+        screenOff.value = false
+        op('key', { label: '唤醒', keycode: 'KEYCODE_WAKEUP' })
+      }
+    }
+    catch (error) {
+      if (powerDisposed)
+        return
+      console.warn('[wake-unlock] Power action failed', { serial, error })
+      toast.error(timedOut ? '唤醒解锁请求超时，请检查设备连接' : error instanceof Error ? error.message : '唤醒解锁请求失败')
+    }
+    finally {
+      window.clearTimeout(timeout)
+      powerAbort = undefined
+      powerBusy.value = false
+    }
   }
 
   function rotate() {
@@ -831,6 +868,8 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   })
 
   onUnmounted(() => {
+    powerDisposed = true
+    powerAbort?.abort()
     if (reconnectTimer !== undefined)
       window.clearTimeout(reconnectTimer)
     if (screenTimer !== undefined)
@@ -878,6 +917,8 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     pipActive,
     fullscreen,
     rebooting,
+    autoUnlockOnWake,
+    powerBusy,
     retry,
     switchStream,
     pressBack,

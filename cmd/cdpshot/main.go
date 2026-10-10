@@ -103,6 +103,15 @@ func main() {
 	cmd := os.Args[1]
 
 	switch cmd {
+	case "tabs":
+		tabs, err := getTabs()
+		if err != nil {
+			fmt.Println("获取标签失败:", err)
+			os.Exit(1)
+		}
+		for i, t := range tabs {
+			fmt.Printf("[%d] type=%s title=%q url=%s\n", i, t.Type, t.Title, t.URL)
+		}
 	case "nav":
 		if len(os.Args) < 3 {
 			fmt.Println("nav 需要 URL"); os.Exit(1)
@@ -138,6 +147,7 @@ func main() {
 		result, err := cdpCall(ws, ctx, 1, "Runtime.evaluate", map[string]interface{}{
 			"expression":   js,
 			"returnByValue": true,
+			"awaitPromise":  true,
 		})
 		if err != nil {
 			fmt.Println("调用失败:", err); os.Exit(1)

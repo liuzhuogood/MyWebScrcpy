@@ -1,27 +1,22 @@
 import { computed, ref } from 'vue'
 import {
   addTemplateImage,
-  clickTemplate,
   createTemplate,
   deleteTemplate,
-  getMatches,
   importTemplates,
   listTemplates,
   updateTemplate,
   type TemplateItem,
-  type TemplateMatch,
   type TemplateScope,
 } from '@/api/templates'
 
-/** 模板资产管理状态（列表/筛选/CRUD/定位点击/命中查看） */
+/** 模板资产管理状态（列表/筛选/CRUD/图片管理/导入导出） */
 export function useTemplates(serial: string) {
   const all = ref<TemplateItem[]>([])
   const loading = ref(true)
   const error = ref('')
   const scope = ref<TemplateScope>('all')
   const busyId = ref<string | null>(null)
-  const matches = ref<TemplateMatch[]>([])
-  const matchesLoading = ref(false)
 
   const filtered = computed(() => {
     if (scope.value === 'device')
@@ -126,30 +121,9 @@ export function useTemplates(serial: string) {
     return data.imported ?? 0
   }
 
-  async function locateClick(t: TemplateItem, mode: 'sdk' | 'adb' = 'sdk') {
-    busyId.value = t.id
-    try {
-      await clickTemplate({ serial, template_id: t.id, mode })
-    }
-    finally {
-      busyId.value = null
-    }
-  }
-
-  async function refreshMatches() {
-    matchesLoading.value = true
-    try {
-      const data = await getMatches(serial)
-      matches.value = Array.isArray(data.matches) ? data.matches : []
-    }
-    finally {
-      matchesLoading.value = false
-    }
-  }
-
   return {
-    all, loading, error, scope, busyId, matches, matchesLoading, filtered,
+    all, loading, error, scope, busyId, filtered,
     load, toggleEnabled, saveThreshold, switchScope, remove,
-    uploadSingle, addImage, importZip, locateClick, refreshMatches,
+    uploadSingle, addImage, importZip,
   }
 }
