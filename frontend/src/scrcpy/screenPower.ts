@@ -42,6 +42,40 @@ async function adbCommand(serial: string, args: string[], signal: AbortSignal): 
   }
 }
 
+export async function requestScreenUnlock(serial: string, signal: AbortSignal): Promise<void> {
+  console.info('[wake-unlock] Requesting keyguard dismissal', { serial })
+  await adbCommand(serial, ['shell', 'wm', 'dismiss-keyguard'], signal)
+  // 命令完成只代表已请求解除锁屏，不代表密码锁已通过验证。
+  console.info('[wake-unlock] Keyguard dismissal requested', { serial })
+}
+
+/** 每次亮屏只尝试一次；重新启用开关时可再尝试，避免定时检测反复打断密码输入。 */
+export function createWakeUnlockTrigger(requestUnlock: () => Promise<void>) {
+  let previousScreenOn: boolean | undefined
+  let enabledBefore = false
+  let pending = false
+  return {
+    reset() {
+      previousScreenOn = undefined
+      enabledBefore = false
+    },
+    async observe(screenOn: boolean, enabled: boolean): Promise<void> {
+      const shouldUnlock = screenOn && enabled && (previousScreenOn !== true || !enabledBefore)
+      previousScreenOn = screenOn
+      enabledBefore = enabled
+      if (!shouldUnlock || pending)
+        return
+      pending = true
+      try {
+        await requestUnlock()
+      }
+      finally {
+        pending = false
+      }
+    },
+  }
+}
+
 function waitForNextCheck(signal: AbortSignal): Promise<void> {
   ensureActive(signal)
   return new Promise((resolve, reject) => {
@@ -75,10 +109,7 @@ export async function pressPowerWithUnlock(
   await adbCommand(serial, ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'], signal)
   for (let attempt = 0; attempt < 12; attempt++) {
     if (await screenIsOn(serial, signal)) {
-      console.info('[wake-unlock] Requesting keyguard dismissal', { serial })
-      await adbCommand(serial, ['shell', 'wm', 'dismiss-keyguard'], signal)
-      // 命令完成只代表已请求解除锁屏，不代表密码锁已通过验证。
-      console.info('[wake-unlock] Keyguard dismissal requested', { serial })
+      await requestScreenUnlock(serial, signal)
       return true
     }
     if (attempt < 11)

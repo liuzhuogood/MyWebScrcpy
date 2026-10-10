@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { pressPowerWithUnlock } from '../src/scrcpy/screenPower.ts'
+import { createWakeUnlockTrigger, pressPowerWithUnlock, requestScreenUnlock } from '../src/scrcpy/screenPower.ts'
 
 function mockRequests(t, replies) {
   const calls = []
@@ -92,4 +92,80 @@ test('aborting after the wake request prevents subsequent screen and unlock requ
   }])
   await assert.rejects(pressPowerWithUnlock('device', true, () => assert.fail(), controller.signal), { name: 'AbortError' })
   assert.equal(calls.length, 2)
+})
+
+test('opening an already lit device requests unlock once without toggling power', async (t) => {
+  const calls = mockRequests(t, [completed])
+  const trigger = createWakeUnlockTrigger(() => requestScreenUnlock('device', new AbortController().signal))
+  await trigger.observe(true, true)
+  await trigger.observe(true, true)
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0].body.args, ['shell', 'wm', 'dismiss-keyguard'])
+})
+
+test('a screen that wakes independently gets a new unlock attempt', async () => {
+  let attempts = 0
+  const trigger = createWakeUnlockTrigger(async () => { attempts++ })
+  await trigger.observe(false, true)
+  assert.equal(attempts, 0)
+  await trigger.observe(true, true)
+  await trigger.observe(true, true)
+  await trigger.observe(false, true)
+  await trigger.observe(true, true)
+  assert.equal(attempts, 2)
+})
+
+test('enabling the setting on a lit device immediately attempts unlock', async () => {
+  let attempts = 0
+  const trigger = createWakeUnlockTrigger(async () => { attempts++ })
+  await trigger.observe(true, false)
+  assert.equal(attempts, 0)
+  await trigger.observe(true, true)
+  assert.equal(attempts, 1)
+})
+
+test('disabled automatic detection never attempts unlock', async () => {
+  const trigger = createWakeUnlockTrigger(async () => assert.fail('setting is disabled'))
+  await trigger.observe(false, false)
+  await trigger.observe(true, false)
+  await trigger.observe(true, false)
+})
+
+test('concurrent screen observations do not duplicate a pending unlock', async () => {
+  let attempts = 0
+  let finish
+  const trigger = createWakeUnlockTrigger(() => {
+    attempts++
+    return new Promise(resolve => { finish = resolve })
+  })
+  const pending = trigger.observe(true, true)
+  await trigger.observe(false, true)
+  await trigger.observe(true, true)
+  assert.equal(attempts, 1)
+  finish()
+  await pending
+})
+
+test('an unlock error is not retried every poll, but a later wake can try again', async () => {
+  let attempts = 0
+  const trigger = createWakeUnlockTrigger(async () => {
+    attempts++
+    if (attempts === 1)
+      throw new Error('command failed')
+  })
+  await assert.rejects(trigger.observe(true, true), /command failed/)
+  await trigger.observe(true, true)
+  assert.equal(attempts, 1)
+  await trigger.observe(false, true)
+  await trigger.observe(true, true)
+  assert.equal(attempts, 2)
+})
+
+test('changing the setting resets the attempt for the next confirmed screen state', async () => {
+  let attempts = 0
+  const trigger = createWakeUnlockTrigger(async () => { attempts++ })
+  await trigger.observe(true, true)
+  trigger.reset()
+  await trigger.observe(true, true)
+  assert.equal(attempts, 2)
 })

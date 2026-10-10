@@ -1,12 +1,10 @@
 import { onMounted, onUnmounted, ref } from 'vue'
-import { useStorage } from '@vueuse/core'
-import { toast } from 'vue-sonner'
 import { inspectorOpen, inspectorTab, xmlHitTest } from '@/inspector/guard'
 import { type OpPayload, type OpType } from '@/inspector/opLog'
 import { DeviceAudio, type AudioStatus } from './audio'
 import { ScrcpyDecoder } from './decoder'
 import { PictureInPicture } from './pip'
-import { pressPowerWithUnlock } from './screenPower'
+import { useScreenPower } from './useScreenPower'
 import {
   ACTION_DOWN,
   ACTION_MOVE,
@@ -24,7 +22,7 @@ const MAX_RECONNECT = 20
 // adb 启动 scrcpy server 在冷启动、无线设备或设备负载较高时可能超过 3 秒。
 const CONNECT_TIMEOUT_MS = 10000
 const NO_FRAME_TIMEOUT_MS = 5000
-const SCREEN_STATE_POLL_MS = 10000
+const SCREEN_STATE_POLL_MS = 2000
 
 interface WsMeta {
   type: string
@@ -64,10 +62,18 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   const pipActive = ref(false)
   const fullscreen = ref(false)
   const rebooting = ref(false)
-  const autoUnlockOnWake = useStorage('auto-unlock-on-wake', false)
-  const powerBusy = ref(false)
-  let powerAbort: AbortController | undefined
-  let powerDisposed = false
+  const { autoUnlockOnWake, powerBusy, pressPower, observeScreenState } = useScreenPower(serial, {
+    sendPowerKey: () => {
+      keyPress(AKEYCODE.POWER)
+      op('key', { label: '电源键', keycode: 'KEYCODE_POWER' })
+    },
+    onWake: () => {
+      screenOffDetected = false
+      screenOff.value = false
+      op('key', { label: '唤醒', keycode: 'KEYCODE_WAKEUP' })
+    },
+    checkScreenState,
+  })
 
   const packer = new ControlPacker()
   let decoder: ScrcpyDecoder | null = null
@@ -87,6 +93,9 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   let lastServerError = ''
   let errorShown = false
   let screenOffDetected = false
+  let screenChecking = false
+  let screenAbort: AbortController | undefined
+  let disposed = false
   let pseudoFs = false
   let resizeObserver: ResizeObserver | undefined
   let mouseDown = false
@@ -610,41 +619,6 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     op('key', { label: '最近应用', keycode: 'KEYCODE_APP_SWITCH' })
   }
 
-  async function pressPower() {
-    if (powerBusy.value)
-      return
-    powerBusy.value = true
-    const controller = new AbortController()
-    powerAbort = controller
-    let timedOut = false
-    const timeout = window.setTimeout(() => {
-      timedOut = true
-      controller.abort()
-    }, 15000)
-    try {
-      const woke = await pressPowerWithUnlock(serial, autoUnlockOnWake.value, () => {
-        keyPress(AKEYCODE.POWER)
-        op('key', { label: '电源键', keycode: 'KEYCODE_POWER' })
-      }, controller.signal)
-      if (woke) {
-        screenOffDetected = false
-        screenOff.value = false
-        op('key', { label: '唤醒', keycode: 'KEYCODE_WAKEUP' })
-      }
-    }
-    catch (error) {
-      if (powerDisposed)
-        return
-      console.warn('[wake-unlock] Power action failed', { serial, error })
-      toast.error(timedOut ? '唤醒解锁请求超时，请检查设备连接' : error instanceof Error ? error.message : '唤醒解锁请求失败')
-    }
-    finally {
-      window.clearTimeout(timeout)
-      powerAbort = undefined
-      powerBusy.value = false
-    }
-  }
-
   function rotate() {
     const before = `${videoSize.value.w}x${videoSize.value.h}`
     send(packer.rotate())
@@ -789,11 +763,19 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
 
   // ---------- 灭屏检测 ----------
   async function checkScreenState() {
-    if (!connected || !serial)
+    if (!serial || screenChecking || disposed)
       return
+    screenChecking = true
+    const controller = new AbortController()
+    screenAbort = controller
+    const timeout = window.setTimeout(() => controller.abort(), 10000)
     try {
-      const res = await fetch(`/api/screen-state?serial=${encodeURIComponent(serial)}`)
+      const res = await fetch(`/api/screen-state?serial=${encodeURIComponent(serial)}`, { signal: controller.signal })
+      if (!res.ok)
+        throw new Error(`读取屏幕状态失败（${res.status}）`)
       const data = await res.json()
+      if (disposed)
+        return
       if (data.error) {
         console.warn('[screen-state] 检测失败:', data.error)
         return
@@ -806,9 +788,16 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
         screenOffDetected = false
         screenOff.value = false
       }
+      if (typeof data.screenOn === 'boolean')
+        await observeScreenState(data.screenOn)
     }
     catch (e) {
       console.warn('[screen-state] 请求失败:', e)
+    }
+    finally {
+      window.clearTimeout(timeout)
+      screenAbort = undefined
+      screenChecking = false
     }
   }
 
@@ -864,12 +853,13 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     window.addEventListener('resize', fitCanvas)
 
     screenTimer = window.setInterval(checkScreenState, SCREEN_STATE_POLL_MS)
+    void checkScreenState()
     connect()
   })
 
   onUnmounted(() => {
-    powerDisposed = true
-    powerAbort?.abort()
+    disposed = true
+    screenAbort?.abort()
     if (reconnectTimer !== undefined)
       window.clearTimeout(reconnectTimer)
     if (screenTimer !== undefined)
