@@ -61,6 +61,17 @@ type sharedAudioPacket struct {
 	replayed bool
 }
 
+// inflightSession coordinates concurrent acquireSession calls for the same
+// serial so they share a single startSession call without holding the global
+// Hub.sessionMu across slow ADB/network operations.
+type inflightSession struct {
+	done    chan struct{}
+	waiters int
+	ms      *managedSession
+	meta    *handshakeMeta
+	err     error
+}
+
 func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, func(), error) {
 	// An active MP4 replay shadows the live scrcpy session for this serial.
 	if h.replays != nil {
@@ -80,17 +91,49 @@ func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, fu
 		h.sessionMu.Unlock()
 		return ms, ms.meta, func() { h.releaseSession(serial, ms) }, nil
 	}
-	// 保持注册表锁直到创建完成，避免同一 serial 并发 push/start 两套 scrcpy。
-	sess, meta, err := h.startSession(serial)
-	if err != nil {
-		h.recordEvent(debuglog.Event{Type: "session.start_failed", DeviceID: serial, Message: err.Error()})
+	if call := h.inflight[serial]; call != nil {
+		call.waiters++
 		h.sessionMu.Unlock()
+		<-call.done
+		if call.err != nil {
+			return nil, nil, nil, call.err
+		}
+		return call.ms, call.meta, func() { h.releaseSession(serial, call.ms) }, nil
+	}
+	if h.inflight == nil {
+		h.inflight = make(map[string]*inflightSession)
+	}
+	call := &inflightSession{done: make(chan struct{}), waiters: 1}
+	h.inflight[serial] = call
+	startFn := h.startSessionFn
+	h.sessionMu.Unlock()
+
+	if startFn == nil {
+		startFn = h.startSession
+	}
+	// 在全局锁外按 serial 单飞启动，避免单台慢设备阻塞其他设备的投屏请求。
+	sess, meta, err := startFn(serial)
+
+	h.sessionMu.Lock()
+	delete(h.inflight, serial)
+	if err != nil {
+		call.err = err
+		close(call.done)
+		h.sessionMu.Unlock()
+		h.recordEvent(debuglog.Event{Type: "session.start_failed", DeviceID: serial, Message: err.Error()})
 		return nil, nil, nil, err
 	}
-	ms := &managedSession{sess: sess, meta: meta, refs: 1, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), audioAvailable: meta.AudioAvailable, audioReason: meta.AudioReason, width: meta.Width, height: meta.Height}
+	ms := &managedSession{sess: sess, meta: meta, refs: call.waiters, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), audioAvailable: meta.AudioAvailable, audioReason: meta.AudioReason, width: meta.Width, height: meta.Height}
 	ms.actions = action.New(deviceActionExecutor{ms: ms, gate: h.gateFor(serial), touch: touchPublisher{h: h, serial: serial, sessionID: meta.SessionID}, commands: h.commands}, 64)
+	if h.sessions == nil {
+		h.sessions = make(map[string]*managedSession)
+	}
 	h.sessions[serial] = ms
+	call.ms = ms
+	call.meta = meta
+	close(call.done)
 	h.sessionMu.Unlock()
+
 	h.recordEvent(debuglog.Event{Type: "session.started", DeviceID: serial, SessionID: meta.SessionID, Fields: map[string]interface{}{"codec": meta.Codec, "width": meta.Width, "height": meta.Height}})
 	go h.readSharedSession(serial, ms)
 	if ms.audioAvailable {
@@ -112,11 +155,15 @@ func (h *Hub) releaseSession(serial string, ms *managedSession) {
 		ms.mu.Unlock()
 		return
 	}
+	idleTTL := h.idleTTL
+	if idleTTL <= 0 {
+		idleTTL = defaultSessionIdleTTL
+	}
 	ms.mu.Lock()
 	ms.refs--
 	refs := ms.refs
 	if refs == 0 {
-		ms.closeTimer = time.AfterFunc(10*time.Second, func() {
+		ms.closeTimer = time.AfterFunc(idleTTL, func() {
 			h.sessionMu.Lock()
 			ms.mu.Lock()
 			if ms.refs != 0 {
@@ -179,6 +226,9 @@ func (h *Hub) subscribeAudio(ms *managedSession) (<-chan sharedAudioPacket, func
 }
 
 func (h *Hub) readSharedSession(serial string, ms *managedSession) {
+	if ms.sess == nil || ms.sess.conn == nil {
+		return
+	}
 	for {
 		f, err := ms.sess.conn.ReadFrame()
 		if err != nil {

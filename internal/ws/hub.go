@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -33,10 +34,18 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+const defaultSessionIdleTTL = 60 * time.Second
+
+type deviceEnv struct {
+	sdk      int
+	jarReady bool
+}
+
 // Hub 管理所有设备的 scrcpy server 会话。
 type Hub struct {
 	adbPath         string
 	jarPath         string
+	jarSize         int64
 	portMu          sync.Mutex
 	nextPort        int
 	resultMu        sync.Mutex
@@ -47,6 +56,11 @@ type Hub struct {
 	events          *debuglog.Ring
 	sessionMu       sync.Mutex
 	sessions        map[string]*managedSession
+	inflight        map[string]*inflightSession
+	envMu           sync.Mutex
+	deviceEnvs      map[string]deviceEnv
+	idleTTL         time.Duration
+	startSessionFn  func(serial string) (*session, *handshakeMeta, error)
 	recordings      *recordingManager
 	replays         *replayManager
 	gates           map[string]*devicegate.Gate
@@ -89,7 +103,26 @@ func (h *Hub) consumeVideoFrame(frame VideoFrame) {
 }
 
 func NewHub(adbPath, jarPath string) *Hub {
-	h := &Hub{adbPath: adbPath, jarPath: jarPath, nextPort: 27183, results: make(map[string]map[chan vision.Message]string), lastResult: make(map[string]vision.Message), sessions: make(map[string]*managedSession), gates: make(map[string]*devicegate.Gate), events: debuglog.New(512)}
+	var jarSize int64
+	if jarPath != "" {
+		if info, err := os.Stat(jarPath); err == nil {
+			jarSize = info.Size()
+		}
+	}
+	h := &Hub{
+		adbPath:    adbPath,
+		jarPath:    jarPath,
+		jarSize:    jarSize,
+		nextPort:   27183,
+		results:    make(map[string]map[chan vision.Message]string),
+		lastResult: make(map[string]vision.Message),
+		sessions:   make(map[string]*managedSession),
+		inflight:   make(map[string]*inflightSession),
+		deviceEnvs: make(map[string]deviceEnv),
+		idleTTL:    defaultSessionIdleTTL,
+		gates:      make(map[string]*devicegate.Gate),
+		events:     debuglog.New(512),
+	}
 	h.recordings = newRecordingManager(h)
 	h.replays = newReplayManager(h)
 	h.commands = adbcommand.New(adbPath, h.gateFor)
@@ -143,6 +176,9 @@ type session struct {
 }
 
 func (s *session) close() {
+	if s == nil {
+		return
+	}
 	if s.conn != nil {
 		s.conn.Close()
 	}
@@ -242,48 +278,78 @@ func writeJSON(c *websocket.Conn, v interface{}) {
 	_ = c.WriteJSON(v)
 }
 
-// startSession 完成 push → forward → start → dial 全流程。
+// startSession 完成环境探测/缓存 → (按需 push) → forward → start → 快速探测 dial 全流程。
 func (h *Hub) startSession(serial string) (*session, *handshakeMeta, error) {
+	sess, meta, skippedPush, err := h.startSessionOnce(serial, false)
+	if err != nil && skippedPush {
+		log.Printf("[scrcpy:%s] 免推启动失败 (%v)，强制重新 push jar 并重试", serial, err)
+		h.invalidateJarReady(serial)
+		sess, meta, _, err = h.startSessionOnce(serial, true)
+	}
+	return sess, meta, err
+}
+
+func (h *Hub) startSessionOnce(serial string, forcePush bool) (*session, *handshakeMeta, bool, error) {
+	t0 := time.Now()
+	sdk, needPush := h.resolveDeviceEnv(serial, forcePush)
+
 	cfg := scrcpy.DefaultConfig(serial)
 	audioReason := ""
 	// Android 11 (API 30) is the first supported release for scrcpy's direct
 	// device-output audio capture. Keep older devices on the established
 	// video/control path instead of letting an unavailable audio stream prevent
 	// screen mirroring altogether.
-	if sdk, err := androidSDK(h.adbPath, serial); err == nil && sdk < 30 {
+	if sdk > 0 && sdk < 30 {
 		cfg.Audio = false
 		audioReason = "audio_unsupported_android"
 	}
 	server := scrcpy.NewServer(cfg, h.adbPath, h.allocPort())
 
-	if err := server.Push(h.jarPath); err != nil {
-		return nil, nil, fmt.Errorf("push jar: %w", err)
+	skippedPush := !needPush
+	if needPush {
+		if err := server.Push(h.jarPath); err != nil {
+			return nil, nil, false, fmt.Errorf("push jar: %w", err)
+		}
 	}
+	h.markJarReady(serial, sdk)
 
 	if err := server.Forward(); err != nil {
-		return nil, nil, fmt.Errorf("forward: %w", err)
+		return nil, nil, skippedPush, fmt.Errorf("forward: %w", err)
 	}
 
 	if err := server.Start(); err != nil {
-		return nil, nil, fmt.Errorf("start server: %w", err)
+		server.RemoveForward()
+		return nil, nil, skippedPush, fmt.Errorf("start server: %w", err)
 	}
 
-	// 等 server 就绪 (JVM 冷启动约 1~2 秒)
-	time.Sleep(1500 * time.Millisecond)
+	// 快速探测 server 就绪：移除原 1500ms 固定死等，初始等待 40ms 后以 50ms~100ms 间隔探测
+	time.Sleep(40 * time.Millisecond)
 
 	var conn *scrcpy.Connection
 	var dialErr error
-	for i := 0; i < 15; i++ {
-		conn, dialErr = scrcpy.Dial(server.LocalPort(), cfg.Audio, cfg.Control, 3*time.Second)
+	deadline := time.Now().Add(8 * time.Second)
+	for attempt := 0; time.Now().Before(deadline); attempt++ {
+		conn, dialErr = scrcpy.Dial(server.LocalPort(), cfg.Audio, cfg.Control, 1500*time.Millisecond)
 		if dialErr == nil {
 			break
 		}
-		time.Sleep(500 * time.Millisecond)
+		select {
+		case <-server.Exited():
+			dialErr = fmt.Errorf("server exited early (%v): %w", server.Wait(), dialErr)
+			goto dialFinished
+		default:
+		}
+		sleepDur := 50 * time.Millisecond
+		if attempt >= 30 {
+			sleepDur = 100 * time.Millisecond
+		}
+		time.Sleep(sleepDur)
 	}
+dialFinished:
 	if conn == nil {
 		server.Stop()
 		server.RemoveForward()
-		return nil, nil, fmt.Errorf("dial scrcpy: %w", dialErr)
+		return nil, nil, skippedPush, fmt.Errorf("dial scrcpy: %w", dialErr)
 	}
 
 	w, hh := conn.Size()
@@ -300,7 +366,90 @@ func (h *Hub) startSession(serial string) (*session, *handshakeMeta, error) {
 	if meta.AudioAvailable {
 		meta.AudioCodec = "aac"
 	}
-	return &session{server: server, conn: conn}, meta, nil
+	log.Printf("[scrcpy:%s] startSession 就绪耗时=%v skippedPush=%v size=%dx%d",
+		serial, time.Since(t0).Round(time.Millisecond), skippedPush, w, hh)
+	return &session{server: server, conn: conn}, meta, skippedPush, nil
+}
+
+func (h *Hub) resolveDeviceEnv(serial string, forcePush bool) (sdk int, needPush bool) {
+	h.envMu.Lock()
+	env := h.deviceEnvs[serial]
+	h.envMu.Unlock()
+
+	if !forcePush && env.sdk > 0 && env.jarReady {
+		return env.sdk, false
+	}
+
+	sdk = env.sdk
+	var remoteJarSize int64 = -1
+	if !forcePush {
+		if pSDK, pSize, err := probeDeviceEnv(h.adbPath, serial); err == nil {
+			if pSDK > 0 {
+				sdk = pSDK
+			}
+			remoteJarSize = pSize
+		}
+	}
+	if sdk <= 0 {
+		if s, err := androidSDK(h.adbPath, serial); err == nil && s > 0 {
+			sdk = s
+		}
+	}
+
+	if !forcePush && h.jarSize > 0 && remoteJarSize == h.jarSize {
+		log.Printf("[scrcpy:%s] 设备端 jar 已存在且大小匹配 (%d bytes)，跳过 push", serial, remoteJarSize)
+		return sdk, false
+	}
+	return sdk, true
+}
+
+func (h *Hub) markJarReady(serial string, sdk int) {
+	h.envMu.Lock()
+	defer h.envMu.Unlock()
+	prev := h.deviceEnvs[serial]
+	if sdk <= 0 {
+		sdk = prev.sdk
+	}
+	h.deviceEnvs[serial] = deviceEnv{sdk: sdk, jarReady: true}
+}
+
+func (h *Hub) invalidateJarReady(serial string) {
+	h.envMu.Lock()
+	defer h.envMu.Unlock()
+	env := h.deviceEnvs[serial]
+	env.jarReady = false
+	h.deviceEnvs[serial] = env
+}
+
+// probeDeviceEnv 在单次 adb shell 往返中同时获取 Android SDK 版本与设备端 jar 文件大小。
+func probeDeviceEnv(adbPath, serial string) (sdk int, jarSize int64, err error) {
+	script := "getprop ro.build.version.sdk; stat -c %s " + scrcpy.DeviceServerPath + " 2>/dev/null || true"
+	out, err := exec.Command(adbPath, "-s", serial, "shell", script).Output()
+	if err != nil {
+		return 0, -1, err
+	}
+	lines := strings.Split(strings.ReplaceAll(string(out), "\r\n", "\n"), "\n")
+	var nonEmpty []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			nonEmpty = append(nonEmpty, trimmed)
+		}
+	}
+	if len(nonEmpty) == 0 {
+		return 0, -1, errors.New("empty probe output")
+	}
+	sdk, err = strconv.Atoi(nonEmpty[0])
+	if err != nil || sdk <= 0 {
+		return 0, -1, fmt.Errorf("invalid Android SDK level %q", nonEmpty[0])
+	}
+	jarSize = -1
+	if len(nonEmpty) >= 2 {
+		if sz, sErr := strconv.ParseInt(nonEmpty[1], 10, 64); sErr == nil && sz > 0 {
+			jarSize = sz
+		}
+	}
+	return sdk, jarSize, nil
 }
 
 func androidSDK(adbPath, serial string) (int, error) {

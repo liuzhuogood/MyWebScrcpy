@@ -44,12 +44,14 @@ type Server struct {
 	localPort   int    // adb forward 的本地端口
 	adbPath     string
 	cmd         *exec.Cmd // app_process 后台进程
+	exited      chan struct{}
+	exitErr     error
 }
 
 // NewServer 创建一个 server 实例（不启动）。
 // localPort 指定 adb forward 的本地端口，每个 session 必须用不同端口。
 func NewServer(cfg ServerConfig, adbPath string, localPort int) *Server {
-	s := &Server{cfg: cfg, adbPath: adbPath, localPort: localPort}
+	s := &Server{cfg: cfg, adbPath: adbPath, localPort: localPort, exited: make(chan struct{})}
 	s.generateSCID()
 	return s
 }
@@ -72,14 +74,7 @@ func (s *Server) Push(jarPath string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("push server jar: %w: %s", err, out)
 	}
-	// 验证设备端 jar 存在
-	verify := exec.Command(s.adbPath, "-s", s.cfg.Serial, "shell",
-		"ls -la "+DeviceServerPath)
-	vout, verr := verify.CombinedOutput()
-	if verr != nil {
-		return fmt.Errorf("verify jar: %w: %s", verr, vout)
-	}
-	log.Printf("[scrcpy] push 完成, 设备端: %s", string(vout))
+	log.Printf("[scrcpy:%s] push 完成 -> %s", s.cfg.Serial, DeviceServerPath)
 	return nil
 }
 
@@ -123,6 +118,7 @@ func (s *Server) Start() error {
 		"send_device_meta=false",
 		"send_stream_meta=true",
 		"send_frame_meta=true",
+		"cleanup=false",
 		fmt.Sprintf("max_size=%d", s.cfg.MaxSize),
 		fmt.Sprintf("video_bit_rate=%d", s.cfg.BitRate),
 		fmt.Sprintf("max_fps=%d", s.cfg.MaxFPS),
@@ -135,15 +131,23 @@ func (s *Server) Start() error {
 	s.cmd.Stderr = lw
 
 	if err := s.cmd.Start(); err != nil {
+		close(s.exited)
 		return fmt.Errorf("start app_process: %w", err)
 	}
 
-	// 后台监控 server 进程退出，打印退出码
+	// 后台监控 server 进程退出，打印退出码并通知等待方
 	go func() {
 		err := s.cmd.Wait()
+		s.exitErr = err
+		close(s.exited)
 		log.Printf("[scrcpy:%s] server 进程退出: %v", s.cfg.Serial, err)
 	}()
 	return nil
+}
+
+// Exited 返回 server 进程退出通知 channel。
+func (s *Server) Exited() <-chan struct{} {
+	return s.exited
 }
 
 // Stop 终止 server 进程。
@@ -158,7 +162,8 @@ func (s *Server) Wait() error {
 	if s.cmd == nil {
 		return nil
 	}
-	return s.cmd.Wait()
+	<-s.exited
+	return s.exitErr
 }
 
 // LocalPort 返回 forward 的本地端口。
