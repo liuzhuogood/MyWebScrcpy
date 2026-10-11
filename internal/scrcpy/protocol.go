@@ -28,6 +28,23 @@ const (
 	TypeRotateDevice       = 11
 )
 
+// 设备消息类型 (device -> client，通过 control socket 下行)
+const (
+	DeviceMsgClipboard    = 0
+	DeviceMsgAckClipboard = 1
+	DeviceMsgUhidOutput   = 2
+)
+
+// GetClipboard 的 copyKey 参数枚举
+const (
+	CopyKeyNone = 0
+	CopyKeyCopy = 1
+	CopyKeyCut  = 2
+)
+
+// ClipboardTextMaxLength 是 scrcpy DeviceMessageWriter / ControlMessage 允许的最大 UTF-8 字节数 (256KB - 5B)
+const ClipboardTextMaxLength = 262139
+
 // 触摸 action (AMOTION_EVENT_ACTION_*)
 const (
 	ActionDown          = 0

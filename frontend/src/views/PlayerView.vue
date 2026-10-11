@@ -497,9 +497,11 @@ async function onReboot() {
         v-else-if="settingsOpen"
         :touch-visible="touchVisible" :boxes-visible="tm.showBoxes.value"
         :auto-unlock-on-wake="p.autoUnlockOnWake.value"
+        :clipboard-sync="p.clipboardSync.value"
         @update:touch-visible="setTouchVisible"
         @update:boxes-visible="tm.setShow"
         @update:auto-unlock-on-wake="p.autoUnlockOnWake.value = $event"
+        @update:clipboard-sync="p.clipboardSync.value = $event"
         @close="settingsOpen = false"
       />
       </div>

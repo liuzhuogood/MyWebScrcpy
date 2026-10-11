@@ -3,6 +3,7 @@ package scrcpy
 import (
 	"encoding/binary"
 	"math"
+	"unicode/utf8"
 )
 
 // 压力归一化值 0.0~1.0 转 uint16 定点 (0xFFFF = 1.0)
@@ -100,6 +101,37 @@ func TextEvent(text string) []byte {
 // action: KeyActionDown 点亮屏幕，KeyActionUp 释放。
 func BackEvent(action uint8) []byte {
 	return []byte{TypeBackOrScreenOn, action}
+}
+
+// GetClipboardEvent 构造获取设备剪贴板消息 (type=8，2 字节)。
+// copyKey: CopyKeyNone / CopyKeyCopy / CopyKeyCut
+func GetClipboardEvent(copyKey uint8) []byte {
+	return []byte{TypeGetClipboard, copyKey}
+}
+
+// SetClipboardEvent 构造设置设备剪贴板消息 (type=9，14+len(text) 字节)。
+// paste 为 true 时设备端写入剪贴板后立即触发 KEYCODE_PASTE。
+func SetClipboardEvent(text string, paste bool, sequence uint64) []byte {
+	text = truncateUTF8(text, ClipboardTextMaxLength)
+	b := make([]byte, 14+len(text))
+	b[0] = TypeSetClipboard
+	binary.BigEndian.PutUint64(b[1:9], sequence)
+	if paste {
+		b[9] = 1
+	}
+	binary.BigEndian.PutUint32(b[10:14], uint32(len(text)))
+	copy(b[14:], text)
+	return b
+}
+
+func truncateUTF8(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	for maxBytes > 0 && !utf8.RuneStart(s[maxBytes]) {
+		maxBytes--
+	}
+	return s[:maxBytes]
 }
 
 // EventRaw 直接透传已经打包好的控制消息字节。

@@ -6,6 +6,8 @@
 //   TYPE_INJECT_TOUCH_EVENT  = 2  (32 字节)
 //   TYPE_INJECT_SCROLL_EVENT = 3  (21 字节)
 //   TYPE_BACK_OR_SCREEN_ON   = 4  (2 字节)
+//   TYPE_GET_CLIPBOARD       = 8  (2 字节)
+//   TYPE_SET_CLIPBOARD       = 9  (14+N 字节)
 //   TYPE_ROTATE_DEVICE       = 11 (1 字节)
 
 export const TYPE_INJECT_KEYCODE = 0
@@ -13,7 +15,15 @@ export const TYPE_INJECT_TEXT = 1
 export const TYPE_INJECT_TOUCH_EVENT = 2
 export const TYPE_INJECT_SCROLL_EVENT = 3
 export const TYPE_BACK_OR_SCREEN_ON = 4
+export const TYPE_GET_CLIPBOARD = 8
+export const TYPE_SET_CLIPBOARD = 9
 export const TYPE_ROTATE_DEVICE = 11
+
+export const COPY_KEY_NONE = 0
+export const COPY_KEY_COPY = 1
+export const COPY_KEY_CUT = 2
+
+export const CLIPBOARD_TEXT_MAX_LENGTH = 262139
 
 export const ACTION_DOWN = 0
 export const ACTION_UP = 1
@@ -24,6 +34,15 @@ export const KEY_UP = 1
 /** 鼠标指针 id（多指触摸用 0,1,2…） */
 export const POINTER_MOUSE = 0xFFFFFFFFFFFFFFFFn
 export const POINTER_FINGER_BASE = 0n
+
+function truncateUtf8(bytes: Uint8Array, maxBytes: number): Uint8Array {
+  if (bytes.length <= maxBytes)
+    return bytes
+  let end = maxBytes
+  while (end > 0 && (bytes[end] & 0xC0) === 0x80)
+    end--
+  return bytes.subarray(0, end)
+}
 
 function pressureU16(p: number): number {
   if (p <= 0)
@@ -117,6 +136,24 @@ export class ControlPacker {
     view.setUint8(0, TYPE_INJECT_TEXT)
     view.setUint32(1, utf8.length, false)
     new Uint8Array(buf).set(utf8, 5)
+    return new Uint8Array(buf)
+  }
+
+  /** 读取设备剪贴板 2 字节；copyKey 可选触发复制/剪切按键 */
+  getClipboard(copyKey: number = COPY_KEY_NONE): Uint8Array {
+    return new Uint8Array([TYPE_GET_CLIPBOARD, copyKey & 0xFF])
+  }
+
+  /** 设置设备剪贴板 14+N 字节；paste=true 时设备端同步触发粘贴 */
+  setClipboard(str: string, paste: boolean, sequence = 0n): Uint8Array {
+    const utf8 = truncateUtf8(new TextEncoder().encode(str), CLIPBOARD_TEXT_MAX_LENGTH)
+    const buf = new ArrayBuffer(14 + utf8.length)
+    const view = new DataView(buf)
+    view.setUint8(0, TYPE_SET_CLIPBOARD)
+    view.setBigUint64(1, sequence, false)
+    view.setUint8(9, paste ? 1 : 0)
+    view.setUint32(10, utf8.length, false)
+    new Uint8Array(buf, 14).set(utf8)
     return new Uint8Array(buf)
   }
 }

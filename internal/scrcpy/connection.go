@@ -268,6 +268,64 @@ func (c *Connection) ReadAudioPacket() (*AudioPacket, error) {
 	return &AudioPacket{Config: ptsFlags&FlagConfigPacket != 0, PTS: ptsFlags & PTSMask, Payload: payload}, nil
 }
 
+// DeviceMessage 表示从 control socket 下行读取的一条设备消息。
+type DeviceMessage struct {
+	Type     uint8
+	Text     string // Type == DeviceMsgClipboard
+	Sequence uint64 // Type == DeviceMsgAckClipboard
+	ID       uint16 // Type == DeviceMsgUhidOutput
+	Data     []byte // Type == DeviceMsgUhidOutput
+}
+
+// ReadDeviceMessage 从 control socket 读取一条设备端推送的消息（剪贴板变更、ACK、UHID）。
+func (c *Connection) ReadDeviceMessage() (*DeviceMessage, error) {
+	if c.ctrlConn == nil {
+		return nil, errors.New("control socket not available")
+	}
+	c.ctrlConn.SetReadDeadline(time.Time{})
+	var typeBuf [1]byte
+	if _, err := io.ReadFull(c.ctrlConn, typeBuf[:]); err != nil {
+		return nil, err
+	}
+	msgType := typeBuf[0]
+	switch msgType {
+	case DeviceMsgClipboard:
+		var lenBuf [4]byte
+		if _, err := io.ReadFull(c.ctrlConn, lenBuf[:]); err != nil {
+			return nil, fmt.Errorf("read clipboard length: %w", err)
+		}
+		length := binary.BigEndian.Uint32(lenBuf[:])
+		if length > ClipboardTextMaxLength {
+			return nil, fmt.Errorf("invalid clipboard text length: %d", length)
+		}
+		buf := make([]byte, length)
+		if _, err := io.ReadFull(c.ctrlConn, buf); err != nil {
+			return nil, fmt.Errorf("read clipboard text: %w", err)
+		}
+		return &DeviceMessage{Type: msgType, Text: string(buf)}, nil
+	case DeviceMsgAckClipboard:
+		var seqBuf [8]byte
+		if _, err := io.ReadFull(c.ctrlConn, seqBuf[:]); err != nil {
+			return nil, fmt.Errorf("read clipboard ack sequence: %w", err)
+		}
+		return &DeviceMessage{Type: msgType, Sequence: binary.BigEndian.Uint64(seqBuf[:])}, nil
+	case DeviceMsgUhidOutput:
+		var hdr [4]byte
+		if _, err := io.ReadFull(c.ctrlConn, hdr[:]); err != nil {
+			return nil, fmt.Errorf("read uhid output header: %w", err)
+		}
+		id := binary.BigEndian.Uint16(hdr[0:2])
+		size := binary.BigEndian.Uint16(hdr[2:4])
+		data := make([]byte, size)
+		if _, err := io.ReadFull(c.ctrlConn, data); err != nil {
+			return nil, fmt.Errorf("read uhid output data: %w", err)
+		}
+		return &DeviceMessage{Type: msgType, ID: id, Data: data}, nil
+	default:
+		return nil, fmt.Errorf("unknown device message type: %d", msgType)
+	}
+}
+
 // WriteControl 向 control socket 写入控制消息（已打包的字节）。
 func (c *Connection) WriteControl(b []byte) error {
 	if c.ctrlConn == nil {

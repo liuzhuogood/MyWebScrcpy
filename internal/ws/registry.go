@@ -28,6 +28,7 @@ type managedSession struct {
 	refs            int
 	subs            map[chan sharedVideoFrame]struct{}
 	audioSubs       map[chan sharedAudioPacket]struct{}
+	clipboardSubs   map[chan string]struct{}
 	controlMu       sync.Mutex
 	closeTimer      *time.Timer
 	lastConfig      []byte
@@ -45,6 +46,7 @@ type managedSession struct {
 
 const sharedVideoQueueSize = 64
 const sharedAudioQueueSize = 256
+const sharedClipboardQueueSize = 16
 
 // sharedVideoFrame keeps the cached decoder bootstrap separate from live source
 // packets. Consumers may need a replayed config/key to initialize a decoder,
@@ -123,7 +125,7 @@ func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, fu
 		h.recordEvent(debuglog.Event{Type: "session.start_failed", DeviceID: serial, Message: err.Error()})
 		return nil, nil, nil, err
 	}
-	ms := &managedSession{sess: sess, meta: meta, refs: call.waiters, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), audioAvailable: meta.AudioAvailable, audioReason: meta.AudioReason, width: meta.Width, height: meta.Height}
+	ms := &managedSession{sess: sess, meta: meta, refs: call.waiters, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), clipboardSubs: make(map[chan string]struct{}), audioAvailable: meta.AudioAvailable, audioReason: meta.AudioReason, width: meta.Width, height: meta.Height}
 	ms.actions = action.New(deviceActionExecutor{ms: ms, gate: h.gateFor(serial), touch: touchPublisher{h: h, serial: serial, sessionID: meta.SessionID}, commands: h.commands}, 64)
 	if h.sessions == nil {
 		h.sessions = make(map[string]*managedSession)
@@ -136,6 +138,7 @@ func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, fu
 
 	h.recordEvent(debuglog.Event{Type: "session.started", DeviceID: serial, SessionID: meta.SessionID, Fields: map[string]interface{}{"codec": meta.Codec, "width": meta.Width, "height": meta.Height}})
 	go h.readSharedSession(serial, ms)
+	go h.readSharedControl(serial, ms)
 	if ms.audioAvailable {
 		go h.readSharedAudio(serial, ms)
 	}
@@ -225,6 +228,65 @@ func (h *Hub) subscribeAudio(ms *managedSession) (<-chan sharedAudioPacket, func
 	}
 }
 
+func (h *Hub) subscribeClipboard(ms *managedSession) (<-chan string, func()) {
+	ch := make(chan string, sharedClipboardQueueSize)
+	ms.mu.Lock()
+	if ms.clipboardSubs == nil {
+		ms.clipboardSubs = make(map[chan string]struct{})
+	}
+	ms.clipboardSubs[ch] = struct{}{}
+	ms.mu.Unlock()
+	return ch, func() {
+		ms.mu.Lock()
+		if _, ok := ms.clipboardSubs[ch]; ok {
+			delete(ms.clipboardSubs, ch)
+			close(ch)
+		}
+		ms.mu.Unlock()
+	}
+}
+
+func (h *Hub) readSharedControl(serial string, ms *managedSession) {
+	if ms.sess == nil || ms.sess.conn == nil {
+		return
+	}
+	for {
+		msg, err := ms.sess.conn.ReadDeviceMessage()
+		if err != nil {
+			log.Printf("[ws] shared control ended serial=%s: %v", serial, err)
+			ms.mu.Lock()
+			for ch := range ms.clipboardSubs {
+				close(ch)
+			}
+			ms.clipboardSubs = make(map[chan string]struct{})
+			ms.mu.Unlock()
+			return
+		}
+		if msg.Type == scrcpy.DeviceMsgClipboard {
+			broadcastClipboard(ms, msg.Text)
+		}
+	}
+}
+
+func broadcastClipboard(ms *managedSession, text string) {
+	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	for ch := range ms.clipboardSubs {
+		select {
+		case ch <- text:
+		default:
+			select {
+			case <-ch:
+			default:
+			}
+			select {
+			case ch <- text:
+			default:
+			}
+		}
+	}
+}
+
 func (h *Hub) readSharedSession(serial string, ms *managedSession) {
 	if ms.sess == nil || ms.sess.conn == nil {
 		return
@@ -248,6 +310,10 @@ func (h *Hub) readSharedSession(serial string, ms *managedSession) {
 				close(ch)
 			}
 			ms.audioSubs = make(map[chan sharedAudioPacket]struct{})
+			for ch := range ms.clipboardSubs {
+				close(ch)
+			}
+			ms.clipboardSubs = make(map[chan string]struct{})
 			ms.mu.Unlock()
 			ms.actions.Close()
 			ms.sess.close()
@@ -402,6 +468,8 @@ func encodeFrame(f *scrcpy.Frame) []byte {
 func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan struct{}) {
 	ch, cancel := h.subscribeShared(ms)
 	defer cancel()
+	clipboardCh, cancelClipboard := h.subscribeClipboard(ms)
+	defer cancelClipboard()
 	var audio <-chan sharedAudioPacket
 	var cancelAudio func()
 	if available, _ := audioState(ms); available {
@@ -442,6 +510,16 @@ func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan
 			}
 			c.SetWriteDeadline(timeNow())
 			if err := c.WriteMessage(websocket.BinaryMessage, packet.data); err != nil {
+				_ = c.Close()
+				return
+			}
+		case text, ok := <-clipboardCh:
+			if !ok {
+				clipboardCh = nil
+				continue
+			}
+			c.SetWriteDeadline(timeNow())
+			if err := c.WriteJSON(map[string]interface{}{"type": "clipboard", "text": text}); err != nil {
 				_ = c.Close()
 				return
 			}

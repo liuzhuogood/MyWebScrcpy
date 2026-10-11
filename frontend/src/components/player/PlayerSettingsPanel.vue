@@ -3,11 +3,17 @@ import { Settings } from 'lucide-vue-next'
 import SidePanelHeader from '@/components/layout/SidePanelHeader.vue'
 import { Switch } from '@/components/ui/switch'
 
-defineProps<{ touchVisible: boolean, boxesVisible: boolean, autoUnlockOnWake: boolean }>()
+defineProps<{
+  touchVisible: boolean
+  boxesVisible: boolean
+  autoUnlockOnWake: boolean
+  clipboardSync: boolean
+}>()
 const emit = defineEmits<{
   'update:touchVisible': [value: boolean]
   'update:boxesVisible': [value: boolean]
   'update:autoUnlockOnWake': [value: boolean]
+  'update:clipboardSync': [value: boolean]
   close: []
 }>()
 </script>
@@ -23,6 +29,10 @@ const emit = defineEmits<{
       </template>
     </SidePanelHeader>
     <div class="space-y-4 overflow-auto p-4">
+      <div class="flex items-center justify-between gap-4">
+        <div><p class="text-sm font-medium">剪贴板共享</p><p class="text-xs text-muted-foreground">在电脑与设备间同步剪贴板文本</p></div>
+        <Switch :model-value="clipboardSync" aria-label="剪贴板共享" @update:model-value="emit('update:clipboardSync', !!$event)" />
+      </div>
       <div class="flex items-center justify-between gap-4">
         <div><p class="text-sm font-medium">显示触摸反馈</p><p class="text-xs text-muted-foreground">在投屏画面中显示点击位置</p></div>
         <Switch :model-value="touchVisible" aria-label="显示触摸反馈" @update:model-value="emit('update:touchVisible', !!$event)" />

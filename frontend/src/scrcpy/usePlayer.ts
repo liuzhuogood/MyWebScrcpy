@@ -4,6 +4,7 @@ import { type OpPayload, type OpType } from '@/inspector/opLog'
 import { DeviceAudio, type AudioStatus } from './audio'
 import { ScrcpyDecoder } from './decoder'
 import { PictureInPicture } from './pip'
+import { useClipboardSync } from './useClipboardSync'
 import { useScreenPower } from './useScreenPower'
 import {
   ACTION_DOWN,
@@ -59,6 +60,7 @@ interface WsMeta {
   status?: string
   reason?: string
   message?: string
+  text?: string
 }
 export interface TouchVisualEvent { kind: 'down' | 'move' | 'up' | 'tap' | 'swipe', x: number, y: number, x2?: number, y2?: number }
 
@@ -100,6 +102,12 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   })
 
   const packer = new ControlPacker()
+  const { clipboardSync, onDeviceClipboard } = useClipboardSync({
+    send: b => send(b),
+    packer,
+    onOp: op,
+    isInputBlocked: isInteractiveTarget,
+  })
   let decoder: ScrcpyDecoder | null = null
   let audio: DeviceAudio | null = null
   let pip: PictureInPicture | null = null
@@ -267,6 +275,10 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
         const msg = JSON.parse(ev.data) as WsMeta
         if (msg.type === 'audio.status' && msg.status) {
           audio?.serverStatus({ status: msg.status as AudioStatus, reason: msg.reason })
+          return
+        }
+        if (msg.type === 'clipboard' && typeof msg.text === 'string') {
+          onDeviceClipboard(msg.text)
           return
         }
         if (msg.type === 'meta') {
@@ -544,6 +556,37 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     dragPath = []
   }
 
+  function isInteractiveField(el: Element | null): boolean {
+    if (!el)
+      return false
+    const tag = el.tagName
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT')
+      return true
+    if ((el as HTMLElement).isContentEditable)
+      return true
+    // Reka Select/菜单把内容渲染到 body 的 portal：选项焦点是 role=option/listbox，需一并放行
+    if (el.closest?.([
+      '[data-capture-layer]',
+      '[role="dialog"]',
+      '[role="listbox"]',
+      '[role="option"]',
+      '[role="menuitem"]',
+      '[data-radix-select-viewport]',
+      '[data-radix-select-content]',
+      '[data-radix-popper-content-wrapper]',
+      'dialog',
+      '.xterm',
+      '.ui-inspector-panel',
+      '.capture-actions',
+    ].join(', ')))
+      return true
+    return false
+  }
+
+  function isInteractiveTarget(target: EventTarget | null): boolean {
+    return isInteractiveField(target instanceof Element ? target : null) || isInteractiveField(document.activeElement)
+  }
+
   function shouldIgnoreKey(e: KeyboardEvent): boolean {
     if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta')
       return true
@@ -551,33 +594,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     if (e.metaKey || (e.altKey && !e.ctrlKey))
       return true
     // 事件目标或当前焦点处于输入控件或可交互浮层/面板内时，不注入设备（与旧版 MyWebScrcpy 对齐）
-    const isField = (el: Element | null): boolean => {
-      if (!el)
-        return false
-      const tag = el.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT')
-        return true
-      if ((el as HTMLElement).isContentEditable)
-        return true
-      // Reka Select/菜单把内容渲染到 body 的 portal：选项焦点是 role=option/listbox，需一并放行
-      if (el.closest?.([
-        '[data-capture-layer]',
-        '[role="dialog"]',
-        '[role="listbox"]',
-        '[role="option"]',
-        '[role="menuitem"]',
-        '[data-radix-select-viewport]',
-        '[data-radix-select-content]',
-        '[data-radix-popper-content-wrapper]',
-        'dialog',
-        '.xterm',
-        '.ui-inspector-panel',
-        '.capture-actions',
-      ].join(', ')))
-        return true
-      return false
-    }
-    return isField(e.target as Element | null) || isField(document.activeElement)
+    return isInteractiveTarget(e.target)
   }
 
   const KEY_LOG_MAP: Record<number, { label: string, keycode: string }> = {
@@ -939,6 +956,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     fullscreen,
     rebooting,
     autoUnlockOnWake,
+    clipboardSync,
     powerBusy,
     retry,
     switchStream,
