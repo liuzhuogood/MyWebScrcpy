@@ -30,9 +30,14 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5174,
     strictPort: true,
-    allowedHosts: ['imposed-stop-entrance-cuisine.trycloudflare.com'],
+    allowedHosts: ['sellers-farm-modified-cubic.trycloudflare.com', 'imposed-stop-entrance-cuisine.trycloudflare.com'],
     fs: { allow: [prototypeDir, frontendDir] },
   },
-  preview: { host: '127.0.0.1', port: 5174, strictPort: true, allowedHosts: ['imposed-stop-entrance-cuisine.trycloudflare.com'] },
+  preview: {
+    host: '127.0.0.1',
+    port: 5174,
+    strictPort: true,
+    allowedHosts: ['examining-remedy-layer-auditor.trycloudflare.com', 'imposed-stop-entrance-cuisine.trycloudflare.com'],
+  },
   build: { outDir: path.join(prototypeDir, 'dist'), emptyOutDir: true },
 })

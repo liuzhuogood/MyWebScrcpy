@@ -1,17 +1,17 @@
 ---
 name: ui-prototype
-description: 在 MyWebScrcpy 中使用现有 Vue 组件和主题创建、修改可交互界面原型，独立预览并保留方案版本。适用于先看原型或比较布局，不用于直接实现正式业务功能。
+description: 在 MyWebScrcpy 中使用现有 Vue 组件和主题创建、修改可交互界面原型，保留方案版本，自动启动或复用本地预览并通过 cloudflared 交付临时公网预览。适用于先看原型或比较布局，不用于直接实现正式业务功能。
 ---
 
 # 项目界面原型
 
-产出可运行的 Vue 原型，复用项目源码中的组件和主题。项目根目录为包含 `frontend/package.json` 与 `prototypes/` 的 MyWebScrcpy 仓库。
+产出可运行的 Vue 原型，复用项目源码中的组件和主题。项目根目录为包含 `frontend/package.json` 与 `prototypes/` 的 MyWebScrcpy 仓库。原型生成或修改完成后，默认自动完成临时公网预览交付；用户明确要求仅本地预览或不启动服务时遵循该要求。
 
 ## 读取与边界
 
 - 先读取 `frontend/AGENTS.md`、`frontend/docs/rules/coding.md`、`frontend/docs/rules/ui.md`、`prototypes/AGENTS.md` 和 `prototypes/README.md`。
 - 核对 `frontend/package.json`、`frontend/components.json`、`frontend/src/style.css`，按界面需要查看相关组件的 props、事件、slots 和现有页面用法，不扫描或复制全部组件 API 文档。
-- 原型任务默认只编辑 `prototypes/`。正式 `frontend/src/`、路由、主题和业务接口只读；技能本身与预览基础设施仅在任务明确涉及维护时修改。
+- 原型任务默认只编辑 `prototypes/`。正式 `frontend/src/`、路由、主题和业务接口只读；技能本身仅在任务明确涉及维护时修改。为完成公网预览，允许最小调整 `frontend/vite.prototype.config.ts` 的具体域名放行及必要的预览网络配置，不修改正式 `frontend/vite.config.ts`。
 - 原型运行独立 Vue 应用，不导入正式 `main.ts`、`App.vue` 或路由。检查业务组件的请求、Store、定时器、设备操作和存储副作用；只有提供明确、可验证的模拟依赖后才能引用。纯 UI 与纯布局组件优先复用。
 
 ## 生成与迭代
@@ -26,8 +26,8 @@ description: 在 MyWebScrcpy 中使用现有 Vue 组件和主题创建、修改�
 ## 验证与交付
 
 1. 检查依赖已安装，运行 `pnpm --dir frontend proto:check` 与 `pnpm --dir frontend proto:build`。
-2. 使用 `pnpm --dir frontend proto` 启动本地预览，打开 `http://127.0.0.1:5174/#<目录名>`。端口占用时报告，不终止未知进程或重启正式服务。
-3. 实际验证主要交互、桌面与小屏、键盘和主题，检查控制台及真实请求边界。截图等验证产物放入 `prototypes/artifacts/`。
-4. 核对 Git 改动范围，交付预览链接、原型目录和验证结论；不要把配置成功当作浏览器运行成功。
+2. 读取并执行 [临时公网预览交付](references/remote-preview.md)：确认实际命令和端口，复用或启动本地预览，用已安装的 cloudflared 创建临时隧道，保存日志与进程信息。当前默认命令为 `pnpm --dir frontend proto`、端口为 `5174`，每次须核对实际运行状态。
+3. 从公网地址 `https://<本次域名>.trycloudflare.com/#<目录名>` 实际验证页面、主要资源、交互、桌面与小屏、键盘和主题，检查控制台及请求边界。截图和网络验证记录放入 `prototypes/artifacts/`；生成链接或首页返回 200 均不足以证明交付成功。
+4. 核对 Git 改动范围，确认进程在启动工具退出后仍存活、公网仍可访问。最终直接交付可点击的公网原型链接、验证结果、日志与进程记录位置，以及停止本次隧道和预览的方法；复用的服务注明归属，不自动停止。
 
 定稿接入正式页面属于后续实现任务，只有用户要求落地时才修改正式页面、路由和数据连接，并保留原型版本。
