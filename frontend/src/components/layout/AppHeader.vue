@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { Github, LayoutGrid, Sparkles } from 'lucide-vue-next'
+import { FileCode2, Github, LayoutGrid, Sparkles } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -61,6 +61,12 @@ onMounted(() => {
           <Badge variant="default" class="h-4 px-1 text-[10px]">Update</Badge>
         </Button>
 
+        <Button variant="outline" size="sm" as-child>
+          <RouterLink to="/scripts">
+            <FileCode2 class="h-4 w-4" />
+            脚本与任务
+          </RouterLink>
+        </Button>
         <Button variant="outline" size="sm" as-child>
           <RouterLink to="/dashboard">
             <LayoutGrid class="h-4 w-4" />

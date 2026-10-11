@@ -79,8 +79,68 @@ func (d *DB) migrate() error {
 	);
 	CREATE INDEX IF NOT EXISTS idx_devices_source ON devices(source);
 	CREATE INDEX IF NOT EXISTS idx_devices_state ON devices(state);
+
+	CREATE TABLE IF NOT EXISTS markdown_scripts (
+		id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+		name                TEXT NOT NULL,
+		target_device       TEXT NOT NULL DEFAULT 'auto',
+		content             TEXT NOT NULL DEFAULT '',
+		extracted_version   TEXT NOT NULL DEFAULT '',
+		schedule_cron       TEXT NOT NULL DEFAULT '',
+		is_enabled          INTEGER NOT NULL DEFAULT 1,
+		timeout_sec         INTEGER NOT NULL DEFAULT 120,
+		compiled_version    TEXT NOT NULL DEFAULT '',
+		compiled_python     TEXT NOT NULL DEFAULT '',
+		compiled_at         INTEGER NOT NULL DEFAULT 0,
+		last_run_at         INTEGER NOT NULL DEFAULT 0,
+		last_run_status     TEXT NOT NULL DEFAULT '',
+		created_at          INTEGER NOT NULL,
+		updated_at          INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_md_scripts_schedule ON markdown_scripts(is_enabled, schedule_cron);
+
+	CREATE TABLE IF NOT EXISTS running_tasks (
+		id              TEXT PRIMARY KEY,
+		script_id       INTEGER NOT NULL,
+		script_name     TEXT NOT NULL,
+		device_serial   TEXT NOT NULL,
+		pid             INTEGER NOT NULL,
+		status          TEXT NOT NULL DEFAULT 'running',
+		exit_code       INTEGER DEFAULT 0,
+		error_msg       TEXT NOT NULL DEFAULT '',
+		started_at      INTEGER NOT NULL,
+		ended_at        INTEGER DEFAULT 0
+	);
+	CREATE INDEX IF NOT EXISTS idx_running_tasks_lock ON running_tasks(device_serial, status);
+
+ CREATE TABLE IF NOT EXISTS script_dispatches (
+  id TEXT PRIMARY KEY, script_id INTEGER NOT NULL, started_ns INTEGER NOT NULL
+ );
+ CREATE INDEX IF NOT EXISTS idx_script_dispatches ON script_dispatches(script_id, started_ns);
+ CREATE TABLE IF NOT EXISTS script_dispatch_tasks (
+  dispatch_id TEXT NOT NULL, task_id TEXT NOT NULL UNIQUE,
+  PRIMARY KEY(dispatch_id, task_id)
+ );
+
+	CREATE TABLE IF NOT EXISTS system_configs (
+		key         TEXT PRIMARY KEY,
+		value       TEXT NOT NULL DEFAULT '',
+		updated_at  INTEGER NOT NULL
+	);
 	`
-	_, err := d.db.Exec(schema)
+	if _, err := d.db.Exec(schema); err != nil {
+		return err
+	}
+
+	// 渐进式列迁移：支持已有旧数据库无缝升级
+	_ = d.addColumnIfNotExists("markdown_scripts", "last_run_at", "INTEGER NOT NULL DEFAULT 0")
+	_ = d.addColumnIfNotExists("markdown_scripts", "last_run_status", "TEXT NOT NULL DEFAULT ''")
+	return d.migrateScriptTargets()
+}
+
+func (d *DB) addColumnIfNotExists(table, column, colType string) error {
+	query := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, colType)
+	_, err := d.db.Exec(query)
 	return err
 }
 

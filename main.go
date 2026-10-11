@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/fs"
 	"log"
 	"net/http"
@@ -15,10 +16,14 @@ import (
 	"time"
 
 	"mywebscrcpy/internal/adbshell"
+	"mywebscrcpy/internal/aiprovider"
 	"mywebscrcpy/internal/db"
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
+	"mywebscrcpy/internal/mdscript"
+	"mywebscrcpy/internal/scheduler"
 	"mywebscrcpy/internal/scripts"
+	"mywebscrcpy/internal/taskmanager"
 	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/uipage"
 	"mywebscrcpy/internal/uixml"
@@ -123,6 +128,52 @@ func main() {
 	templateService := template.NewService(templateStorage)
 	defer templateService.Stop()
 	template.RegisterRoutes(mux, templateService)
+
+	if database == nil {
+		registerUnavailableScriptRoutes(mux)
+	} else {
+		// Markdown 脚本与任务管理器 API
+		taskMgr := taskmanager.NewManager(database)
+		taskHandler := taskmanager.NewHandler(taskMgr)
+		taskHandler.RegisterRoutes(mux)
+
+		executor := mdscript.NewExecutor(database, taskMgr, func(serial string) (bool, bool) {
+			device, known := dm.GetDevice(serial)
+			return known, known && device.State == "device"
+		}, func(serial, id string) error {
+			asset, err := templateStorage.GetTemplate(id)
+			if err != nil {
+				return fmt.Errorf("读取模板 %s 失败: %w", id, err)
+			}
+			if asset == nil {
+				return fmt.Errorf("模板不存在: %s", id)
+			}
+			if !asset.Enabled {
+				return fmt.Errorf("模板已停用: %s", asset.Name)
+			}
+			if asset.Serial != template.GlobalSerial && asset.Serial != serial {
+				return fmt.Errorf("模板 %s 不属于设备 %s", asset.Name, serial)
+			}
+			return nil
+		})
+		// 内嵌 Cron 调度器
+		sched := scheduler.NewScheduler(database, executor)
+		if err := sched.Start(); err != nil {
+			log.Printf("警告: 启动 Cron 调度器失败: %v", err)
+		}
+		defer sched.Stop()
+
+		schedHandler := scheduler.NewHandler(sched)
+		schedHandler.RegisterRoutes(mux)
+
+		mdHandler := mdscript.NewHandler(database, executor, sched)
+		mdHandler.RegisterRoutes(mux)
+
+		// AI 模型配置与代理 API
+		aiSvc := aiprovider.NewService(database)
+		aiHandler := aiprovider.NewHandler(aiSvc)
+		aiHandler.RegisterRoutes(mux)
+	}
 
 	// API: 设备管理
 	mux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) {
@@ -415,4 +466,17 @@ func writeJarToTemp() (string, error) {
 		return "", err
 	}
 	return f.Name(), nil
+}
+
+// Preserve the device app's existing non-persistent mode when script migration cannot open SQLite.
+func registerUnavailableScriptRoutes(mux *http.ServeMux) {
+	log.Print("脚本数据库不可用，脚本、调度和文档助手接口暂停")
+	unavailable := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(w).Encode(map[string]string{"message": "脚本数据库不可用，请检查服务日志"})
+	}
+	for _, prefix := range []string{"/api/md-scripts", "/api/md-scripts/", "/api/tasks/", "/api/scheduler/", "/api/ai/"} {
+		mux.HandleFunc(prefix, unavailable)
+	}
 }
