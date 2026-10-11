@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8fafc">
+  <title>MyWebScrcpy · 个人云机 Agent</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17233c;
+      --muted: #67748a;
+      --line: #e8edf5;
+      --blue: #326bff;
+      --blue-soft: #edf3ff;
+      --violet: #8059e9;
+      --page: #f8fafc;
+      --shadow: 0 24px 70px rgba(37, 61, 113, .11);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; }
+    .shell { width: min(1200px, calc(100% - 48px)); margin: auto; }
+    .topbar { height: 78px; border-bottom: 1px solid rgba(223, 231, 244, .8); background: rgba(255,255,255,.82); backdrop-filter: blur(18px); position: sticky; top: 0; z-index: 20; }
+    .topbar .shell { height: 100%; display: flex; align-items: center; gap: 34px; }
+    .brand { display: inline-flex; align-items: center; gap: 11px; font-size: 18px; font-weight: 800; letter-spacing: -.5px; white-space: nowrap; }
+    .brand-mark { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: linear-gradient(145deg, #4d86ff, #2e5dea); box-shadow: 0 7px 16px rgba(50,107,255,.25); color: white; }
+    .brand-mark svg { width: 23px; height: 23px; }
+    .nav { display: flex; gap: 22px; margin-left: auto; color: #52617b; font-size: 14px; font-weight: 600; white-space: nowrap; }
+    .nav a:hover, .text-link:hover { color: var(--blue); }
+    .top-action { margin-left: 9px; padding: 10px 16px; border: 1px solid #dae4f6; border-radius: 10px; color: #2e5bd0; background: white; font-size: 13px; font-weight: 700; white-space: nowrap; }
+    .top-action:hover { border-color: var(--blue); }
+    .hero { position: relative; overflow: hidden; padding: 88px 0 94px; background: radial-gradient(circle at 88% 15%, #e4eaff 0, transparent 31%), radial-gradient(circle at 12% 72%, #e7f5ff 0, transparent 28%), #fafcff; }
+    .hero::after { content: ""; position: absolute; width: 550px; height: 550px; border: 1px solid rgba(104,136,217,.12); border-radius: 50%; right: -140px; top: -175px; pointer-events: none; box-shadow: 0 0 0 92px rgba(104,136,217,.035), 0 0 0 185px rgba(104,136,217,.025); }
+    .hero-grid { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 470px) minmax(0, 1fr); gap: 60px; align-items: center; }
+    .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 7px 11px; border-radius: 999px; background: #eaf0ff; color: #315fd1; font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+    .eyebrow::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); box-shadow: 0 0 0 3px #d0ddff; }
+    h1 { margin: 23px 0 20px; font-size: clamp(38px, 4.2vw, 58px); line-height: 1.18; letter-spacing: -2.5px; }
+    .gradient-text { display: block; color: var(--blue); }
+    .hero-copy { margin: 0; max-width: 440px; color: #617087; font-size: 16px; line-height: 1.85; }
+    .platform-chips { display: flex; gap: 8px; margin-top: 22px; flex-wrap: wrap; }
+    .platform-chips a { padding: 7px 12px; border: 1px solid #dfe7f5; border-radius: 7px; background: rgba(255,255,255,.75); font-size: 12px; color: #536988; font-weight: 700; }
+    .platform-chips a:hover { border-color: var(--blue); color: var(--blue); }
+    .hero-actions { display: flex; align-items: center; gap: 14px; margin-top: 31px; flex-wrap: wrap; }
+    .button { display: inline-flex; justify-content: center; align-items: center; gap: 9px; min-height: 44px; padding: 0 18px; border-radius: 11px; font-size: 14px; font-weight: 750; transition: transform .18s, box-shadow .18s, background .18s; }
+    .button:hover { transform: translateY(-2px); }
+    .button.primary { color: #fff; background: var(--blue); box-shadow: 0 10px 22px rgba(50, 107, 255, .23); }
+    .button.primary:hover { background: #255beb; box-shadow: 0 15px 28px rgba(50, 107, 255, .3); }
+    .button.secondary { background: white; color: #3d5173; border: 1px solid #e0e8f4; }
+    .hero-note { display: flex; align-items: center; gap: 9px; margin-top: 30px; color: #8190a7; font-size: 12px; }
+    .hero-note span { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; color: #6285d7; background: #eaf0ff; font-weight: 800; }
+    .preview { min-width: 0; overflow: hidden; border: 1px solid #dce6f5; border-radius: 19px; background: #fff; box-shadow: var(--shadow); transform: rotate(-1deg); }
+    .preview-top { height: 42px; display: flex; align-items: center; gap: 7px; padding: 0 14px; border-bottom: 1px solid #e7ecf4; background: #fbfcff; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #ffaaa5; }
+    .dot:nth-child(2) { background: #ffd784; }
+    .dot:nth-child(3) { background: #91dbb4; }
+    .preview-url { margin: auto; padding: 5px 45px; border-radius: 6px; background: #f0f3f8; color: #8d9bb0; font-size: 10px; }
+    .preview-body { display: grid; grid-template-columns: 105px 1fr 174px; height: 350px; }
+    .mini-rail { padding: 18px 10px; background: #16233d; color: #8f9fbb; font-size: 10px; }
+    .mini-rail-brand { color: #fff; font-weight: 800; margin-bottom: 27px; font-size: 11px; }
+    .mini-nav { display: flex; align-items: center; gap: 7px; padding: 8px 7px; border-radius: 6px; margin-bottom: 7px; }
+    .mini-nav.active { color: #fff; background: #345caa; }
+    .mini-nav i { width: 10px; height: 10px; border: 1.5px solid currentColor; border-radius: 3px; }
+    .mini-main { display: flex; flex-direction: column; min-width: 0; padding: 15px 18px; background: #f6f8fc; }
+    .mini-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: 800; }
+    .mini-head small { color: #4cbb8e; font-size: 9px; font-weight: 700; }
+    .mini-content { flex: 1; display: flex; justify-content: center; align-items: center; padding: 12px 0; }
+    .phone { width: 139px; height: 248px; padding: 7px; border: 5px solid #202f4d; border-radius: 24px; box-shadow: 0 15px 22px rgba(24,43,81,.18); background: #202f4d; position: relative; }
+    .phone::before { content: ""; position: absolute; width: 49px; height: 9px; border-radius: 0 0 8px 8px; background: #202f4d; top: 4px; left: 50%; transform: translateX(-50%); z-index: 2; }
+    .phone-screen { height: 100%; overflow: hidden; border-radius: 15px; background: linear-gradient(150deg, #476af2 0%, #7455da 48%, #dd7faa 100%); color: white; }
+    .phone-status { display: flex; justify-content: space-between; padding: 9px 10px 0; font-size: 7px; font-weight: 700; }
+    .phone-time { margin-top: 35px; text-align: center; font-size: 30px; font-weight: 250; letter-spacing: -1px; }
+    .phone-date { text-align: center; font-size: 8px; opacity: .9; }
+    .phone-icons { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin: 50px 11px 0; }
+    .phone-icons b { height: 20px; border-radius: 6px; background: rgba(255,255,255,.86); box-shadow: 0 4px 9px rgba(22,33,61,.11); }
+    .phone-icons b:nth-child(2) { background: #ffbd86; }.phone-icons b:nth-child(3) { background: #85d9ed; }.phone-icons b:nth-child(4) { background: #a5e4ac; }
+    .mini-tools { display: flex; justify-content: center; gap: 8px; }
+    .mini-tools i { width: 18px; height: 18px; border-radius: 5px; background: #e6ecf7; }
+    .mini-side { border-left: 1px solid #e7ecf4; padding: 16px 12px; background: white; }
+    .mini-side-title { font-size: 11px; font-weight: 800; margin-bottom: 13px; }
+    .mini-side-row { display: flex; align-items: center; gap: 6px; font-size: 9px; padding: 8px 7px; color: #65758d; border-radius: 6px; margin-bottom: 5px; }
+    .mini-side-row.selected { background: #edf3ff; color: #326bff; font-weight: 700; }
+    .mini-side-row i { width: 11px; height: 11px; border-radius: 3px; background: #a6b7d2; }
+    .mini-side-row.selected i { background: #6690ff; }
+    .mini-code { margin-top: 15px; padding: 10px 8px; border-radius: 7px; background: #17233d; color: #c8d8fb; font: 8px/1.8 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre; }
+    .preview-foot { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-top: 1px solid #e7ecf4; color: #8291a8; font-size: 10px; }
+    .preview-foot strong { color: #5d6d89; font-weight: 600; }
+    section { scroll-margin-top: 90px; }
+    .section { padding: 100px 0; }
+    .section.white { background: #fff; }
+    .section-heading { max-width: 680px; margin-bottom: 44px; }
+    .overline { display: block; margin-bottom: 13px; color: var(--blue); font-size: 12px; font-weight: 800; letter-spacing: .13em; }
+    h2 { margin: 0 0 14px; font-size: clamp(29px, 3vw, 40px); line-height: 1.3; letter-spacing: -1.2px; }
+    .section-heading p { color: var(--muted); line-height: 1.8; margin: 0; font-size: 15px; }
+    .deployment-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .deployment-card { padding: 26px; border: 1px solid #e2e8f5; border-radius: 17px; background: #fff; }
+    .deployment-card > span { color: #7d96c1; font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+    .deployment-card h3 { margin: 17px 0 9px; font-size: 19px; }
+    .deployment-card p { margin: 0; color: #6d7b91; font-size: 13px; line-height: 1.8; }
+    .private-environment { margin-top: 25px; padding: 26px; border: 1px dashed #b9cbed; border-radius: 17px; background: #edf3ff; }
+    .environment-heading { display: flex; justify-content: space-between; gap: 15px; align-items: center; margin-bottom: 19px; font-size: 13px; color: #42649d; font-weight: 750; }
+    .environment-nodes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .environment-nodes div { padding: 17px; border-radius: 11px; background: #fff; color: #526b93; font-size: 12px; line-height: 1.7; }
+    .environment-nodes strong { display: block; margin-bottom: 6px; color: #2c548f; font-size: 14px; }
+    .platform-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+    .platform-card { padding: 26px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+    .platform-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .platform-icon { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 14px; background: #edf3ff; color: #326bff; }
+    .platform-icon svg { width: 27px; height: 27px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .platform-card:nth-child(2) .platform-icon { background: #f1edff; color: #8059e9; }
+    .platform-card:nth-child(3) .platform-icon { background: #edf1f8; color: #526786; }
+    .platform-card:nth-child(4) .platform-icon { background: #e9f9f4; color: #35a77d; }
+    .available { padding: 4px 7px; border-radius: 5px; background: #e8f8ef; color: #2e9666; font-size: 10px; font-weight: 800; }
+    .platform-card h3 { font-size: 24px; letter-spacing: -.5px; margin: 22px 0 8px; }
+    .platform-card p { color: #6d7b91; font-size: 13px; line-height: 1.8; margin: 0; }
+    .platform-focus { margin-top: 20px; padding-top: 17px; border-top: 1px solid #edf0f6; color: #526784; font-size: 12px; line-height: 1.7; }
+    .platform-comparison { margin-top: 24px; border: 1px solid #e1e8f3; border-radius: 14px; overflow: auto; background: #fff; }
+    .platform-comparison table { width: 100%; min-width: 840px; border-collapse: collapse; table-layout: fixed; text-align: left; font-size: 13px; }
+    .platform-comparison caption { text-align: left; padding: 19px 22px; font-size: 15px; font-weight: 750; }
+    .platform-comparison th, .platform-comparison td { padding: 15px 22px; border-top: 1px solid #edf0f6; line-height: 1.65; }
+    .platform-comparison thead th { background: #f7f9fd; color: #50637f; font-size: 12px; }
+    .platform-comparison tbody th { font-weight: 650; color: #4e607c; }
+    .platform-comparison td { color: #708198; }
+    .platform-comparison td:nth-child(2) { color: #345fa9; }
+    .platform-connection { display: flex; align-items: center; gap: 24px; margin-top: 24px; padding: 23px 26px; border-radius: 14px; background: #edf3ff; }
+    .connection-flow { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; color: #3b64ac; font-size: 12px; font-weight: 750; }
+    .connection-flow span { color: #8ca7d4; }
+    .platform-connection p { margin: 0; color: #63789a; font-size: 12px; line-height: 1.8; }
+    .feature-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 17px; }
+    .feature-card { min-height: 213px; padding: 26px; border: 1px solid var(--line); border-radius: 17px; background: white; box-shadow: 0 10px 28px rgba(49,78,126,.035); }
+    .feature-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: #edf3ff; color: #3b70ed; }
+    .feature-icon svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+    .feature-card:nth-child(2) .feature-icon, .feature-card:nth-child(5) .feature-icon { background: #f1edff; color: #8766dc; }
+    .feature-card:nth-child(3) .feature-icon, .feature-card:nth-child(6) .feature-icon { background: #e9f9f4; color: #3dad8a; }
+    .feature-card h3 { margin: 21px 0 9px; font-size: 17px; }
+    .feature-card p { margin: 0; color: #718097; line-height: 1.7; font-size: 13px; }
+    .section-intro { display: flex; align-items: end; justify-content: space-between; gap: 28px; }
+    .status-key { display: flex; align-items: center; gap: 8px; padding-bottom: 5px; white-space: nowrap; color: #75839a; font-size: 12px; }
+    .status-key i { width: 7px; height: 7px; border-radius: 50%; background: #f2aa5c; }
+    .workflow-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .workflow-card { position: relative; overflow: hidden; min-height: 330px; padding: 28px; border: 1px solid #e2e8f5; border-radius: 19px; background: #fff; box-shadow: 0 12px 34px rgba(42,75,128,.045); }
+    .workflow-card::after { content: ""; position: absolute; width: 180px; height: 180px; border-radius: 50%; right: -70px; top: -75px; background: #eef3ff; }
+    .workflow-card.ai::after { background: #f2eeff; }
+    .workflow-card > * { position: relative; z-index: 1; }
+    .workflow-label { display: flex; gap: 9px; align-items: center; color: #3666d9; font-size: 12px; font-weight: 800; }
+    .workflow-card.ai .workflow-label { color: var(--violet); }
+    .planned { padding: 4px 7px; border-radius: 5px; background: #fff3e6; color: #b7752d; font-size: 10px; font-weight: 800; }
+    .workflow-card h3 { margin: 19px 0 9px; font-size: 25px; letter-spacing: -.6px; }
+    .workflow-card p { max-width: 420px; margin: 0; line-height: 1.75; color: #6d7b91; font-size: 14px; }
+    .flow { display: flex; align-items: stretch; gap: 7px; margin-top: 28px; }
+    .flow span { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 51px; padding: 8px 5px; border-radius: 8px; background: #f3f6fc; color: #4c6185; font-size: 12px; font-weight: 700; text-align: center; }
+    .flow em { align-self: center; color: #9cabc4; font-size: 14px; font-style: normal; }
+    .workflow-detail { margin-top: 20px; padding-top: 18px; border-top: 1px solid #edf0f6; color: #718097; font-size: 12px; line-height: 1.7; }
+    .studio { padding: 30px; display: grid; grid-template-columns: 255px minmax(0,1fr); gap: 24px; border: 1px solid #e0e7f3; border-radius: 22px; background: #fff; box-shadow: var(--shadow); }
+    .studio-sidebar { padding: 3px 0; }
+    .studio-sidebar h3 { font-size: 21px; margin: 0 0 10px; }
+    .studio-sidebar p { margin: 0 0 24px; color: #748299; font-size: 13px; line-height: 1.75; }
+    .studio-step { display: flex; gap: 12px; padding: 13px 0; border-top: 1px solid #edf0f6; color: #586983; font-size: 12px; line-height: 1.55; }
+    .studio-step b { flex: 0 0 24px; height: 24px; display: grid; place-items: center; border-radius: 7px; background: #eaf0ff; color: #3768df; font-size: 11px; }
+    .studio-panel { overflow: hidden; border: 1px solid #dfe7f4; border-radius: 13px; background: #fff; }
+    .studio-tabs { display: flex; gap: 3px; padding: 9px 11px; border-bottom: 1px solid #e6ebf4; background: #fbfcff; }
+    .studio-tabs button { padding: 8px 13px; border: 0; border-radius: 7px; background: transparent; color: #708098; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .studio-tabs button[aria-selected="true"] { background: #eaf0ff; color: #2f62de; }
+    .studio-content { display: grid; grid-template-columns: minmax(0,1fr) 180px; min-height: 268px; }
+    .studio-code { padding: 20px 23px; min-width: 0; background: #18243e; color: #d3e0fa; overflow: auto; }
+    .studio-code .filename { color: #8ba5d3; font-size: 11px; font-weight: 700; margin-bottom: 14px; }
+    .studio-code pre { margin: 0; font: 12px/1.85 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }
+    .studio-aside { padding: 19px 15px; background: #f7f9fd; }
+    .studio-aside h4 { margin: 0 0 18px; font-size: 12px; }
+    .aside-line { display: flex; gap: 7px; margin: 0 0 16px; color: #62738c; font-size: 11px; line-height: 1.5; }
+    .aside-line i { flex: 0 0 15px; height: 15px; display: grid; place-items: center; border-radius: 50%; background: #def4e9; color: #2eac79; font-size: 10px; font-style: normal; font-weight: 800; }
+    .studio-caption { display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; border-top: 1px solid #e6ebf4; color: #8290a5; font-size: 11px; }
+    .architecture { margin-top: 34px; display: grid; grid-template-columns: repeat(5, 1fr); align-items: center; gap: 8px; }
+    .arch-node { padding: 16px 10px; text-align: center; border: 1px solid #e2e9f4; border-radius: 11px; background: #fff; color: #50617d; font-size: 12px; font-weight: 700; }
+    .arch-arrow { display: none; }
+    .architecture .arch-node:nth-child(3) { border-color: #bdd0ff; background: #edf3ff; color: #3262d0; }
+    .closing { padding: 64px 0; background: #172848; color: white; }
+    .closing .shell { display: flex; align-items: center; justify-content: space-between; gap: 30px; }
+    .closing h2 { margin-bottom: 8px; font-size: 29px; }
+    .closing p { margin: 0; color: #b0bed7; font-size: 14px; line-height: 1.7; }
+    .closing .button { background: #fff; color: #285adb; }
+    footer { padding: 26px 0; border-top: 1px solid #263b60; background: #172848; color: #90a1bf; font-size: 12px; }
+    footer .shell { display: flex; justify-content: space-between; gap: 18px; }
+    @media (max-width: 980px) {
+      .hero-grid { grid-template-columns: 1fr; gap: 48px; }
+      .hero-copy { max-width: 620px; }
+      .preview { max-width: 650px; transform: none; }
+      .feature-grid { grid-template-columns: repeat(2, 1fr); }
+      .platform-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .platform-connection { flex-direction: column; align-items: flex-start; gap: 13px; }
+      .nav { gap: 13px; font-size: 12px; }
+      .studio { grid-template-columns: 1fr; }
+      .studio-sidebar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+      .studio-sidebar h3, .studio-sidebar p { grid-column: 1 / -1; }
+      .studio-sidebar p { margin-bottom: 8px; }
+    }
+    @media (max-width: 700px) {
+      .shell { width: min(100% - 32px, 1200px); }
+      .topbar { height: 66px; }
+      .topbar .shell { gap: 12px; }
+      .brand { font-size: 16px; }
+      .brand-mark { width: 31px; height: 31px; }
+      .nav { display: none; }
+      .top-action { margin-left: auto; padding: 8px 10px; font-size: 11px; }
+      .hero { padding: 63px 0 72px; }
+      h1 { letter-spacing: -1.5px; }
+      .hero-copy { font-size: 14px; }
+      .preview-body { grid-template-columns: 78px 1fr 130px; height: 315px; }
+      .mini-rail { padding: 15px 6px; }
+      .mini-main { padding: 13px 9px; }
+      .mini-side { padding: 13px 7px; }
+      .phone { transform: scale(.85); }
+      .section { padding: 70px 0; }
+      .feature-grid, .workflow-grid, .platform-grid, .deployment-grid, .environment-nodes { grid-template-columns: 1fr; }
+      .private-environment { padding: 20px; }
+      .connection-flow { flex-wrap: wrap; gap: 8px; }
+      .platform-connection { padding: 20px; }
+      .feature-card { min-height: 0; }
+      .section-intro { display: block; }
+      .status-key { margin: -21px 0 27px; }
+      .studio { padding: 16px; }
+      .studio-sidebar { display: block; }
+      .studio-step { padding: 9px 0; }
+      .studio-content { grid-template-columns: 1fr; }
+      .studio-aside { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 13px; }
+      .studio-aside h4 { grid-column: 1 / -1; margin: 0; }
+      .aside-line { margin: 0; }
+      .architecture { grid-template-columns: 1fr; gap: 6px; }
+      .architecture .arch-node { padding: 11px; }
+      .architecture .arch-arrow { display: block; text-align: center; color: #9cabca; }
+      .closing .shell { display: block; }
+      .closing .button { margin-top: 23px; }
+    }
+    @media (max-width: 430px) {
+      .preview-body { grid-template-columns: 65px 1fr 103px; }
+      .mini-nav { font-size: 8px; gap: 4px; }
+      .mini-side-row { font-size: 8px; }
+      .mini-code { font-size: 6px; }
+      .preview-url { padding: 5px 17px; }
+      .studio-aside { display: block; }
+      .aside-line { margin-top: 8px; }
+    }
+    @media (max-width: 860px) { .nav { display: none; } .top-action { margin-left: auto; } }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .button { transition: none; } }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="shell">
+      <a class="brand" href="#top" aria-label="MyWebScrcpy 首页">
+        <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="6" y="2.5" width="12" height="19" rx="2.5" stroke="currentColor" stroke-width="2"/><path d="m10 9 5 3-5 3V9Z" fill="currentColor"/></svg></span>
+        MyWebScrcpy
+      </a>
+      <nav class="nav" aria-label="页面导航">
+        <a href="#deployment">私有部署</a>
+        <a href="#platforms">四端版本</a>
+        <a href="#features">现有功能</a>
+        <a href="#workflows">新增规划</a>
+        <a href="#studio">脚本工作台</a>
+      </nav>
+      <a class="top-action" href="/">进入设备列表 ↗</a>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="hero">
+      <div class="shell hero-grid">
+        <div>
+          <span class="eyebrow">个人云机 AGENT · 私有化部署</span>
+          <h1>个人云机 Agent，<span class="gradient-text">由你掌控。</span></h1>
+          <p class="hero-copy">部署在自己的主机或服务器，连接个人 Android 设备与可接入的云机。用 Markdown 固化流程，让 AI 观察画面、执行任务并验证结果；一套 Web 工作台覆盖四端。</p>
+          <div class="platform-chips" aria-label="产品版本"><a href="#platform-web">Web</a><a href="#platform-desktop">桌面端</a><a href="#platform-ios">iOS</a><a href="#platform-android">Android</a></div>
+          <div class="hero-actions">
+            <a class="button primary" href="#deployment">了解私有部署 <span aria-hidden="true">→</span></a>
+            <a class="button secondary" href="#platforms">查看四端设计</a>
+          </div>
+          <div class="hero-note"><span>i</span> 桌面与移动 App、Markdown、AI 脚本为新增规划。</div>
+        </div>
+
+        <div class="preview" role="img" aria-label="个人云机 Agent 与脚本工作台的概念预览">
+          <div class="preview-top"><i class="dot"></i><i class="dot"></i><i class="dot"></i><span class="preview-url">MyWebScrcpy · 个人云机</span></div>
+          <div class="preview-body">
+            <div class="mini-rail">
+              <div class="mini-rail-brand">M / W</div>
+              <div class="mini-nav active"><i></i> 设备</div>
+              <div class="mini-nav"><i></i> 任务</div>
+              <div class="mini-nav"><i></i> 脚本</div>
+              <div class="mini-nav"><i></i> 文件</div>
+            </div>
+            <div class="mini-main">
+              <div class="mini-head">我的云机 <small>● 已连接</small></div>
+              <div class="mini-content">
+                <div class="phone"><div class="phone-screen"><div class="phone-status"><span>9:41</span><span>● ▰</span></div><div class="phone-time">09:41</div><div class="phone-date">星期四 · 10月8日</div><div class="phone-icons"><b></b><b></b><b></b><b></b></div></div></div>
+              </div>
+              <div class="mini-tools"><i></i><i></i><i></i><i></i><i></i></div>
+            </div>
+            <div class="mini-side">
+              <div class="mini-side-title">工作台</div>
+              <div class="mini-side-row"><i></i> 页面检查</div>
+              <div class="mini-side-row selected"><i></i> Markdown 脚本</div>
+              <div class="mini-side-row"><i></i> AI 任务</div>
+              <div class="mini-code"># 打开设置
+点击「设置」
+等待页面出现
+检查 Wi-Fi 状态</div>
+            </div>
+          </div>
+          <div class="preview-foot"><strong>查看云机，指派任务，跟进结果</strong><span>概念预览</span></div>
+        </div>
+      </div>
+    </div>
+
+    <section id="deployment" class="section white">
+      <div class="shell">
+        <div class="section-heading">
+          <span class="overline">PERSONAL CLOUD AGENT</span>
+          <h2>把云机与 Agent，放进自己的环境</h2>
+          <p>面向个人使用的私有化部署方案：自己管理设备、任务与数据，从任意一端进入同一个 Agent 工作台。</p>
+        </div>
+        <div class="deployment-grid">
+          <article class="deployment-card"><span>01 / 环境</span><h3>部署在自己的主机</h3><p>在个人电脑、私有服务器或自有云主机运行服务，由自己管理连接地址与访问权限。</p></article>
+          <article class="deployment-card"><span>02 / 数据</span><h3>设备与任务由自己管理</h3><p>统一连接个人 Android 设备与云机，脚本、截图、录像和任务记录保存在自己的部署环境。</p></article>
+          <article class="deployment-card"><span>03 / 模型</span><h3>按需要连接 AI 模型</h3><p>Agent 规划支持接入自部署模型或指定模型服务。使用外部模型时，任务上下文按配置发送到该服务。</p></article>
+        </div>
+        <div class="private-environment" aria-label="个人云机 Agent 私有环境设计">
+          <div class="environment-heading"><span>你的私有环境</span><span class="planned">Agent 方案规划中</span></div>
+          <div class="environment-nodes">
+            <div><strong>个人设备与云机</strong>查看画面、检查状态、执行操作</div>
+            <div><strong>Agent 与脚本执行</strong>理解目标、组织步骤、执行与验证</div>
+            <div><strong>个人脚本与任务记录</strong>保存流程、跟进进度、查看结果</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="platforms" class="section">
+      <div class="shell">
+        <div class="section-heading">
+          <span class="overline">WEB · DESKTOP · IOS · ANDROID</span>
+          <h2>一个个人 Agent，从四端进入</h2>
+          <p>以一套 Web 界面实现浏览器、桌面与移动 App，按屏幕和输入方式适配。四端连接自己的私有服务，共用设备、脚本与任务。</p>
+        </div>
+        <div class="platform-grid">
+          <article class="platform-card" id="platform-web">
+            <div class="platform-top"><span class="platform-icon"><svg viewBox="0 0 28 28" aria-hidden="true"><rect x="3" y="4" width="22" height="16" rx="2"/><path d="M10 24h8M14 20v4M3 9h22"/></svg></span><span class="available">已有版本</span></div>
+            <h3>Web</h3><p>通过浏览器进入统一工作台，免安装使用设备控制、检查器与脚本管理。</p>
+            <div class="platform-focus">设备列表 · 大屏监控 · 检查器 · 脚本工作台</div>
+          </article>
+          <article class="platform-card" id="platform-desktop">
+            <div class="platform-top"><span class="platform-icon"><svg viewBox="0 0 28 28" aria-hidden="true"><rect x="2" y="3" width="24" height="17" rx="2"/><path d="M9 25h10M14 20v5"/></svg></span><span class="planned">App 规划中</span></div>
+            <h3>桌面端</h3><p>以桌面 App 使用同一套 Web 工作台，适配大屏、窗口布局和键盘鼠标操作。</p>
+            <div class="platform-focus">统一功能 · 桌面布局 · 键盘鼠标</div>
+          </article>
+          <article class="platform-card" id="platform-ios">
+            <div class="platform-top"><span class="platform-icon"><svg viewBox="0 0 28 28" aria-hidden="true"><rect x="7" y="2" width="14" height="24" rx="4"/><path d="M12 5h4M12 23h4"/></svg></span><span class="planned">App 规划中</span></div>
+            <h3>iOS</h3><p>将统一 Web 工作台适配到 iPhone 与 iPad，保留相同功能与任务流程。</p>
+            <div class="platform-focus">统一功能 · 自适应布局 · 触控操作</div>
+          </article>
+          <article class="platform-card" id="platform-android">
+            <div class="platform-top"><span class="platform-icon"><svg viewBox="0 0 28 28" aria-hidden="true"><rect x="7" y="2" width="14" height="24" rx="2.5"/><path d="M12 5h4"/><circle cx="14" cy="23" r=".7"/></svg></span><span class="planned">App 规划中</span></div>
+            <h3>Android</h3><p>将统一 Web 工作台适配到 Android 手机与平板，随身访问设备和脚本任务。</p>
+            <div class="platform-focus">统一功能 · 自适应布局 · 触控操作</div>
+          </article>
+        </div>
+        <div class="platform-comparison" role="region" aria-label="四端统一功能" tabindex="0">
+          <table>
+            <caption>四端共用功能，操作方式随设备适配</caption>
+            <thead><tr><th scope="col">功能</th><th scope="col">Web</th><th scope="col">桌面 App · 规划</th><th scope="col">iOS App · 规划</th><th scope="col">Android App · 规划</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">投屏与控制</th><td>鼠标、键盘与触控</td><td>鼠标与键盘</td><td>触控与横竖屏</td><td>触控与横竖屏</td></tr>
+              <tr><th scope="row">多设备监控</th><td>自适应设备网格</td><td>自适应设备网格</td><td>自适应设备网格</td><td>自适应设备网格</td></tr>
+              <tr><th scope="row">检查器与文件</th><td>检查与管理</td><td>检查与管理</td><td>检查与管理</td><td>检查与管理</td></tr>
+              <tr><th scope="row">Markdown 脚本 · 规划</th><td>编辑、运行与停止</td><td>编辑、运行与停止</td><td>编辑、运行与停止</td><td>编辑、运行与停止</td></tr>
+              <tr><th scope="row">AI 脚本执行 · 规划</th><td>任务与计划审阅</td><td>任务与计划审阅</td><td>任务与计划审阅</td><td>任务与计划审阅</td></tr>
+              <tr><th scope="row">运行记录 · 规划</th><td>步骤、结果与历史</td><td>步骤、结果与历史</td><td>步骤、结果与历史</td><td>步骤、结果与历史</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="platform-connection">
+          <div class="connection-flow" aria-label="四端连接私有服务">四端 Web 工作台 <span aria-hidden="true">→</span> 私有 Agent 服务 <span aria-hidden="true">→</span> 个人设备与云机</div>
+          <p>任务在自己的服务中执行，四端负责提交、审阅与查看。关闭客户端后，可再次进入工作台跟进进度和结果。</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="section white">
+      <div class="shell">
+        <div class="section-heading">
+          <span class="overline">CURRENT CAPABILITIES</span>
+          <h2>已有设备能力，构成 Agent 的基础</h2>
+          <p>当前项目已具备画面查看、设备操作、状态检查与扩展接口，为个人云机 Agent 提供感知和执行基础。</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card"><span class="feature-icon"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M10 18h4"/></svg></span><h3>实时投屏与控制</h3><p>浏览器直接查看 Android 画面，支持鼠标、触摸、键盘、旋转、全屏与画中画。</p></article>
+          <article class="feature-card"><span class="feature-icon"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span><h3>多设备监控</h3><p>设备列表与大屏模式集中呈现多台设备，快速切换目标并查看状态。</p></article>
+          <article class="feature-card"><span class="feature-icon"><svg viewBox="0 0 24 24"><path d="M4 7V4h16v3M4 17v3h16v-3M8 12h8M12 8v8"/></svg></span><h3>播放器检查器</h3><p>取色、坐标、XML 树、XPath 和页面信息联动，帮助定位屏幕元素。</p></article>
+          <article class="feature-card"><span class="feature-icon"><svg viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v11H3V7Z"/><path d="M3 7V4h8l2 3"/></svg></span><h3>文件与模板管理</h3><p>管理设备共享存储；保存和整理截图模板，供外部识别流程使用。</p></article>
+          <article class="feature-card"><span class="feature-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></svg></span><h3>录屏与回放</h3><p>保存 MP4 录制，查看历史记录，并将录制画面回放到投屏与 Vision 通道。</p></article>
+          <article class="feature-card"><span class="feature-icon"><svg viewBox="0 0 24 24"><path d="M8 4 3 12l5 8M16 4l5 8-5 8M13 3l-2 18"/></svg></span><h3>扩展与脚本管理</h3><p>提供 ADB 终端、Python Vision 接口及 Python 脚本的分类和在线编辑。</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="workflows" class="section">
+      <div class="shell">
+        <div class="section-intro">
+          <div class="section-heading"><span class="overline">AGENT WORKFLOWS</span><h2>给云机一个目标，让 Agent 完成任务</h2><p>Markdown 沉淀可复用流程，AI 根据目标和设备状态组织行动。每次执行都能查看步骤、验证结果并保留记录。</p></div>
+          <div class="status-key"><i></i> 以下为新增功能规划</div>
+        </div>
+        <div class="workflow-grid">
+          <article class="workflow-card">
+            <div class="workflow-label">01 · 可复用步骤 <span class="planned">规划中</span></div>
+            <h3>Markdown 脚本</h3>
+            <p>用可阅读的文档组织任务说明、设备步骤与检查点。编辑时预览，运行前确认目标设备和动作。</p>
+            <div class="flow"><span>编写步骤</span><em>→</em><span>校验动作</span><em>→</em><span>确认设备</span><em>→</em><span>运行记录</span></div>
+            <div class="workflow-detail">适合重复巡检、操作指引和团队共享的标准流程。</div>
+          </article>
+          <article class="workflow-card ai">
+            <div class="workflow-label">02 · 自然语言任务 <span class="planned">规划中</span></div>
+            <h3>AI 脚本执行</h3>
+            <p>描述目标，Agent 结合当前画面与可用动作生成计划，执行后检查状态并反馈结果。过程可查看，支持随时停止。</p>
+            <div class="flow"><span>描述目标</span><em>→</em><span>生成计划</span><em>→</em><span>人工确认</span><em>→</em><span>逐步执行</span></div>
+            <div class="workflow-detail">适合探索式任务；先审阅计划，再由 Agent 执行和验证。</div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="studio" class="section white">
+      <div class="shell">
+        <div class="section-heading"><span class="overline">SCRIPT STUDIO CONCEPT</span><h2>脚本工作台的设计方向</h2><p>沿用现有的脚本管理入口，补上文档化流程、AI 计划与执行过程的可视化。</p></div>
+        <div class="studio">
+          <div class="studio-sidebar">
+            <h3>一个任务，完整闭环</h3>
+            <p>脚本内容、目标设备、执行步骤与结果放在同一视野中。</p>
+            <div class="studio-step"><b>1</b><span>选择在线设备，确认当前画面。</span></div>
+            <div class="studio-step"><b>2</b><span>编辑 Markdown 步骤，或让 AI 生成计划。</span></div>
+            <div class="studio-step"><b>3</b><span>审阅动作，运行后查看逐步记录。</span></div>
+          </div>
+          <div class="studio-panel">
+            <div class="studio-tabs" role="tablist" aria-label="脚本示例">
+              <button type="button" role="tab" id="tab-markdown" aria-controls="example-panel" aria-selected="true" data-example="markdown">Markdown 脚本</button>
+              <button type="button" role="tab" id="tab-ai" aria-controls="example-panel" aria-selected="false" tabindex="-1" data-example="ai">AI 任务</button>
+            </div>
+            <div class="studio-content" id="example-panel" role="tabpanel" aria-labelledby="tab-markdown">
+              <div class="studio-code"><div class="filename" id="example-name">设备巡检.md · 示例</div><pre id="example-code"># 设备巡检
+
+目标：检查 Wi-Fi 是否已连接
+
+1. 打开系统设置
+2. 进入「网络和互联网」
+3. 查看 Wi-Fi 状态
+4. 记录检查结果</pre></div>
+              <div class="studio-aside"><h4 id="example-title">运行前确认</h4><div class="aside-line"><i>✓</i><span id="example-line-1">目标设备已选择</span></div><div class="aside-line"><i>✓</i><span id="example-line-2">步骤已逐项列出</span></div><div class="aside-line"><i>✓</i><span id="example-line-3">运行结果可追踪</span></div></div>
+            </div>
+            <div class="studio-caption"><span>交互示意 · 暂不可运行</span><span>点击上方标签查看另一种任务</span></div>
+          </div>
+        </div>
+        <div class="architecture" aria-label="任务执行流程">
+          <div class="arch-node">读取画面与状态</div><span class="arch-arrow">↓</span>
+          <div class="arch-node">生成与审阅计划</div><span class="arch-arrow">↓</span>
+          <div class="arch-node">执行设备动作</div><span class="arch-arrow">↓</span>
+          <div class="arch-node">验证执行结果</div><span class="arch-arrow">↓</span>
+          <div class="arch-node">保存任务记录</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="closing"><div class="shell"><div><h2>从自己的设备，开始构建个人 Agent</h2><p>先连接和查看设备，再逐步建立可复用的任务流程。</p></div><a class="button" href="/">进入设备工作台 <span aria-hidden="true">→</span></a></div></div>
+  <footer><div class="shell"><span>MyWebScrcpy · 个人云机 Agent · 私有化部署</span><span>产品设计预览</span></div></footer>
+
+  <script>
+    const examples = {
+      markdown: {
+        name: '设备巡检.md · 示例',
+        code: '# 设备巡检\n\n目标：检查 Wi-Fi 是否已连接\n\n1. 打开系统设置\n2. 进入「网络和互联网」\n3. 查看 Wi-Fi 状态\n4. 记录检查结果',
+        title: '运行前确认',
+        lines: ['目标设备已选择', '步骤已逐项列出', '运行结果可追踪']
+      },
+      ai: {
+        name: 'AI 任务 · 示例',
+        code: '任务\n检查当前设备的 Wi-Fi 状态，\n并告诉我是否已经连接。\n\n计划\n1. 查看当前屏幕\n2. 打开系统设置\n3. 进入 Wi-Fi 页面\n4. 读取连接状态并汇总',
+        title: '执行前审阅',
+        lines: ['AI 计划已生成', '动作等待用户确认', '异常时可停止']
+      }
+    };
+    const tabs = [...document.querySelectorAll('[data-example]')];
+    function selectExample(name) {
+      const example = examples[name];
+      tabs.forEach(tab => {
+        const selected = tab.dataset.example === name;
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      });
+      document.getElementById('example-panel').setAttribute('aria-labelledby', 'tab-' + name);
+      document.getElementById('example-name').textContent = example.name;
+      document.getElementById('example-code').textContent = example.code;
+      document.getElementById('example-title').textContent = example.title;
+      example.lines.forEach((line, index) => {
+        document.getElementById('example-line-' + (index + 1)).textContent = line;
+      });
+    }
+    tabs.forEach((tab, index) => {
+      tab.addEventListener('click', () => selectExample(tab.dataset.example));
+      tab.addEventListener('keydown', event => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const next = tabs[(index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+        selectExample(next.dataset.example);
+        next.focus();
+      });
+    });
+  </script>
+</body>
+</html>
