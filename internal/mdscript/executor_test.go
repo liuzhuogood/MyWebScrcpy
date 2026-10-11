@@ -212,6 +212,8 @@ func TestScriptHTTPDeviceContractAndCompilationInvalidation(t *testing.T) {
 }
 
 func TestGeneratedPythonQuotesAndRequiredDeviceArgument(t *testing.T) {
+	// 模拟 Windows 非 UTF-8 标准输出，生成脚本仍应能输出中文。
+	t.Setenv("PYTHONIOENCODING", "cp1252")
 	content := "version: 1.0.0\n- 输入 \\\"引号\\\" 与 {literal} 和 C:\\test\n"
 	meta := ParseMarkdown(content, time.Now())
 	source, err := NewCompiler().Compile("任务\n\"\"\"{title}", meta, content)

@@ -132,6 +132,9 @@ def run(serial: str) -> bool:
     return True
 
 if __name__ == "__main__":
+    # 独立运行生成脚本时也统一日志编码。
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     if len(sys.argv) != 2:
         raise SystemExit("Usage: script.py <device_serial>")
     run(sys.argv[1])

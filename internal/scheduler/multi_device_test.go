@@ -31,8 +31,8 @@ func TestScheduledTargetsUseSavedListAndReloadForFutureRuns(t *testing.T) {
 	sched := NewScheduler(d, executor)
 	content := "version: 1.0.0\n- 等待"
 	script, _ := d.CreateMarkdownScript("多设备定时", []string{"device-A", "device-B"}, content, "1.0.0", "0 9 * * *", 1, 10)
-	output := filepath.Join(dir, "args")
-	code := fmt.Sprintf("import sys, pathlib, time\nwith pathlib.Path(%q).open('a') as f: f.write(sys.argv[1] + '\\n')\ntime.sleep(10)", output)
+	// 各设备写独立文件，避免 Windows 并发追加共享文件的覆盖与换行差异。
+	code := fmt.Sprintf("import sys, pathlib, time\n(pathlib.Path(%q) / sys.argv[1]).write_text(sys.argv[1], encoding='utf-8')\ntime.sleep(10)", dir)
 	if err := d.SaveCompiledPython(script.ID, "1.0.0", code); err != nil {
 		t.Fatal(err)
 	}
@@ -40,14 +40,22 @@ func TestScheduledTargetsUseSavedListAndReloadForFutureRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	sched.triggerWorker(script.ID)
-	deadline := time.Now().Add(3 * time.Second)
-	for time.Now().Before(deadline) {
-		data, _ := os.ReadFile(output)
-		if len(data) >= len("device-A\ndevice-B\n") {
-			break
+	assertDeviceArgument := func(serial string) {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		var data []byte
+		var err error
+		for time.Now().Before(deadline) {
+			data, err = os.ReadFile(filepath.Join(dir, serial))
+			if err == nil && string(data) == serial {
+				return
+			}
+			time.Sleep(20 * time.Millisecond)
 		}
-		time.Sleep(20 * time.Millisecond)
+		t.Fatalf("device=%s arguments=%q err=%v", serial, data, err)
 	}
+	assertDeviceArgument("device-A")
+	assertDeviceArgument("device-B")
 	runs, _ := d.ListScriptRuns(script.ID)
 	if len(runs) != 2 {
 		t.Fatalf("not dispatched to both devices: %+v", runs)
@@ -74,8 +82,5 @@ func TestScheduledTargetsUseSavedListAndReloadForFutureRuns(t *testing.T) {
 			t.Fatalf("running instance modified: %+v", record)
 		}
 	}
-	data, err := os.ReadFile(output)
-	if err != nil || !(string(data) == "device-A\ndevice-B\n" || string(data) == "device-B\ndevice-A\n" || len(data) > len("device-A\ndevice-B\n")) {
-		t.Fatalf("arguments %q %v", data, err)
-	}
+	assertDeviceArgument("device-C")
 }

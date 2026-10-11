@@ -29,4 +29,5 @@
 - ✅ 锁定依赖安装、前端生产构建、17 个前端测试、原型类型检查通过。
 - ✅ 独立 Python 模板匹配测试通过，使用已有 `yolo_wepork/.venv` 的依赖；默认 Python 未安装 OpenCV。
 - ✅ Release Action 更新后的 `actionlint` 工作流静态检查、Go 完整回归与版本一致性检查通过。
-- ⬜ 提交并推送 `v1.19.1` 标签，核对 GitHub Actions、Release 文件与 Docker 结果。
+- ✅ 提交 `f172c13` 与 `v1.19.1` 标签已推送；[Actions 38155092348](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/38155092348) 的五个平台编译和产物上传全部成功。
+- Windows 原生任务管理测试通过；Markdown 执行测试暴露中文输出的 cp1252 编码错误，调度测试暴露并发追加共享文件与 Windows 换行差异。Release 与 Docker 按门禁跳过，继续在 `v1.19.2-fix` 修复，不覆盖已有标签。

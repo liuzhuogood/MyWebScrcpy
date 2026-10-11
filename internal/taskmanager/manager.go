@@ -68,6 +68,8 @@ func (m *Manager) StartTask(scriptID int64, scriptName, deviceSerial string, tim
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 
 	cmd := exec.CommandContext(ctx, "python3", scriptPath, deviceSerial)
+	// 托管脚本统一输出 UTF-8，避免 Windows 默认代码页导致中文日志崩溃。
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 	configureTaskProcess(cmd)
 	cmd.Cancel = func() error { return terminateTaskProcess(cmd.Process.Pid) }
 	cmd.WaitDelay = 2 * time.Second

@@ -70,3 +70,33 @@ func TestTaskManagerLockAndKill(t *testing.T) {
 		_ = mgr.KillTask(task1Again.ID)
 	}()
 }
+
+func TestTaskManagerChineseOutputWithLegacyEncoding(t *testing.T) {
+	t.Setenv("PYTHONIOENCODING", "cp1252")
+	d, err := db.Open(filepath.Join(t.TempDir(), "encoding.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	mgr := NewManager(d)
+	task, err := mgr.StartTask(1, "中文输出", "device-A", 5, "print('中文任务日志')")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mgr.KillTask(task.ID)
+	deadline := time.Now().Add(4 * time.Second)
+	for time.Now().Before(deadline) {
+		record, err := d.GetTaskByID(task.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if record.Status != "running" {
+			if record.Status != "completed" || record.ExitCode != 0 {
+				t.Fatalf("中文输出导致任务失败: %+v", record)
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("中文输出任务未结束")
+}
