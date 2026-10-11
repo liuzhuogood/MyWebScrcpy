@@ -18,4 +18,6 @@
 - ✅ 编码复现用例转绿，任务管理/Markdown/调度回归通过。
 - ✅ 全量 Go 测试、`go vet`、相关 race、`actionlint` 通过。
 - ✅ 前端生产构建与 17 个测试通过；Linux amd64/arm64、macOS amd64/arm64、Windows amd64 交叉编译通过；三份正式版本来源一致。
-- ⬜ 推送标签并核对 GitHub 全部任务、Release 产物和 Docker 发布结果。
+- ✅ 修复提交 `b6d2077` 与 `v1.19.2` 标签已推送，远端标签解引用到该提交。
+- ✅ [GitHub Actions 38155571572](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/38155571572) 全部成功：五个平台编译、Windows 原生任务管理/Markdown/调度测试、Release 与 Docker 构建发布。
+- ✅ [v1.19.2 Release](https://github.com/liuzhuogood/MyWebScrcpy/releases/tag/v1.19.2) 已正式发布，核对五个非空程序文件：Linux amd64/arm64、macOS amd64/arm64、Windows amd64。
