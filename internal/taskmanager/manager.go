@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"syscall"
 	"time"
 
 	"mywebscrcpy/internal/db"
@@ -69,8 +68,8 @@ func (m *Manager) StartTask(scriptID int64, scriptName, deviceSerial string, tim
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 
 	cmd := exec.CommandContext(ctx, "python3", scriptPath, deviceSerial)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	configureTaskProcess(cmd)
+	cmd.Cancel = func() error { return terminateTaskProcess(cmd.Process.Pid) }
 	cmd.WaitDelay = 2 * time.Second
 
 	if err := cmd.Start(); err != nil {
@@ -84,7 +83,9 @@ func (m *Manager) StartTask(scriptID int64, scriptName, deviceSerial string, tim
 
 	// 3. 在数据库登记任务，立即对目标设备施加排他锁
 	if err := m.database.InsertRunningTask(taskID, scriptID, scriptName, deviceSerial, pid); err != nil {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		if killErr := terminateTaskProcess(cmd.Process.Pid); killErr != nil {
+			log.Printf("[TaskManager] task=%s 注册失败后清理进程失败: %v", taskID, killErr)
+		}
 		cancel()
 		_ = os.Remove(scriptPath)
 		delete(m.procs, taskID)
@@ -172,10 +173,11 @@ func (m *Manager) KillTask(taskID string) error {
 
 	// 杀掉系统进程
 	if cmd, ok := m.procs[taskID]; ok && cmd.Process != nil {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		if err := terminateTaskProcess(cmd.Process.Pid); err != nil {
+			log.Printf("[TaskManager] task=%s 终止进程失败: %v", taskID, err)
+		}
 	} else if task.PID > 0 {
-		_ = syscall.Kill(-task.PID, syscall.SIGKILL)
-		_ = syscall.Kill(task.PID, syscall.SIGKILL)
+		terminateStoredTaskProcess(task.PID)
 	}
 
 	// 立即将状态置为 killed，设备锁即刻释放

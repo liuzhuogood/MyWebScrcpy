@@ -9,6 +9,25 @@ permissions:
   contents: write  # 需要写权限来创建 Release
 
 jobs:
+  windows-task-tests:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Test Windows task lifecycle
+        run: go test -count=1 ./internal/taskmanager ./internal/mdscript ./internal/scheduler
+
   build:
     runs-on: ubuntu-latest
     strategy:
@@ -66,7 +85,7 @@ jobs:
           path: mywebscrcpy-${{ matrix.suffix }}
 
   release:
-    needs: build
+    needs: [build, windows-task-tests]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -101,7 +120,7 @@ jobs:
 
       - name: Create Release (with version.md)
         if: steps.notes.outputs.use_version_md == 'true'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           body_path: docs/versions/${{ github.ref_name }}-${{ steps.notes.outputs.notes_suffix }}/version.md
           files: |
@@ -115,7 +134,7 @@ jobs:
 
       - name: Create Release (fallback, auto-generated)
         if: steps.notes.outputs.use_version_md != 'true'
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: |
@@ -128,7 +147,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
-    needs: build
+    needs: [build, windows-task-tests]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

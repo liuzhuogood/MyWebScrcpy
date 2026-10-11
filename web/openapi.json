@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "MyWebScrcpy API",
-    "version": "1.19.0",
+    "version": "1.19.1",
     "description": "MyWebScrcpy 提供的完整 HTTP 与 WebSocket 接口规范。涵盖设备管理、实时投屏、录像、截图、回放、ADB 命令与按键注入、文件管理、脚本管理、UI 布局抓取及 Vision 智能交互。服务默认无内建身份认证，请在受信任网络中部署与使用。"
   },
   "servers": [

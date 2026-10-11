@@ -204,10 +204,30 @@ func TestReplayAPIStateMachine(t *testing.T) {
 		t.Fatalf("replay meta = %+v", meta)
 	}
 	ch, cancel := h.subscribeShared(ms)
-	first := <-ch
-	second := <-ch
-	cancel()
-	release()
+	defer cancel()
+	defer release()
+	nextFrame := func() sharedVideoFrame {
+		t.Helper()
+		select {
+		case frame, ok := <-ch:
+			if !ok || len(frame.data) == 0 {
+				t.Fatal("回放在发送初始化帧前结束")
+			}
+			return frame
+		case <-time.After(time.Second):
+			t.Fatal("等待回放初始化帧超时")
+			return sharedVideoFrame{}
+		}
+	}
+	first := nextFrame()
+	// 尚未缓存初始化帧时，订阅者会先收到回放开始的会话帧。
+	if first.data[0] == byte(scrcpy.FrameSession) {
+		if !first.replayed {
+			t.Fatal("回放会话帧缺少 replayed 标志")
+		}
+		first = nextFrame()
+	}
+	second := nextFrame()
 	if first.data[0] != byte(scrcpy.FrameConfig) || !first.replayed || second.data[0] != byte(scrcpy.FrameKey) || !second.replayed {
 		t.Fatalf("replay bootstrap must be replayed config/key: %v %v", first.data[0], second.data[0])
 	}
