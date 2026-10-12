@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, copyFileSync, chmodSync, writeFileSync } from 'node:fs'
+import { mkdirSync, copyFileSync, chmodSync, writeFileSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -9,15 +9,19 @@ const args = process.argv.slice(2)
 const skipFrontend = args.includes('--skip-frontend')
 const noBundle = args.includes('--no-bundle')
 const checkOnly = args.includes('--check')
+const signed = args.includes('--signed')
 const verifyNative = args.includes('--verify-native')
 for (const arg of args) {
-  if (!['--skip-frontend', '--no-bundle', '--check', '--verify-native'].includes(arg)) throw new Error(`未知参数: ${arg}`)
+  if (!['--skip-frontend', '--no-bundle', '--check', '--verify-native', '--signed'].includes(arg)) throw new Error(`未知参数: ${arg}`)
 }
 function run(command, argv, options = {}) {
   const result = spawnSync(command, argv, { cwd: root, stdio: 'inherit', ...options })
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(`${command} 失败 (${result.status})`)
 }
+run(process.execPath, ['scripts/sync-version.mjs'])
+if (signed && (!process.env.MYWEBSCRCPY_UPDATER_PUBLIC_KEY || !process.env.TAURI_SIGNING_PRIVATE_KEY)) throw new Error('签名发布需要更新公钥和私钥')
+if (signed && process.env.MYWEBSCRCPY_UPDATER_PUBLIC_KEY.trim() !== readFileSync(path.join(desktop, 'updater.pub'), 'utf8').trim()) throw new Error('发布公钥与仓库公钥不一致')
 const host = spawnSync('rustc', ['--print', 'host-tuple'], { encoding: 'utf8' })
 if (host.status !== 0) throw new Error('无法检测 Rust 编译目标')
 const target = host.stdout.trim()
@@ -45,7 +49,10 @@ if (checkOnly) {
 }
 const buildArgs = ['--dir', desktop, 'exec', 'tauri', 'build']
 if (noBundle) buildArgs.push('--no-bundle')
-if (verifyNative) buildArgs.push('--features', 'native-verify')
+if (process.env.DESKTOP_BUNDLES) buildArgs.push('--bundles', process.env.DESKTOP_BUNDLES)
+if (goos === 'darwin') buildArgs.push('--config', JSON.stringify({ bundle: { macOS: { signingIdentity: process.env.APPLE_SIGNING_IDENTITY || '-' } } }))
+if (signed) buildArgs.push('--config', JSON.stringify({ bundle: { createUpdaterArtifacts: true } }))
+if (verifyNative) buildArgs.push('--features', 'native-verify', '--config', JSON.stringify({ identifier: 'com.mywebscrcpy.desktop.verification' }))
 // Linux desktop shortcuts invoke the Go entry point to choose GUI or service.
 if (goos === 'linux' && !noBundle) {
   const config = {
@@ -60,7 +67,11 @@ if (goos === 'linux' && !noBundle) {
   writeFileSync(configPath, JSON.stringify(config))
   buildArgs.push('--config', configPath)
 }
-run(pnpm, buildArgs, { shell: process.platform === 'win32' })
+const tauriEnv = { ...process.env }
+for (const key of ['APPLE_CERTIFICATE','APPLE_CERTIFICATE_PASSWORD','APPLE_SIGNING_IDENTITY','APPLE_ID','APPLE_PASSWORD','APPLE_TEAM_ID']) {
+ if (!tauriEnv[key]) delete tauriEnv[key]
+}
+run(pnpm, buildArgs, { shell: process.platform === 'win32', env: tauriEnv })
 // Also deliver a portable folder with a Go entry point independent of GUI libs.
 const portable = path.join(desktop, 'target', 'portable', `${goos}-${goarch}`)
 mkdirSync(portable, { recursive: true })

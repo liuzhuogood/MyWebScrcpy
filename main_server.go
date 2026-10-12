@@ -1,13 +1,20 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
+	"errors"
 	"log"
 	"mywebscrcpy/internal/desktop"
+	"mywebscrcpy/internal/updater"
 	"net"
 	"net/http"
 	"os"
+	"strings"
+	"time"
 )
+
+var updateStop = make(chan struct{})
 
 func serveApplication(addr string, httpsFlag *bool, readyFlag *string, mux *http.ServeMux, adbPath string) {
 	_, port, err := net.SplitHostPort(addr)
@@ -20,7 +27,7 @@ func serveApplication(addr string, httpsFlag *bool, readyFlag *string, mux *http
 		if *httpsFlag || os.Getenv("TLS_CERT") != "" || os.Getenv("TLS_KEY") != "" {
 			log.Fatal("桌面内部服务只使用回环 HTTP")
 		}
-		if err := desktop.ServeDesktop(addr, *readyFlag, mux); err != nil {
+		if err := desktop.ServeDesktopWithMaintenance(addr, *readyFlag, mux, updateMiddleware(mux), updatePrepare, updateResume); err != nil {
 			log.Fatalf("桌面服务失败: %v", err)
 		}
 		return
@@ -56,15 +63,39 @@ func serveApplication(addr string, httpsFlag *bool, readyFlag *string, mux *http
 			log.Fatalf("TLS 监听失败: %v", err)
 		}
 		log.Printf("MyWebScrcpy 启动 → https://localhost:%s (%s)", port, addr)
-		if err := http.Serve(listener, mux); err != nil {
+		if err := serveManaged(listener, mux, true); err != nil {
 			log.Fatalf("server: %v", err)
 		}
 	} else {
 		log.Printf("MyWebScrcpy 启动 → http://localhost:%s (%s)", port, addr)
 		log.Printf("提示: 使用 -https 参数启用 HTTPS，或设置 TLS_CERT/TLS_KEY 环境变量")
-		if err := http.ListenAndServe(addr, mux); err != nil {
+		listener, err := net.Listen("tcp", addr)
+		if err != nil {
+			log.Fatalf("监听失败: %v", err)
+		}
+		if err := serveManaged(listener, mux, false); err != nil {
 			log.Fatalf("server: %v", err)
 		}
 	}
 
+}
+
+func serveManaged(listener net.Listener, mux *http.ServeMux, secure bool) error {
+	server := &http.Server{Handler: updateMiddleware(mux), ReadHeaderTimeout: 10 * time.Second}
+	if err := updater.PublishHealth(listener, secure, strings.TrimSpace(string(versionBytes))); err != nil {
+		return err
+	}
+	go func() {
+		<-updateStop
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			server.Close()
+		}
+	}()
+	err := server.Serve(listener)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }

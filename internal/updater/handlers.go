@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 )
 
 // Service 整合 Checker、Downloader 与 Applier
@@ -16,6 +15,11 @@ type Service struct {
 	downloader *Downloader
 	applier    *Applier
 	upgradeMu  sync.Mutex
+	policy     Policy
+	prepare    func() error
+	resume     func()
+	stop       func()
+	version    string
 }
 
 // NewService 创建 Updater 服务
@@ -31,12 +35,18 @@ func NewService(currentVersion string) (*Service, error) {
 		checker:    checker,
 		downloader: downloader,
 		applier:    applier,
+		policy:     DetectPolicy(false),
+		version:    currentVersion,
 	}, nil
 }
 
 // RegisterRoutes 注册自动更新相关 HTTP 接口
 func RegisterRoutes(mux *http.ServeMux, s *Service) {
 	mux.HandleFunc("/api/version/check", s.handleCheck)
+	mux.HandleFunc("GET /api/version/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"version": s.version})
+	})
 	mux.HandleFunc("/api/version/upgrade", s.handleUpgrade)
 	mux.HandleFunc("/api/version/upgrade-stream", s.handleUpgradeStream)
 	mux.HandleFunc("/api/version/status", s.handleStatus)
@@ -59,6 +69,11 @@ func (s *Service) handleCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	result.Policy = s.policy
+	result.CanUpgrade = s.policy.Method == "binary" && result.HasUpdate && result.DownloadURL != "" && validDigest(result.Digest)
+	if s.policy.Method == "binary" && result.HasUpdate && !result.CanUpgrade {
+		result.Reason = "当前版本缺少可验证的更新文件"
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(result)
 }
@@ -69,6 +84,11 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	progress := s.downloader.GetProgress()
+	if progress.State == StateIdle {
+		if bytes, err := os.ReadFile(filepath.Join("data", "updater-status.json")); err == nil {
+			_ = json.Unmarshal(bytes, &progress)
+		}
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(progress)
 }
@@ -85,76 +105,45 @@ func (s *Service) handleUpgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req UpgradeRequest
-	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+	if receipt := os.Getenv("MYWEBSCRCPY_UPDATE_RECEIPT"); receipt != "" && !fileExists(receipt+".confirmed") {
+		http.Error(w, "新版启动验证尚未完成", http.StatusConflict)
+		return
 	}
-
-	// 如果没有传 download_url，主动检查一次并使用匹配的 asset
-	if req.DownloadURL == "" {
-		check, err := s.checker.CheckUpdate()
-		if err != nil {
-			http.Error(w, fmt.Sprintf("failed to get release info: %v", err), http.StatusBadRequest)
-			return
-		}
-		if check.DownloadURL == "" {
-			http.Error(w, "no suitable binary asset found for current OS/Arch", http.StatusBadRequest)
-			return
-		}
-		req.DownloadURL = check.DownloadURL
-		req.AssetSize = check.AssetSize
+	if s.policy.Method != "binary" {
+		http.Error(w, s.policy.Reason, http.StatusConflict)
+		return
 	}
-
-	// 启动后台下载任务
+	// Never accept a download URL from a client: select only the configured repository release.
+	if !s.upgradeMu.TryLock() {
+		http.Error(w, "更新正在进行", http.StatusConflict)
+		return
+	}
+	check, err := s.checker.CheckUpdate()
+	if err != nil || check == nil || !check.HasUpdate || check.DownloadURL == "" || !validDigest(check.Digest) {
+		s.upgradeMu.Unlock()
+		http.Error(w, "没有可验证的新版更新文件", http.StatusBadRequest)
+		return
+	}
+	if s.prepare == nil || s.stop == nil {
+		s.upgradeMu.Unlock()
+		http.Error(w, "当前启动方式不支持自动更新", http.StatusConflict)
+		return
+	}
+	_ = os.Remove(filepath.Join("data", "updater-status.json"))
 	go func() {
-		s.upgradeMu.Lock()
 		defer s.upgradeMu.Unlock()
-
-		tempDir := os.TempDir()
-		destFile := filepath.Join(tempDir, fmt.Sprintf("mywebscrcpy-update-%d", time.Now().UnixNano()))
-
-		err := s.downloader.DownloadAsset(req.DownloadURL, req.AssetSize, destFile)
-		if err != nil {
-			return
+		if err := s.stageUpgrade(check); err != nil {
+			s.downloader.notify(ProgressInfo{State: StateError, Error: err.Error()})
 		}
-
-		// 下载完成，进入 Applying 阶段
-		s.downloader.notify(ProgressInfo{
-			State:      StateApplying,
-			Percent:    100,
-			Downloaded: req.AssetSize,
-			Total:      req.AssetSize,
-			Speed:      "0 KB/s",
-			TargetFile: destFile,
-		})
-
-		// 应用更新
-		if err := s.applier.ApplyUpdate(destFile); err != nil {
-			s.downloader.notify(ProgressInfo{
-				State: StateError,
-				Error: fmt.Sprintf("apply update failed: %v", err),
-			})
-			return
-		}
-
-		// 应用成功
-		s.downloader.notify(ProgressInfo{
-			State:      StateSuccess,
-			Percent:    100,
-			Downloaded: req.AssetSize,
-			Total:      req.AssetSize,
-			Speed:      "0 KB/s",
-		})
-
-		// 触发重启
-		_ = s.applier.RestartProcess()
 	}()
-
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"status":  "started",
-		"message": "upgrade task initiated",
-	})
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+}
+
+// ConfigureRuntime connects the updater to the application's orderly shutdown.
+func (s *Service) ConfigureRuntime(policy Policy, prepare func() error, stop func(), resume func()) {
+	s.policy, s.prepare, s.stop, s.resume = policy, prepare, stop, resume
 }
 
 func (s *Service) handleUpgradeStream(w http.ResponseWriter, r *http.Request) {

@@ -1,20 +1,43 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "MyWebScrcpy",
-  "version": "1.20.0",
+  "version": "1.19.2",
   "identifier": "com.mywebscrcpy.desktop",
-  "build": { "frontendDist": "ui" },
+  "build": {
+    "frontendDist": "ui"
+  },
   "app": {
     "windows": [],
-    "security": { "capabilities": [] }
+    "security": {
+      "capabilities": []
+    }
   },
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"],
-    "externalBin": ["binaries/mywebscrcpy"],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "externalBin": [
+      "binaries/mywebscrcpy"
+    ],
     "category": "DeveloperTool",
     "shortDescription": "Android 设备投屏与自动化",
-    "windows": { "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true } }
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      }
+    },
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDM4RjdBMUU4QzhEREQwOTgKUldTWTBOM0k2S0gzT0Iza2Nic1ZqR0JKbHhVWVZWWjBFa1N3NHpOam5VMzVMYjVSUDhobE01MzkK"
+    }
   }
 }

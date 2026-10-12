@@ -22,6 +22,7 @@ type ReleaseAsset struct {
 	Name               string `json:"name"`
 	Size               int64  `json:"size"`
 	BrowserDownloadURL string `json:"browser_download_url"`
+	Digest             string `json:"digest"`
 }
 
 // ReleaseInfo 代表 GitHub Release 的精简信息
@@ -35,6 +36,9 @@ type ReleaseInfo struct {
 
 // CheckResult 是检查更新返回给前端的数据结构
 type CheckResult struct {
+	Policy
+	CanUpgrade     bool   `json:"can_upgrade"`
+	Digest         string `json:"digest"`
 	CurrentVersion string `json:"current_version"`
 	LatestVersion  string `json:"latest_version"`
 	HasUpdate      bool   `json:"has_update"`
@@ -125,6 +129,7 @@ func (c *Checker) CheckUpdate() (*CheckResult, error) {
 		result.AssetName = targetAsset.Name
 		result.AssetSize = targetAsset.Size
 		result.DownloadURL = targetAsset.BrowserDownloadURL
+		result.Digest = targetAsset.Digest
 	}
 
 	return result, nil
@@ -149,7 +154,7 @@ func MatchAsset(assets []ReleaseAsset, goos, goarch string) *ReleaseAsset {
 	}
 
 	for _, a := range assets {
-		if strings.HasSuffix(a.Name, expectedSuffix) {
+		if a.Name == "mywebscrcpy-"+expectedSuffix {
 			return &a
 		}
 	}

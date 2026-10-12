@@ -49,6 +49,10 @@ var defaultCert []byte
 var defaultKey []byte
 
 func main() {
+	if handleUpdateCommand() {
+		return
+	}
+	defer updater.MarkExited()
 	opts := parseRuntimeOptions()
 	if opts.Exit {
 		return
@@ -75,6 +79,9 @@ func main() {
 	dbPath := filepath.Join("data", "mywebscrcpy.db")
 	database, err := db.Open(dbPath)
 	if err != nil {
+		if os.Getenv("MYWEBSCRCPY_UPDATE_RECEIPT") != "" {
+			log.Fatalf("[Updater] 新版数据库初始化失败: %v", err)
+		}
 		log.Printf("警告: 初始化 SQLite 数据库失败: %v，将在无持久化模式下运行", err)
 	} else {
 		defer database.Close()
@@ -85,9 +92,7 @@ func main() {
 	defer dm.Stop()
 
 	hub := ws.NewHub(adbPath, jarPath)
-	if *readyFlag != "" {
-		defer hub.Close()
-	}
+	defer hub.Close()
 
 	// 初始化脚本管理目录
 	if err := scripts.EnsureRoot(); err != nil {
@@ -121,11 +126,48 @@ func main() {
 		log.Printf("警告: 初始化更新器失败: %v", err)
 	} else {
 		updater.RegisterRoutes(mux, updaterService)
-		if *readyFlag != "" {
-			mux.HandleFunc("POST /api/version/upgrade", func(w http.ResponseWriter, r *http.Request) {
-				http.Error(w, "桌面版本请通过完整安装包更新", http.StatusConflict)
-			})
+		updaterService.ConfigureRuntime(serviceUpdatePolicy(*readyFlag != "", addr), func() error { return updatePrepare() }, func() { close(updateStop) }, func() { updateResume() })
+	}
+
+	var updateTasks *taskmanager.Manager
+	updatePrepare = func() error {
+		if !updatePrepared.CompareAndSwap(false, true) {
+			return fmt.Errorf("更新正在进行")
 		}
+		prepared := false
+		defer func() {
+			if !prepared {
+				updatePrepared.Store(false)
+			}
+		}()
+		if !updateGate.TryLock() {
+			return fmt.Errorf("请关闭投屏连接并等待当前操作完成后再更新")
+		}
+		if err := hub.CheckUpdateIdle(); err != nil {
+			updateGate.Unlock()
+			return err
+		}
+		if database == nil {
+			updateGate.Unlock()
+			return fmt.Errorf("数据库不可用，无法安全更新")
+		}
+		if updateTasks != nil {
+			if err := updateTasks.BeginMaintenance(); err != nil {
+				updateGate.Unlock()
+				return err
+			}
+		}
+		prepared = true
+		return nil
+	}
+	updateResume = func() {
+		if !updatePrepared.Swap(false) {
+			return
+		}
+		if updateTasks != nil {
+			updateTasks.EndMaintenance()
+		}
+		updateGate.Unlock()
 	}
 
 	// 模板管理与匹配 API
@@ -148,9 +190,8 @@ func main() {
 	} else {
 		// Markdown 脚本与任务管理器 API
 		taskMgr := taskmanager.NewManager(database)
-		if *readyFlag != "" {
-			defer taskMgr.Close()
-		}
+		updateTasks = taskMgr
+		defer taskMgr.Close()
 		taskHandler := taskmanager.NewHandler(taskMgr)
 		taskHandler.RegisterRoutes(mux)
 
@@ -175,10 +216,7 @@ func main() {
 		})
 		// 内嵌 Cron 调度器
 		sched := scheduler.NewScheduler(database, executor)
-		if err := sched.Start(); err != nil {
-			log.Printf("警告: 启动 Cron 调度器失败: %v", err)
-		}
-		defer sched.Stop()
+		defer startUpdateAwareScheduler(sched)()
 
 		schedHandler := scheduler.NewHandler(sched)
 		schedHandler.RegisterRoutes(mux)

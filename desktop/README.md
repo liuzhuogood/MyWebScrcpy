@@ -52,3 +52,7 @@ macOS Finder 启动不会继承终端中临时设置的环境变量；可在桌�
 `node scripts/verification/desktop-service.mjs` 验证当前目标配套 Go 程序的回环端口、就绪令牌、依赖配置、升级阻止和受控退出。
 
 需要验证原生 WebView/窗口行为时，运行 `node scripts/build-desktop.mjs --verify-native --no-bundle`，再在启动 GUI 时设置 `MYWEBSCRCPY_NATIVE_REPORT` 为报告的绝对路径。该构建会通过原生菜单处理器进入依赖管理，验证关闭隐藏和恢复，并输出不含设备信息/令牌的 JSON。Go 的 `desktopverify` 与 Rust 的 `native-verify` 都仅存在于明确指定的验证构建；交付前重新运行普通构建，移除验证入口。
+
+## 更新发布
+
+完整更新包、运行方式识别、数据备份、回滚与 Actions 凭据见 [更新文档](../docs/updating.md)。签名更新构建使用 `node scripts/build-desktop.mjs --signed`，签名私钥从环境传入，公钥保存在 `updater.pub`。原生验证构建使用独立应用标识，可运行 `node scripts/verification/desktop-native.mjs`，验证完成后退出 App。

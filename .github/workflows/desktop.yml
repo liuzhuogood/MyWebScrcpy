@@ -8,7 +8,8 @@ on:
       - 'frontend/**'
       - 'internal/**'
       - 'main*.go'
-      - 'scripts/build-desktop.mjs'
+      - 'scripts/**'
+      - 'VERSION'
       - '.github/workflows/desktop.yml'
 
 permissions:
@@ -49,6 +50,8 @@ jobs:
         run: node scripts/build-desktop.mjs
       - name: Verify desktop service lifecycle
         run: node scripts/verification/desktop-service.mjs
+      - name: Verify release manifest contracts
+        run: node scripts/verification/release-manifest.mjs
       - name: Check Rust
         working-directory: desktop
         run: cargo clippy --locked -- -D warnings

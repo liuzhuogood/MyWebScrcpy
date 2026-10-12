@@ -3,6 +3,8 @@
 mod backend;
 mod links;
 mod menu;
+mod update_backup;
+mod updater;
 #[cfg(feature = "native-verify")]
 mod verify;
 
@@ -69,9 +71,11 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![links::open_browser_link])
+ .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![links::open_browser_link, updater::desktop_check_update, updater::desktop_upgrade])
         .setup(move |app| {
             let data = app.path().app_data_dir()?;
+ updater::prepare_startup(&data).map_err(std::io::Error::other)?;
             let backend = backend::Backend::start(&data).map_err(std::io::Error::other)?;
             let url = backend.ready.url.clone();
             app.add_capability(
@@ -79,7 +83,9 @@ fn main() {
                     .window("main")
                     .local(false)
                     .remote(format!("{url}/*"))
-                    .permission("allow-open-browser-link"),
+                    .permission("allow-open-browser-link")
+ .permission("allow-desktop-check-update")
+ .permission("allow-desktop-upgrade"),
             )?;
  let token=serde_json::to_string(&backend.ready.token)?;
             app.manage(State { backend: Mutex::new(Some(backend)), url: url.clone(), tray_available: AtomicBool::new(false) });

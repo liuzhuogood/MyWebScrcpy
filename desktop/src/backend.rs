@@ -71,7 +71,10 @@ impl Backend {
             .open(data.join("desktop.log"))
             .map_err(|e| format!("打开日志失败: {e}"))?;
         let error_log = log.try_clone().map_err(|e| e.to_string())?;
-        let mut child = command(&executable()?)
+        let mut service_command=command(&executable()?);
+ service_command.env_remove("MYWEBSCRCPY_UPDATE_RECEIPT");
+ if let Some(receipt)=crate::update_backup::pending_receipt(data)? {service_command.env("MYWEBSCRCPY_UPDATE_RECEIPT",receipt);}
+ let mut child = service_command
             .args(["--no-gui", "--listen", "127.0.0.1:0", "--data-dir"])
             .arg(data)
             .arg("--desktop-ready")
@@ -81,11 +84,13 @@ impl Backend {
             .env_remove("PORT")
             .env_remove("SCRIPTS_DIR")
             .env_remove("TEMPLATES_DIR")
+            .env("MYWEBSCRCPY_DESKTOP_VERSION", env!("CARGO_PKG_VERSION"))
             .stdin(Stdio::piped())
             .stdout(Stdio::from(log))
             .stderr(Stdio::from(error_log))
             .spawn()
             .map_err(|e| format!("启动服务失败: {e}"))?;
+        crate::updater::record_backend_pid(data, child.id())?;
         let deadline = Instant::now() + Duration::from_secs(20);
         loop {
             if let Ok(contents) = fs::read(&ready_file) {
@@ -169,7 +174,7 @@ impl Drop for Backend {
     }
 }
 
-fn request(ready: &Ready, method: &str, path: &str) -> Result<(), String> {
+pub fn request(ready: &Ready, method: &str, path: &str) -> Result<(), String> {
     let address = ready
         .url
         .strip_prefix("http://")
@@ -192,7 +197,12 @@ fn request(ready: &Ready, method: &str, path: &str) -> Result<(), String> {
     if response.starts_with("HTTP/1.1 200 ") || response.starts_with("HTTP/1.1 202 ") {
         Ok(())
     } else {
-        Err("服务就绪或退出请求失败".into())
+        Err(response
+            .split("\r\n\r\n")
+            .nth(1)
+            .unwrap_or("服务请求失败")
+            .trim()
+            .to_string())
     }
 }
 

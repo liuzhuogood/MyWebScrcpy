@@ -18,11 +18,12 @@ var ErrDeviceBusy = errors.New("设备正在运行其他任务")
 
 // Manager 任务管理器，统一管理 Python 进程生命周期与设备排他锁
 type Manager struct {
-	database *db.DB
-	mu       sync.Mutex
-	procs    map[string]*exec.Cmd
-	closed   bool
-	workers  sync.WaitGroup
+	database    *db.DB
+	mu          sync.Mutex
+	procs       map[string]*exec.Cmd
+	closed      bool
+	maintenance bool
+	workers     sync.WaitGroup
 }
 
 func NewManager(database *db.DB) *Manager {
@@ -36,7 +37,7 @@ func NewManager(database *db.DB) *Manager {
 func (m *Manager) StartTask(scriptID int64, scriptName, deviceSerial string, timeoutSec int, pythonCode string) (*db.RunningTaskRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.closed {
+	if m.closed || m.maintenance {
 		return nil, fmt.Errorf("任务管理器已停止")
 	}
 
@@ -218,3 +219,15 @@ func (m *Manager) GetActiveTaskByDevice(deviceSerial string) (*db.RunningTaskRec
 func (m *Manager) ListActiveTasks() ([]db.RunningTaskRecord, error) {
 	return m.database.ListActiveTasks()
 }
+
+// BeginMaintenance atomically rejects new scheduled tasks while requiring idle state.
+func (m *Manager) BeginMaintenance() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.procs) != 0 {
+		return fmt.Errorf("请等待正在运行的脚本任务完成后再更新")
+	}
+	m.maintenance = true
+	return nil
+}
+func (m *Manager) EndMaintenance() { m.mu.Lock(); m.maintenance = false; m.mu.Unlock() }
