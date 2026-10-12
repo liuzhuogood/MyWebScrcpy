@@ -55,6 +55,7 @@ type Hub struct {
 	touchSubs       map[string]map[chan TouchEventMessage]string
 	events          *debuglog.Ring
 	sessionMu       sync.Mutex
+	closed          bool
 	sessions        map[string]*managedSession
 	inflight        map[string]*inflightSession
 	envMu           sync.Mutex

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 	"time"
@@ -75,6 +76,13 @@ type inflightSession struct {
 }
 
 func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, func(), error) {
+	h.sessionMu.Lock()
+	closed := h.closed
+	h.sessionMu.Unlock()
+	if closed {
+		return nil, nil, nil, fmt.Errorf("服务正在退出")
+	}
+
 	// An active MP4 replay shadows the live scrcpy session for this serial.
 	if h.replays != nil {
 		if ms, meta, release, ok := h.replays.acquire(serial); ok {
@@ -82,6 +90,10 @@ func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, fu
 		}
 	}
 	h.sessionMu.Lock()
+	if h.closed {
+		h.sessionMu.Unlock()
+		return nil, nil, nil, fmt.Errorf("服务正在退出")
+	}
 	if ms := h.sessions[serial]; ms != nil {
 		ms.mu.Lock()
 		ms.refs++
@@ -118,6 +130,13 @@ func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, fu
 
 	h.sessionMu.Lock()
 	delete(h.inflight, serial)
+	if h.closed && err == nil {
+		call.err = fmt.Errorf("服务正在退出")
+		close(call.done)
+		h.sessionMu.Unlock()
+		sess.close()
+		return nil, nil, nil, call.err
+	}
 	if err != nil {
 		call.err = err
 		close(call.done)

@@ -7,6 +7,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue'), meta: { title: 'MyWebScrcpy - 大屏监控' } },
   { path: '/files', name: 'files', component: () => import('@/views/FilesView.vue'), meta: { title: 'MyWebScrcpy - 文件管理' } },
   { path: '/scripts', name: 'scripts', component: () => import('@/views/ScriptsView.vue'), meta: { title: 'MyWebScrcpy - 脚本与任务' } },
+  { path: '/dependencies', name: 'dependencies', component: () => import('@/views/DependenciesView.vue'), meta: { title: 'MyWebScrcpy - 依赖管理' } },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 

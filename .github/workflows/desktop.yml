@@ -1,0 +1,60 @@
+name: Desktop build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - 'frontend/**'
+      - 'internal/**'
+      - 'main*.go'
+      - 'scripts/build-desktop.mjs'
+      - '.github/workflows/desktop.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.7.0'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.90.0'
+      - name: Install Linux desktop libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: pnpm --dir frontend install --frozen-lockfile
+      - run: pnpm --dir desktop install --frozen-lockfile
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Go regression
+        run: go test ./...
+      - name: Build desktop and installers
+        run: node scripts/build-desktop.mjs
+      - name: Verify desktop service lifecycle
+        run: node scripts/verification/desktop-service.mjs
+      - name: Check Rust
+        working-directory: desktop
+        run: cargo clippy --locked -- -D warnings
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ runner.os }}-${{ runner.arch }}
+          path: |
+            desktop/target/release/bundle/
+            desktop/target/portable/

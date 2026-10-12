@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=MyWebScrcpy
+Comment=Android 设备投屏与自动化
+Exec=mywebscrcpy
+Icon=mywebscrcpy-gui
+Terminal=false
+Categories=Development;Utility;

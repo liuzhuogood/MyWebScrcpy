@@ -112,6 +112,12 @@ bash scripts/build.sh
 
 首页直接使用 Vue 界面，投屏、监控和文件管理地址分别为 `/player`、`/dashboard`、`/files`。
 
+### 桌面 App（v1.20 开发中）
+
+新增轻量 Tauri 外壳，复用现有 Vue/Go，提供原生菜单、系统托盘与依赖管理。构建与启动详见 [桌面说明](desktop/README.md)。桌面便携包的 `mywebscrcpy` 默认检测 GUI，`--gui` 强制桌面窗口，`--no-gui` 仅运行服务；Linux 无图形库时使用 Go 入口。
+
+既有服务端构建与运行方式保留。桌面内部服务使用回环动态端口和系统用户数据目录；不捆绑 ADB/Python。桌面安装包、WebView 投屏兼容性和各平台原生验证分别记录在 [v1.20 版本任务](docs/versions/v1.20.0-feature/tasks.md)。
+
 ### 前端开发
 
 在 Go 后端运行后，执行：

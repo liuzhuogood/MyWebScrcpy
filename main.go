@@ -1,10 +1,8 @@
 package main
 
 import (
-	"crypto/tls"
 	"embed"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/fs"
 	"log"
@@ -18,6 +16,7 @@ import (
 	"mywebscrcpy/internal/adbshell"
 	"mywebscrcpy/internal/aiprovider"
 	"mywebscrcpy/internal/db"
+	"mywebscrcpy/internal/dependencies"
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/mdscript"
@@ -50,13 +49,19 @@ var defaultCert []byte
 var defaultKey []byte
 
 func main() {
-	httpsFlag := flag.Bool("https", false, "启用 HTTPS（使用内置证书）")
-	flag.Parse()
-
+	opts := parseRuntimeOptions()
+	if opts.Exit {
+		return
+	}
+	httpsFlag, listenFlag, readyFlag := opts.HTTPS, opts.Listen, opts.Ready
 	adbPath := findADB()
 	addr := "0.0.0.0:8080"
 	if p := os.Getenv("PORT"); p != "" {
 		addr = "0.0.0.0:" + p
+	}
+
+	if *listenFlag != "" {
+		addr = *listenFlag
 	}
 
 	// 把嵌入的 jar 写到临时文件，供 scrcpy.Server.Push 使用
@@ -80,6 +85,9 @@ func main() {
 	defer dm.Stop()
 
 	hub := ws.NewHub(adbPath, jarPath)
+	if *readyFlag != "" {
+		defer hub.Close()
+	}
 
 	// 初始化脚本管理目录
 	if err := scripts.EnsureRoot(); err != nil {
@@ -90,6 +98,7 @@ func main() {
 	uiPage := uipage.New(adbPath)
 
 	mux := http.NewServeMux()
+	dependencies.RegisterRoutes(mux, *readyFlag != "")
 	mux.HandleFunc("/api/openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.Header().Set("Allow", http.MethodGet)
@@ -112,6 +121,11 @@ func main() {
 		log.Printf("警告: 初始化更新器失败: %v", err)
 	} else {
 		updater.RegisterRoutes(mux, updaterService)
+		if *readyFlag != "" {
+			mux.HandleFunc("POST /api/version/upgrade", func(w http.ResponseWriter, r *http.Request) {
+				http.Error(w, "桌面版本请通过完整安装包更新", http.StatusConflict)
+			})
+		}
 	}
 
 	// 模板管理与匹配 API
@@ -134,6 +148,9 @@ func main() {
 	} else {
 		// Markdown 脚本与任务管理器 API
 		taskMgr := taskmanager.NewManager(database)
+		if *readyFlag != "" {
+			defer taskMgr.Close()
+		}
 		taskHandler := taskmanager.NewHandler(taskMgr)
 		taskHandler.RegisterRoutes(mux)
 
@@ -389,65 +406,22 @@ func main() {
 	mux.Handle("/api-docs.html", http.FileServer(http.FS(webRoot)))
 	mux.Handle("/", newAppHandler(appRoot))
 
-	port := strings.TrimPrefix(addr, "0.0.0.0:")
-	log.Printf("adb 路径: %s", adbPath)
-
-	// TLS 配置
-	tlsCertFile := os.Getenv("TLS_CERT")
-	tlsKeyFile := os.Getenv("TLS_KEY")
-
-	if *httpsFlag || (tlsCertFile != "" && tlsKeyFile != "") {
-		var cert tls.Certificate
-		var err error
-
-		if tlsCertFile != "" && tlsKeyFile != "" {
-			// 使用自定义证书
-			cert, err = tls.LoadX509KeyPair(tlsCertFile, tlsKeyFile)
-			if err != nil {
-				log.Fatalf("加载自定义证书失败: %v", err)
-			}
-			log.Printf("使用自定义证书: %s", tlsCertFile)
-		} else {
-			// 使用内置证书
-			cert, err = tls.X509KeyPair(defaultCert, defaultKey)
-			if err != nil {
-				log.Fatalf("加载内置证书失败: %v", err)
-			}
-			log.Printf("使用内置证书（自签名）")
-		}
-
-		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
-		listener, err := tls.Listen("tcp", addr, tlsConfig)
-		if err != nil {
-			log.Fatalf("TLS 监听失败: %v", err)
-		}
-		log.Printf("MyWebScrcpy 启动 → https://localhost:%s (0.0.0.0:%s)", port, port)
-		if err := http.Serve(listener, mux); err != nil {
-			log.Fatalf("server: %v", err)
-		}
-	} else {
-		log.Printf("MyWebScrcpy 启动 → http://localhost:%s (0.0.0.0:%s)", port, port)
-		log.Printf("提示: 使用 -https 参数启用 HTTPS，或设置 TLS_CERT/TLS_KEY 环境变量")
-		if err := http.ListenAndServe(addr, mux); err != nil {
-			log.Fatalf("server: %v", err)
-		}
-	}
+	serveApplication(addr, httpsFlag, readyFlag, mux, adbPath)
 }
 
 // findADB 查找 adb 可执行文件。
 func findADB() string {
-	for _, p := range []string{
-		os.Getenv("ANDROID_HOME"),
-	} {
-		if p != "" {
-			candidate := filepath.Join(p, "platform-tools", "adb")
-			if _, err := exec.LookPath(candidate); err == nil {
-				return candidate
-			}
-		}
-	}
-	if path, err := exec.LookPath("adb"); err == nil {
+	path, err := dependencies.ADBPath()
+	if err == nil {
 		return path
+	}
+	if value := os.Getenv("MYWEBSCRCPY_ADB"); value != "" {
+		log.Printf("ADB 配置不可用: %v", err)
+		return value
+	}
+	if value := dependencies.Current().ADB; value != "" {
+		log.Printf("ADB 配置不可用: %v", err)
+		return value
 	}
 	return "adb"
 }

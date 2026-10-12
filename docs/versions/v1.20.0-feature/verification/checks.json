@@ -1,0 +1,29 @@
+{
+  "go_tests": "passed",
+  "go_race_all": "passed",
+  "go_vet": "passed",
+  "frontend_build": "passed",
+  "prototype_build_and_interactions": "passed",
+  "rust_check_clippy_all_features": "passed",
+  "desktop_service_integration": "passed",
+  "native_macos_webview_and_window_lifecycle": "passed",
+  "native_single_instance": "passed",
+  "parent_exit_cleanup": "passed",
+  "production_verification_hook_absent": "passed",
+  "go_compile_targets": [
+    "windows-amd64",
+    "linux-amd64",
+    "linux-arm64",
+    "darwin-amd64",
+    "darwin-arm64"
+  ],
+  "not_verified": [
+    "Windows/Linux native GUI and installers",
+    "macOS physical menu/tray click and visual pixels",
+    "real-device video/audio",
+    "signing/notarization",
+    "remote CI"
+  ],
+  "public_prototype": "unavailable: cloudflared not installed",
+  "prototype_url": "http://127.0.0.1:5174/#desktop-app-v1"
+}

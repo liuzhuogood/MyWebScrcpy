@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MyWebScrcpy",
+  "version": "1.20.0",
+  "identifier": "com.mywebscrcpy.desktop",
+  "build": { "frontendDist": "ui" },
+  "app": {
+    "windows": [],
+    "security": { "capabilities": [] }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"],
+    "externalBin": ["binaries/mywebscrcpy"],
+    "category": "DeveloperTool",
+    "shortDescription": "Android 设备投屏与自动化",
+    "windows": { "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true } }
+  }
+}

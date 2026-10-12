@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-10-12T13:09:38.780430",
+  "kind": "local compiled application, not runtime snapshot",
+  "files": [
+    {
+      "path": "/Users/liuzhuo/code/MyWebScrcpy/desktop/target/release/bundle/macos/MyWebScrcpy.app/Contents/MacOS/mywebscrcpy",
+      "bytes": 15705362,
+      "sha256": "8ea34136ddbf8e7a79f30c76536aedc1e4ff51c7756074348cafd0eaa29a93a5"
+    },
+    {
+      "path": "/Users/liuzhuo/code/MyWebScrcpy/desktop/target/release/bundle/macos/MyWebScrcpy.app/Contents/MacOS/mywebscrcpy-gui",
+      "bytes": 9973184,
+      "sha256": "6eb3923675505bfc39052e80f7e4d7f2ba12b4260cae3bffa83eac388956be9f"
+    }
+  ]
+}
