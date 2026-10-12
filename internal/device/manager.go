@@ -3,6 +3,7 @@ package device
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -174,6 +175,7 @@ func (m *Manager) Connect(serial string) error {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, m.adbPath, "connect", serial)
+	cmd.Dir = os.TempDir()
 	out, err := cmd.CombinedOutput()
 	output := string(out)
 
@@ -238,7 +240,9 @@ func (m *Manager) RemoveManualDevice(serial string) error {
 
 	// 可选尝试断开 adb disconnect
 	go func() {
-		exec.Command(m.adbPath, "disconnect", serial).Run()
+		cmd := exec.Command(m.adbPath, "disconnect", serial)
+		cmd.Dir = os.TempDir()
+		_ = cmd.Run()
 	}()
 
 	m.refresh()
@@ -261,7 +265,9 @@ func (m *Manager) UpdateAlias(serial, alias string) error {
 
 // ListDevices 执行一次 adb devices -l 并返回解析结果。
 func (m *Manager) ListDevices() ([]Device, error) {
-	out, err := exec.Command(m.adbPath, "devices", "-l").Output()
+	cmd := exec.Command(m.adbPath, "devices", "-l")
+	cmd.Dir = os.TempDir()
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("adb devices: %w", err)
 	}

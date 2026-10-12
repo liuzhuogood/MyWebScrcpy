@@ -31,4 +31,4 @@ try{
  writeFileSync(file,source)
  run('rustc',['--edition=2021',file,'-L',`dependency=${deps}`,'--extern',`base64=${library('base64')}`,'--extern',`minisign_verify=${library('minisign_verify')}`,'-o',executable])
  run(executable,[signatures[0].slice(0,-4),path.resolve('desktop/updater.pub'),signatures[0]])
-}finally{rmSync(temp,{recursive:true,force:true})}
+}finally{rmSync(temp,{recursive:true,force:true,maxRetries:10,retryDelay:200})}

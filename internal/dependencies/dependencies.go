@@ -64,6 +64,7 @@ func inspect(tool Tool, path string, pathErr error, args ...string) Tool {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, args...)
+	cmd.Dir = os.TempDir()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		tool.Error = "程序检查失败: " + err.Error()

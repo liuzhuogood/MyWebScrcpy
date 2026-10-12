@@ -25,4 +25,4 @@ try {
  await rm(path.join(temp,'artifacts','desktop-linux-x86_64'),{recursive:true})
  run('scripts/merge-desktop-manifests.mjs',['artifacts'],1)
  console.log('PASS: platform filenames, manifest merge, architecture separation and incomplete release rejection')
-}finally{await rm(temp,{recursive:true,force:true})}
+}finally{await rm(temp,{recursive:true,force:true,maxRetries:10,retryDelay:200})}
