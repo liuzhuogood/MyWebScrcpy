@@ -2,6 +2,8 @@ package aiprovider
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 )
 
@@ -85,18 +87,40 @@ func (h *Handler) handleTest(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) handleChat(w http.ResponseWriter, r *http.Request) {
 	var req ChatRequest
+	r.Body = http.MaxBytesReader(w, r.Body, 2<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "无效请求")
 		return
 	}
-	if len(req.Messages) == 0 {
-		writeError(w, http.StatusBadRequest, "消息列表不能为空")
+	if err := validateChat(req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	reply, err := h.service.ChatCompletion(r.Context(), req.Messages)
-	if err != nil {
-		writeError(w, http.StatusBadGateway, err.Error())
+	if _, ok := w.(http.Flusher); !ok {
+		writeError(w, http.StatusInternalServerError, "当前连接不支持流式响应")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "reply": reply})
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	controller := http.NewResponseController(w)
+	if err := controller.Flush(); err != nil {
+		return
+	}
+	emit := func(event ChatEvent) error {
+		data, err := json.Marshal(event)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+			return err
+		}
+		return controller.Flush()
+	}
+	if err := h.service.StreamChat(r.Context(), req, emit); err != nil {
+		log.Printf("[ScriptAssistant] Pi 请求失败: %v", err)
+		if r.Context().Err() == nil {
+			_ = emit(ChatEvent{Type: "error", Error: err.Error()})
+		}
+	}
 }

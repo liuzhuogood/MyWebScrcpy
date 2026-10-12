@@ -26,3 +26,9 @@ data/
 
 # Generated Vue frontend assets
 web/dist/
+
+# Generated embedded Pi payload and extracted portable runtime
+.cache/pi/
+internal/pibundle/payload/runtime.zip*
+internal/pibundle/payload/manifest.json
+.pi/runtime/

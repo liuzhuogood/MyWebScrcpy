@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"mywebscrcpy/internal/db"
+	"mywebscrcpy/internal/pibundle"
 )
 
 const (
@@ -32,17 +33,20 @@ type ChatMessage struct {
 
 type ChatRequest struct {
 	Messages []ChatMessage `json:"messages"`
+	Document string        `json:"document"`
 }
 
 type Service struct {
-	database *db.DB
-	client   *http.Client
+	database  *db.DB
+	client    *http.Client
+	piRuntime pibundle.Paths
 }
 
-func NewService(database *db.DB) *Service {
+func NewService(database *db.DB, piRuntime pibundle.Paths) *Service {
 	return &Service{
-		database: database,
-		client:   &http.Client{Timeout: 60 * time.Second},
+		database:  database,
+		client:    &http.Client{Timeout: 60 * time.Second},
+		piRuntime: piRuntime,
 	}
 }
 
@@ -113,57 +117,4 @@ func (s *Service) TestConnection(ctx context.Context, cfg ModelConfig) (string, 
 	}
 
 	return "连接成功，模型响应正常", nil
-}
-
-// ChatCompletion 代理发送标准 OpenAI 对齐请求
-func (s *Service) ChatCompletion(ctx context.Context, messages []ChatMessage) (string, error) {
-	cfg, err := s.GetConfig()
-	if err != nil {
-		return "", fmt.Errorf("读取配置失败: %w", err)
-	}
-	baseURL := strings.TrimRight(cfg.BaseURL, "/")
-	reqURL := baseURL + "/chat/completions"
-
-	bodyData := map[string]interface{}{
-		"model":       cfg.Model,
-		"messages":    messages,
-		"temperature": 0.7,
-	}
-	jsonBody, _ := json.Marshal(bodyData)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(jsonBody))
-	if err != nil {
-		return "", fmt.Errorf("构建请求失败: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if cfg.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+cfg.APIKey)
-	}
-
-	resp, err := s.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("模型调用失败: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		respBytes, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("模型返回错误 (%d): %s", resp.StatusCode, string(respBytes))
-	}
-
-	var res struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return "", fmt.Errorf("解析模型返回结果失败: %w", err)
-	}
-	if len(res.Choices) == 0 {
-		return "", fmt.Errorf("模型未返回任何有效回复")
-	}
-
-	return res.Choices[0].Message.Content, nil
 }

@@ -44,11 +44,3 @@ export function testAIConnection(config: AIModelConfig): Promise<{ ok: boolean, 
     body: JSON.stringify(config),
   })
 }
-
-export function sendAIChat(messages: ChatMessage[]): Promise<{ ok: boolean, reply: string }> {
-  return request('/api/ai/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages }),
-  })
-}

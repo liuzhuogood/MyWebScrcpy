@@ -9,6 +9,24 @@ permissions:
   contents: write  # 需要写权限来创建 Release
 
 jobs:
+  pi-runtime-tests:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Prepare native standalone Pi
+        run: python scripts/prepare-pi.py
+      - name: Test embedded Pi and search tools without host PATH
+        run: go test -count=1 -v ./internal/pibundle ./internal/aiprovider
+
   windows-task-tests:
     runs-on: windows-latest
     steps:
@@ -62,6 +80,11 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -144,6 +167,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - run: pnpm --dir frontend install --frozen-lockfile
       - run: pnpm --dir desktop install --frozen-lockfile
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
       - name: Build complete signed desktop packages
         run: node scripts/build-desktop.mjs --signed
       - name: Verify updater signature and corruption rejection
@@ -168,7 +194,7 @@ jobs:
             desktop-manifest-${{ matrix.target }}.json
 
   release:
-    needs: [build, windows-task-tests, desktop]
+    needs: [build, windows-task-tests, desktop, pi-runtime-tests]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -251,7 +277,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
-    needs: [build, windows-task-tests]
+    needs: [build, windows-task-tests, pi-runtime-tests]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

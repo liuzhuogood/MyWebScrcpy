@@ -44,6 +44,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
+      - name: Prepare native standalone Pi
+        run: python scripts/prepare-pi.py
       - name: Go regression
         run: go test ./...
       - name: Build desktop and installers

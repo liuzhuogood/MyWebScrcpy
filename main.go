@@ -20,6 +20,7 @@ import (
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/mdscript"
+	"mywebscrcpy/internal/pibundle"
 	"mywebscrcpy/internal/scheduler"
 	"mywebscrcpy/internal/scripts"
 	"mywebscrcpy/internal/taskmanager"
@@ -48,6 +49,9 @@ var defaultCert []byte
 //go:embed assets/certs/key.pem
 var defaultKey []byte
 
+//go:embed all:.pi/skills
+var piSkillsFS embed.FS
+
 func main() {
 	if handleUpdateCommand() {
 		return
@@ -58,6 +62,23 @@ func main() {
 		return
 	}
 	httpsFlag, listenFlag, readyFlag := opts.HTTPS, opts.Listen, opts.Ready
+	executable, err := os.Executable()
+	if err != nil {
+		log.Fatalf("定位程序目录失败: %v", err)
+	}
+	executable, err = filepath.EvalSymlinks(executable)
+	if err != nil {
+		log.Fatalf("解析程序路径失败: %v", err)
+	}
+	piSkills, err := fs.Sub(piSkillsFS, ".pi/skills")
+	if err != nil {
+		log.Fatalf("读取内置技能失败: %v", err)
+	}
+	piRuntime, err := pibundle.Prepare(filepath.Dir(executable), piSkills)
+	if err != nil {
+		log.Fatalf("初始化内置 Pi 失败: %v", err)
+	}
+
 	adbPath := findADB()
 	addr := "0.0.0.0:8080"
 	if p := os.Getenv("PORT"); p != "" {
@@ -225,7 +246,7 @@ func main() {
 		mdHandler.RegisterRoutes(mux)
 
 		// AI 模型配置与代理 API
-		aiSvc := aiprovider.NewService(database)
+		aiSvc := aiprovider.NewService(database, piRuntime)
 		aiHandler := aiprovider.NewHandler(aiSvc)
 		aiHandler.RegisterRoutes(mux)
 	}

@@ -1,0 +1,75 @@
+{
+  "version": "0.86.1",
+  "targets": {
+    "darwin/arm64": {
+      "pi": {
+        "url": "https://github.com/earendil-works/pi/releases/download/v0.86.1/pi-darwin-arm64.tar.gz",
+        "sha256": "03bd097ad4540ae4c3d9c1b5b19c517047cda0f1506bfcb992b17308460b0383"
+      },
+      "fd": {
+        "url": "https://github.com/sharkdp/fd/releases/download/v10.3.0/fd-v10.3.0-aarch64-apple-darwin.tar.gz",
+        "sha256": "0570263812089120bc2a5d84f9e65cd0c25e4a4d724c80075c357239c74ae904"
+      },
+      "rg": {
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz",
+        "sha256": "3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4"
+      }
+    },
+    "darwin/amd64": {
+      "pi": {
+        "url": "https://github.com/earendil-works/pi/releases/download/v0.86.1/pi-darwin-x64.tar.gz",
+        "sha256": "74b0262948651f70c6d85a52043985e8fce2c89f1cd3a6f08f81d9cc799ec4a4"
+      },
+      "fd": {
+        "url": "https://github.com/sharkdp/fd/releases/download/v10.3.0/fd-v10.3.0-x86_64-apple-darwin.tar.gz",
+        "sha256": "50d30f13fe3d5914b14c4fff5abcbd4d0cdab4b855970a6956f4f006c17117a3"
+      },
+      "rg": {
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-apple-darwin.tar.gz",
+        "sha256": "af7825fcc69a2afc7a7aea55fc9af90e26421d8f20fe59df32e233c0b8a231c1"
+      }
+    },
+    "linux/arm64": {
+      "pi": {
+        "url": "https://github.com/earendil-works/pi/releases/download/v0.86.1/pi-linux-arm64.tar.gz",
+        "sha256": "3957cb7ac3ec84fe905f0f077c599fd3fecfbb886a93467dfebfacc108b8c3b7"
+      },
+      "fd": {
+        "url": "https://github.com/sharkdp/fd/releases/download/v10.3.0/fd-v10.3.0-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "996b9b1366433b211cb3bbedba91c9dbce2431842144d925428ead0adf32020b"
+      },
+      "rg": {
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz",
+        "sha256": "800b1e7206afe799dfb5a6901f23147cfaabe0e52210538100f61e86e1740915"
+      }
+    },
+    "linux/amd64": {
+      "pi": {
+        "url": "https://github.com/earendil-works/pi/releases/download/v0.86.1/pi-linux-x64.tar.gz",
+        "sha256": "2494f5587a8774a10296d00a7e504e7ad05596ca93e057cb89372c8b1a7f46a9"
+      },
+      "fd": {
+        "url": "https://github.com/sharkdp/fd/releases/download/v10.3.0/fd-v10.3.0-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "2b6bfaae8c48f12050813c2ffe1884c61ea26e750d803df9c9114550a314cd14"
+      },
+      "rg": {
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz",
+        "sha256": "33e15bcf1624b25cdd2a55813a47a2f95dbe126268203e76aa6a585d1e7b149c"
+      }
+    },
+    "windows/amd64": {
+      "pi": {
+        "url": "https://github.com/earendil-works/pi/releases/download/v0.86.1/pi-windows-x64.zip",
+        "sha256": "b049d35a176fa5f4353d53ca90212320c031c9912b59efe95bb7985d52ed1507"
+      },
+      "fd": {
+        "url": "https://github.com/sharkdp/fd/releases/download/v10.3.0/fd-v10.3.0-x86_64-pc-windows-msvc.zip",
+        "sha256": "318aa2a6fa664325933e81fda60d523fff29444129e91ebf0726b5b3bcd8b059"
+      },
+      "rg": {
+        "url": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip",
+        "sha256": "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5"
+      }
+    }
+  }
+}

@@ -101,7 +101,7 @@ Vision 接口当前支持协议版本 `1`。显式发送未知版本会收到
 git clone https://github.com/liuzhuogood/MyWebScrcpy.git
 cd MyWebScrcpy
 
-# 构建（需要 Node.js 24 和 pnpm 11.7.0）
+# 构建（需要 Python 3.9+、Node.js 24 和 pnpm 11.7.0）
 bash scripts/build.sh
 
 # 运行
@@ -128,8 +128,8 @@ pnpm --dir frontend dev
 ```
 
 打开 `http://localhost:5173/`。开发服务器将 HTTP API 和 WebSocket 请求代理到 `http://localhost:8080`。
-发布时使用 `bash scripts/build.sh`：前端产物写入 `web/dist/`，随后嵌入 Go 程序；运行时无需 Node.js。
-直接运行 `go build` 不会更新前端产物。跨平台构建示例：
+发布时使用 `bash scripts/build.sh`：前端产物、目标平台的 Pi 独立程序和项目 `.pi/skills/` 一起嵌入 Go 程序。运行时无需安装 Pi 或 Node.js，启动时释放到程序旁的 `.pi/`，保留已有技能修改。详细说明见 [Pi 文档助手](docs/pi-assistant.md)。
+直接运行 `go build` 不会更新前端产物，也不会准备 Pi 依赖；需先运行 `python3 scripts/prepare-pi.py`。跨平台构建示例：
 
 ```bash
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 bash scripts/build.sh -o mywebscrcpy-linux-amd64
