@@ -7,10 +7,16 @@ import os
 from pathlib import Path, PurePosixPath
 import shutil
 import subprocess
+import sys
 import tarfile
 import time
 import urllib.request
 import zipfile
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -78,7 +84,7 @@ def main():
     parser.add_argument("--goarch", default=os.environ.get("GOARCH") or subprocess.check_output(["go", "env", "GOHOSTARCH"], text=True).strip())
     parser.add_argument("--cache", type=Path, default=ROOT / ".cache" / "pi")
     args = parser.parse_args()
-    lock = json.loads((ROOT / "scripts/pi-runtime.lock.json").read_text())
+    lock = json.loads((ROOT / "scripts/pi-runtime.lock.json").read_text(encoding="utf-8"))
     target = f"{args.goos}/{args.goarch}"
     if target not in lock["targets"]:
         parser.error(f"没有锁定的 Pi 独立包: {target}")
@@ -117,7 +123,7 @@ def main():
     manifest = {"version": lock["version"], "goos": args.goos, "goarch": args.goarch,
                 "sha256": digest(temporary), "files": entries}
     temporary.replace(output)
-    (payload / "manifest.json").write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+    (payload / "manifest.json").write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     print(f"[Pi] 已准备 {target} Pi {lock['version']}，{output.stat().st_size / 1024 / 1024:.1f} MiB")
 
 

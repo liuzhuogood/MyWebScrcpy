@@ -24,11 +24,7 @@ func testExecutor(t *testing.T) (*db.DB, *taskmanager.Manager, *Executor) {
 	}
 	mgr := taskmanager.NewManager(d)
 	t.Cleanup(func() {
-		tasks, _ := mgr.ListActiveTasks()
-		for _, task := range tasks {
-			_ = mgr.KillTask(task.ID)
-		}
-		time.Sleep(30 * time.Millisecond)
+		mgr.Close()
 		d.Close()
 	})
 	lookup := func(serial string) (bool, bool) { return serial != "unknown", serial != "offline" }
@@ -67,7 +63,7 @@ func TestMultiDeviceArgumentsAndIndependentStop(t *testing.T) {
 	}
 	outputDir := t.TempDir()
 	directory, _ := json.Marshal(outputDir)
-	python := fmt.Sprintf("import sys, pathlib, time\np = pathlib.Path(%s) / sys.argv[1]\np.write_text(sys.argv[1])\ntime.sleep(10)\n", directory)
+	python := fmt.Sprintf("import sys, pathlib, time\np = pathlib.Path(%s) / sys.argv[1]\np.write_text(sys.argv[1], encoding='utf-8')\ntime.sleep(10)\n", directory)
 	if err := d.SaveCompiledPython(script.ID, "1.0.0", python); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +76,7 @@ func TestMultiDeviceArgumentsAndIndependentStop(t *testing.T) {
 		var data []byte
 		for time.Now().Before(deadline) {
 			data, err = os.ReadFile(filepath.Join(outputDir, result.DeviceSerial))
-			if err == nil {
+			if err == nil && string(data) == result.DeviceSerial {
 				break
 			}
 			time.Sleep(20 * time.Millisecond)
