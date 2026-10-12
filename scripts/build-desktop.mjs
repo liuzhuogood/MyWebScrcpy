@@ -49,24 +49,29 @@ if (checkOnly) {
   process.exit(0)
 }
 const buildArgs = ['--dir', desktop, 'exec', 'tauri', 'build']
+function addConfig(name, config) {
+  const configPath = path.join(desktop, 'target', `${name}.conf.json`)
+  mkdirSync(path.dirname(configPath), { recursive: true })
+  writeFileSync(configPath, JSON.stringify(config))
+  buildArgs.push('--config', configPath)
+}
 if (noBundle) buildArgs.push('--no-bundle')
 if (process.env.DESKTOP_BUNDLES) buildArgs.push('--bundles', process.env.DESKTOP_BUNDLES)
-if (goos === 'darwin') buildArgs.push('--config', JSON.stringify({ bundle: { macOS: { signingIdentity: process.env.APPLE_SIGNING_IDENTITY || '-' } } }))
-if (signed) buildArgs.push('--config', JSON.stringify({ bundle: { createUpdaterArtifacts: true } }))
-if (verifyNative) buildArgs.push('--features', 'native-verify', '--config', JSON.stringify({ identifier: 'com.mywebscrcpy.desktop.verification' }))
+if (goos === 'darwin') addConfig('macos-signing', { bundle: { macOS: { signingIdentity: process.env.APPLE_SIGNING_IDENTITY || '-' } } })
+if (signed) addConfig('signed', { bundle: { createUpdaterArtifacts: true } })
+if (verifyNative) {
+  buildArgs.push('--features', 'native-verify')
+  addConfig('verify', { identifier: 'com.mywebscrcpy.desktop.verification' })
+}
 // Linux desktop shortcuts invoke the Go entry point to choose GUI or service.
 if (goos === 'linux' && !noBundle) {
-  const config = {
+  addConfig('launcher', {
     bundle: {
       linux: { deb: { files: { '/usr/bin/mywebscrcpy': service }, desktopTemplate: 'linux.desktop' },
         rpm: { files: { '/usr/bin/mywebscrcpy': service }, desktopTemplate: 'linux.desktop' },
         appimage: { files: { '/usr/bin/mywebscrcpy': service } } },
     },
-  }
-  const configPath = path.join(desktop, 'target', 'launcher.conf.json')
-  mkdirSync(path.dirname(configPath), { recursive: true })
-  writeFileSync(configPath, JSON.stringify(config))
-  buildArgs.push('--config', configPath)
+  })
 }
 const tauriEnv = { ...process.env }
 for (const key of ['APPLE_CERTIFICATE','APPLE_CERTIFICATE_PASSWORD','APPLE_SIGNING_IDENTITY','APPLE_ID','APPLE_PASSWORD','APPLE_TEAM_ID']) {

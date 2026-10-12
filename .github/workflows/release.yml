@@ -11,6 +11,7 @@ permissions:
 jobs:
   pi-runtime-tests:
     strategy:
+      fail-fast: false
       matrix:
         runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
     runs-on: ${{ matrix.runner }}

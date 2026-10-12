@@ -20,15 +20,8 @@ func TestResolvePiSkillsDir(t *testing.T) {
 	if err := os.Mkdir(expected, 0700); err != nil {
 		t.Fatal(err)
 	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
-	}
-	relative, err := filepath.Rel(cwd, expected)
-	if err != nil {
-		t.Fatal(err)
-	}
-	actual, err := resolvePiSkillsDir(relative)
+	t.Chdir(root)
+	actual, err := resolvePiSkillsDir("skills")
 	if err != nil || actual != expected {
 		t.Fatalf("dir=%q err=%v", actual, err)
 	}
