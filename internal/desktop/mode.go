@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -56,12 +57,12 @@ func ShellPath() string {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	path := filepath.Join(filepath.Dir(executable), name)
-	info, err := os.Stat(path)
+	p := filepath.Join(filepath.Dir(executable), name)
+	info, err := os.Stat(p)
 	if err != nil || info.IsDir() {
 		return ""
 	}
-	return path
+	return p
 }
 
 // Socket connectivity is a preflight. The GUI host still validates its actual
@@ -84,11 +85,11 @@ func canConnect(network, address string) bool {
 
 func LinuxDisplayAvailable(getenv func(string) string, connect func(string, string) bool) bool {
 	if display := getenv("WAYLAND_DISPLAY"); display != "" {
-		path := display
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(getenv("XDG_RUNTIME_DIR"), display)
+		socketPath := display
+		if !path.IsAbs(socketPath) {
+			socketPath = path.Join(getenv("XDG_RUNTIME_DIR"), display)
 		}
-		if filepath.IsAbs(path) && connect("unix", path) {
+		if path.IsAbs(socketPath) && connect("unix", socketPath) {
 			return true
 		}
 	}

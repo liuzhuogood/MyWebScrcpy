@@ -3,6 +3,7 @@ package ws
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -129,6 +130,13 @@ func TestResolveDeviceEnvSkipsPushWhenRemoteJarMatchesAndCaches(t *testing.T) {
 		"echo \"$@\" >> \"" + countFile + "\"\n" +
 		"echo 33\n" +
 		"echo 41\n"
+	if runtime.GOOS == "windows" {
+		adbScript = filepath.Join(tmpDir, "fake-adb.bat")
+		scriptContent = "@echo off\r\n" +
+			"echo %* >> \"" + countFile + "\"\r\n" +
+			"echo 33\r\n" +
+			"echo 41\r\n"
+	}
 	if err := os.WriteFile(adbScript, []byte(scriptContent), 0o755); err != nil {
 		t.Fatalf("write fake adb: %v", err)
 	}

@@ -277,12 +277,13 @@ func (s *Storage) loadExisting() error {
 // Reload re-traverses the base directory, compares with in-memory templates,
 // incrementally applies additions, updates, and deletions, and returns all affected serials.
 func (s *Storage) Reload() ([]string, error) {
+	s.mu.Lock()
 	diskEntries, err := s.readAllDiskTemplates()
 	if err != nil {
+		s.mu.Unlock()
 		return nil, err
 	}
 
-	s.mu.Lock()
 	affected := make(map[string]bool)
 
 	// 1. Clear templates that no longer exist on disk
