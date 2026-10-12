@@ -11,15 +11,19 @@ import (
 	"time"
 
 	"mywebscrcpy/internal/db"
+	"mywebscrcpy/internal/dependencies"
 )
 
 var ErrDeviceBusy = errors.New("设备正在运行其他任务")
 
 // Manager 任务管理器，统一管理 Python 进程生命周期与设备排他锁
 type Manager struct {
-	database *db.DB
-	mu       sync.Mutex
-	procs    map[string]*exec.Cmd
+	database    *db.DB
+	mu          sync.Mutex
+	procs       map[string]*exec.Cmd
+	closed      bool
+	maintenance bool
+	workers     sync.WaitGroup
 }
 
 func NewManager(database *db.DB) *Manager {
@@ -33,6 +37,9 @@ func NewManager(database *db.DB) *Manager {
 func (m *Manager) StartTask(scriptID int64, scriptName, deviceSerial string, timeoutSec int, pythonCode string) (*db.RunningTaskRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.closed || m.maintenance {
+		return nil, fmt.Errorf("任务管理器已停止")
+	}
 
 	if err := db.ValidateTargetDevices([]string{deviceSerial}); err != nil {
 		return nil, err
@@ -67,7 +74,13 @@ func (m *Manager) StartTask(scriptID int64, scriptName, deviceSerial string, tim
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
 
-	cmd := exec.CommandContext(ctx, "python3", scriptPath, deviceSerial)
+	pythonPath, err := dependencies.PythonPath()
+	if err != nil {
+		cancel()
+		_ = os.Remove(scriptPath)
+		return nil, fmt.Errorf("Python 依赖不可用: %w", err)
+	}
+	cmd := exec.CommandContext(ctx, pythonPath, scriptPath, deviceSerial)
 	// 托管脚本统一输出 UTF-8，避免 Windows 默认代码页导致中文日志崩溃。
 	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
 	configureTaskProcess(cmd)
@@ -95,8 +108,10 @@ func (m *Manager) StartTask(scriptID int64, scriptName, deviceSerial string, tim
 		return nil, fmt.Errorf("注册任务到数据库失败: %w", err)
 	}
 
+	m.workers.Add(1)
 	// 4. 异步监听进程生命周期并在结束后释放锁
 	go func() {
+		defer m.workers.Done()
 		defer cancel()
 		defer func() {
 			_ = os.Remove(scriptPath)
@@ -204,3 +219,15 @@ func (m *Manager) GetActiveTaskByDevice(deviceSerial string) (*db.RunningTaskRec
 func (m *Manager) ListActiveTasks() ([]db.RunningTaskRecord, error) {
 	return m.database.ListActiveTasks()
 }
+
+// BeginMaintenance atomically rejects new scheduled tasks while requiring idle state.
+func (m *Manager) BeginMaintenance() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.procs) != 0 {
+		return fmt.Errorf("请等待正在运行的脚本任务完成后再更新")
+	}
+	m.maintenance = true
+	return nil
+}
+func (m *Manager) EndMaintenance() { m.mu.Lock(); m.maintenance = false; m.mu.Unlock() }

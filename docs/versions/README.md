@@ -47,6 +47,8 @@
 | [v1.19.1-fix](v1.19.1-fix/version.md) | 五平台编译成功；发布被运行测试拦截 | Windows 进程树清理测试通过；原生测试发现中文输出编码与调度测试文件追加问题，转 `v1.19.2-fix` 处理。 |
 | [v1.19.2-fix](v1.19.2-fix/version.md) | 已修复并发布 | 2026-10-12 [GitHub Actions](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/38155571572) 的五平台编译、Windows 原生测试、Release 和 Docker 全部成功；[Release](https://github.com/liuzhuogood/MyWebScrcpy/releases/tag/v1.19.2) 已发布五个程序文件。修复提交 `b6d2077`，保留前序标签。 |
 
+| [v1.20.0-feature](v1.20.0-feature/version.md) | 进行中 | Tauri 桌面窗口、原生菜单、托盘、GUI/服务模式与独立依赖管理；三平台验证分别记录。 |
+
 ## Vue 前端迁移版本
 
 前端现位于主仓库 `frontend/`。以下版本描述其迁移过程，原独立仓库路径与旧 HTML 对照用于追溯。

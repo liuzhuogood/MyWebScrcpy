@@ -26,14 +26,14 @@ const (
 
 // ProgressInfo 下载与更新进度快照
 type ProgressInfo struct {
-	State       ProgressState `json:"state"`
-	Percent     float64       `json:"percent"`
-	Downloaded  int64         `json:"downloaded"`
-	Total       int64         `json:"total"`
-	Speed       string        `json:"speed"`
-	Error       string        `json:"error,omitempty"`
-	TargetFile  string        `json:"target_file,omitempty"`
-	UpdatedAt   time.Time     `json:"updated_at"`
+	State      ProgressState `json:"state"`
+	Percent    float64       `json:"percent"`
+	Downloaded int64         `json:"downloaded"`
+	Total      int64         `json:"total"`
+	Speed      string        `json:"speed"`
+	Error      string        `json:"error,omitempty"`
+	TargetFile string        `json:"target_file,omitempty"`
+	UpdatedAt  time.Time     `json:"updated_at"`
 }
 
 // Downloader 负责流式下载二进制并计算进度
@@ -107,8 +107,11 @@ func (d *Downloader) notify(p ProgressInfo) {
 
 // Cancel 取消当前下载
 func (d *Downloader) Cancel() {
-	if d.cancelFn != nil {
-		d.cancelFn()
+	d.stateMu.RLock()
+	cancel := d.cancelFn
+	d.stateMu.RUnlock()
+	if cancel != nil {
+		cancel()
 	}
 }
 
@@ -122,7 +125,10 @@ func (d *Downloader) DownloadAsset(downloadURL string, totalSize int64, destPath
 	d.stateMu.Unlock()
 
 	ctx, cancel := context.WithCancel(context.Background())
+	d.stateMu.Lock()
 	d.cancelFn = cancel
+	d.stateMu.Unlock()
+	defer cancel()
 
 	d.notify(ProgressInfo{
 		State:      StateDownloading,
@@ -178,7 +184,9 @@ func (d *Downloader) DownloadAsset(downloadURL string, totalSize int64, destPath
 	defer ticker.Stop()
 
 	doneCh := make(chan struct{})
+	finished := make(chan struct{})
 	go func() {
+		defer close(finished)
 		for {
 			select {
 			case <-ticker.C:
@@ -230,12 +238,14 @@ func (d *Downloader) DownloadAsset(downloadURL string, totalSize int64, destPath
 			}
 			if werr != nil {
 				close(doneCh)
+				<-finished
 				d.notify(ProgressInfo{State: StateError, Error: werr.Error()})
 				return werr
 			}
 		}
 		if rerr != nil {
 			close(doneCh)
+			<-finished
 			if rerr == io.EOF {
 				break
 			}
@@ -244,6 +254,15 @@ func (d *Downloader) DownloadAsset(downloadURL string, totalSize int64, destPath
 		}
 	}
 
+	if totalSize > 0 && downloaded != totalSize {
+		err := fmt.Errorf("download size mismatch: got %d, expected %d", downloaded, totalSize)
+		d.notify(ProgressInfo{State: StateError, Error: err.Error()})
+		return err
+	}
+	if err := out.Sync(); err != nil {
+		d.notify(ProgressInfo{State: StateError, Error: err.Error()})
+		return err
+	}
 	d.notify(ProgressInfo{
 		State:      StateVerifying,
 		Percent:    100,

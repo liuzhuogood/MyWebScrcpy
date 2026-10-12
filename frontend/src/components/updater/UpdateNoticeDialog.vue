@@ -25,9 +25,9 @@ const stateText = computed(() => {
     case 'verifying':
       return '正在验证安装包...'
     case 'applying':
-      return '正在替换可执行文件...'
+      return '正在安装并重新启动...'
     case 'success':
-      return '更新完成，服务正在重启...'
+      return '更新完成'
     case 'error':
       return '更新失败'
     default:
@@ -51,32 +51,9 @@ function handleRefresh() {
   window.location.reload()
 }
 
-// 成功后自动尝试探测后端并刷新
-watch(
-  () => updater.progress.state,
-  (newState) => {
-    if (newState === 'success') {
-      let attempts = 0
-      const timer = setInterval(async () => {
-        attempts++
-        try {
-          const res = await fetch('/api/version/check')
-          if (res.ok) {
-            clearInterval(timer)
-            setTimeout(() => {
-              window.location.reload()
-            }, 800)
-          }
-        } catch {
-          // 服务还在重启中
-        }
-        if (attempts > 30) {
-          clearInterval(timer)
-        }
-      }, 1000)
-    }
-  }
-)
+watch(() => updater.progress.state, state => {
+  if (state === 'success') setTimeout(() => window.location.reload(), 800)
+})
 </script>
 
 <template>
@@ -89,7 +66,7 @@ watch(
           <DialogTitle class="text-lg">{{ hasUpdate ? '软件更新' : '版本信息' }}</DialogTitle>
         </div>
         <DialogDescription class="text-sm">
-          {{ hasUpdate ? '发现新版本，建议及时更新以获取最新功能和修复。' : '当前已是最新版本，无需更新。' }}
+          {{ updater.errorMessage ? '检查或更新未完成' : updater.checkResult?.update_reason ? updater.checkResult.update_reason : hasUpdate ? '发现新版本' : updater.checkResult ? '当前已是最新版本' : '正在检查版本' }}
         </DialogDescription>
       </DialogHeader>
 
@@ -110,7 +87,7 @@ watch(
               <Badge variant="default" class="h-5 text-[10px] px-1.5">New</Badge>
             </div>
           </div>
-          <div v-else class="text-right">
+          <div v-else-if="updater.checkResult && !updater.errorMessage && !updater.checkResult.update_reason" class="text-right">
             <Badge variant="secondary" class="gap-1 border-green-500/30 bg-green-500/10 text-green-600 dark:text-green-400">
               <CheckCircle2 class="h-3.5 w-3.5" />
               已是最新
@@ -159,7 +136,7 @@ watch(
         <template v-if="updater.progress.state === 'idle' || updater.progress.state === 'error'">
           <template v-if="hasUpdate">
             <Button variant="ghost" size="sm" @click="updater.closeDialog">稍后提醒</Button>
-            <Button size="sm" class="gap-1.5" @click="updater.upgrade">
+            <Button v-if="updater.checkResult?.can_upgrade" size="sm" class="gap-1.5" :disabled="updater.isUpgrading" @click="updater.upgrade">
               <Download class="h-4 w-4" />
               立即更新
             </Button>

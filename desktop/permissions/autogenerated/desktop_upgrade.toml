@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-desktop-upgrade"
+description = "Enables the desktop_upgrade command without any pre-configured scope."
+commands.allow = ["desktop_upgrade"]
+
+[[permission]]
+identifier = "deny-desktop-upgrade"
+description = "Denies the desktop_upgrade command without any pre-configured scope."
+commands.deny = ["desktop_upgrade"]

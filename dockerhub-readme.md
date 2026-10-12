@@ -78,3 +78,14 @@ Canvas 渲染             视频编码 + 控制注入
 ## License
 
 MIT
+
+## 更新镜像
+
+Docker 内只检查版本，不执行应用内二进制升级。请拉取新版镜像，然后沿用原来的网络、端口、设备和数据卷配置重建容器。使用 Compose 时执行：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+数据库应持久化挂载到 `/app/data`；脚本、模板和录制目录也应按实际使用路径挂载。未挂载的数据会随容器删除而丢失。自定义镜像应保留 `MYWEBSCRCPY_RUNTIME=docker`；若关闭默认 HTTPS，请相应覆盖镜像的健康检查。

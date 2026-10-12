@@ -1,0 +1,12 @@
+{
+  "name": "mywebscrcpy-desktop",
+  "private": true,
+  "version": "1.19.2",
+  "packageManager": "pnpm@11.7.0",
+  "scripts": {
+    "tauri": "tauri",
+    "build": "node ../scripts/build-desktop.mjs",
+    "check": "cargo check --locked"
+  },
+  "devDependencies": { "@tauri-apps/cli": "^2" }
+}

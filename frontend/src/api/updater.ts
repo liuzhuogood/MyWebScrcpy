@@ -1,4 +1,10 @@
+import { Channel, invoke, isTauri } from '@tauri-apps/api/core'
+
 export interface CheckResult {
+  runtime_mode: string
+  update_method: string
+  can_upgrade: boolean
+  update_reason: string
   current_version: string
   latest_version: string
   has_update: boolean
@@ -21,6 +27,7 @@ export interface UpgradeProgress {
 }
 
 export async function checkUpdate(): Promise<CheckResult> {
+  if (isTauri()) return invoke<CheckResult>('desktop_check_update')
   const res = await fetch('/api/version/check')
   if (!res.ok) {
     throw new Error(`检查更新失败: ${res.statusText}`)
@@ -66,4 +73,11 @@ export function subscribeUpgradeStream(onProgress: (p: UpgradeProgress) => void,
   return () => {
     es.close()
   }
+}
+
+export function isDesktopUpdate(): boolean { return isTauri() }
+export async function upgradeDesktop(onProgress: (value: UpgradeProgress) => void): Promise<void> {
+ const channel = new Channel<UpgradeProgress>()
+ channel.onmessage = onProgress
+ await invoke('desktop_upgrade', { onProgress: channel })
 }

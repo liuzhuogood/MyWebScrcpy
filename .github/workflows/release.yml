@@ -68,6 +68,11 @@ jobs:
         with:
           version: '11.7.0'
 
+      - name: Validate release version
+        run: |
+          test "$(cat VERSION | tr -d '\r\n')" = "${GITHUB_REF_NAME}"
+          node scripts/sync-version.mjs --check
+
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
@@ -84,12 +89,94 @@ jobs:
           name: ${{ matrix.suffix }}
           path: mywebscrcpy-${{ matrix.suffix }}
 
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: darwin-aarch64
+            bundles: app,dmg
+          - os: macos-15-intel
+            target: darwin-x86_64
+            bundles: app,dmg
+          - os: windows-latest
+            target: windows-x86_64
+            bundles: nsis
+          - os: ubuntu-24.04
+            target: linux-x86_64
+            bundles: appimage
+    runs-on: ${{ matrix.os }}
+    env:
+      MYWEBSCRCPY_UPDATER_PUBLIC_KEY: ${{ vars.MYWEBSCRCPY_UPDATER_PUBLIC_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      DESKTOP_BUNDLES: ${{ matrix.bundles }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.7.0'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.90.0'
+      - name: Validate release version and signing configuration
+        shell: bash
+        run: |
+          test "$(cat VERSION | tr -d '\r\n')" = "${GITHUB_REF_NAME}"
+          test -n "$MYWEBSCRCPY_UPDATER_PUBLIC_KEY"
+          test -n "$TAURI_SIGNING_PRIVATE_KEY"
+          node scripts/sync-version.mjs --check
+      - name: Install Linux desktop libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: pnpm --dir frontend install --frozen-lockfile
+      - run: pnpm --dir desktop install --frozen-lockfile
+      - name: Build complete signed desktop packages
+        run: node scripts/build-desktop.mjs --signed
+      - name: Verify updater signature and corruption rejection
+        run: node scripts/verification/update-signature.mjs
+      - name: Go regression
+        run: go test ./...
+      - name: Verify desktop service lifecycle
+        run: node scripts/verification/desktop-service.mjs
+      - name: Verify release manifest contracts
+        run: node scripts/verification/release-manifest.mjs
+      - name: Generate platform update manifest
+        run: node scripts/desktop-manifest.mjs desktop/target/release/bundle ${{ matrix.target }} desktop-manifest-${{ matrix.target }}.json ${{ github.ref_name }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.target }}
+          path: |
+            desktop/target/release/bundle/**/*.tar.gz
+            desktop/target/release/bundle/**/*.sig
+            desktop/target/release/bundle/**/*.dmg
+            desktop/target/release/bundle/**/*.exe
+            desktop/target/release/bundle/**/*.AppImage
+            desktop-manifest-${{ matrix.target }}.json
+
   release:
-    needs: [build, windows-task-tests]
+    needs: [build, windows-task-tests, desktop]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -118,6 +205,11 @@ jobs:
           echo "notes_suffix=${NOTES_SUFFIX}" >> $GITHUB_OUTPUT
           echo "use_version_md=$([ -n "$NOTES_FILE" ] && echo true || echo false)" >> $GITHUB_OUTPUT
 
+      - name: Assemble desktop update manifest
+        env:
+          RELEASE_NOTES_FILE: ${{ steps.notes.outputs.notes_file }}
+        run: node scripts/merge-desktop-manifests.mjs artifacts
+
       - name: Create Release (with version.md)
         if: steps.notes.outputs.use_version_md == 'true'
         uses: softprops/action-gh-release@v3
@@ -129,6 +221,12 @@ jobs:
             artifacts/macos-amd64/mywebscrcpy-macos-amd64
             artifacts/macos-arm64/mywebscrcpy-macos-arm64
             artifacts/windows-amd64.exe/mywebscrcpy-windows-amd64.exe
+            artifacts/desktop-*/**/*.tar.gz
+            artifacts/desktop-*/**/*.sig
+            artifacts/desktop-*/**/*.dmg
+            artifacts/desktop-*/**/*.exe
+            artifacts/desktop-*/**/*.AppImage
+            desktop-latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -143,6 +241,12 @@ jobs:
             artifacts/macos-amd64/mywebscrcpy-macos-amd64
             artifacts/macos-arm64/mywebscrcpy-macos-arm64
             artifacts/windows-amd64.exe/mywebscrcpy-windows-amd64.exe
+            artifacts/desktop-*/**/*.tar.gz
+            artifacts/desktop-*/**/*.sig
+            artifacts/desktop-*/**/*.dmg
+            artifacts/desktop-*/**/*.exe
+            artifacts/desktop-*/**/*.AppImage
+            desktop-latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
