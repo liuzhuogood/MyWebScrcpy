@@ -34,7 +34,7 @@ const minutesModel = computed({
 </script>
 
 <template>
-  <div class="w-80 space-y-3 p-1">
+  <div class="w-80 max-w-full space-y-3 p-1">
     <div>
       <div class="mb-1 flex items-center justify-between text-sm">
         <span class="font-medium">录制时长</span>

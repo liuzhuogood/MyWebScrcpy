@@ -46,6 +46,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -96,6 +97,7 @@ const shellOpen = ref(false)
 const filesOpen = ref(false)
 const settingsOpen = ref(false)
 const sizeOpen = ref(false)
+const mobileTool = ref<'recording' | 'screenshots' | null>(null)
 const touchVisible = ref(localStorage.getItem('show-touch-overlay') !== 'false')
 const touchVisualizerRef = ref<InstanceType<typeof TouchVisualizer> | null>(null)
 const deleteRecordingTarget = ref<RecordingEntry | null>(null)
@@ -241,33 +243,34 @@ async function onReboot() {
     </Empty>
   </div>
 
-  <div v-else :ref="p.stageRef" class="flex h-screen flex-col bg-background">
+  <div v-else :ref="p.stageRef" class="flex h-dvh flex-col bg-background">
     <!-- 工具栏 -->
-    <header class="flex h-14 shrink-0 items-center gap-1 overflow-x-auto border-b px-3">
+    <header class="flex h-14 shrink-0 items-center gap-1 border-b px-3">
       <Button variant="ghost" size="icon" aria-label="返回设备列表" as-child>
         <RouterLink to="/"><ArrowLeft class="h-5 w-5" /></RouterLink>
       </Button>
-      <span class="ml-1 max-w-48 truncate font-mono text-sm font-medium" :title="serial">{{ serial }}</span>
+      <span class="ml-1 min-w-0 max-w-48 flex-1 truncate font-mono text-sm font-medium" :title="serial">{{ serial }}</span>
       <Badge :variant="p.live.value ? 'default' : 'secondary'">{{ p.statusText.value }}</Badge>
-      <Badge v-if="p.showFps.value" variant="outline">{{ p.fps.value }} fps</Badge>
+      <Badge v-if="p.showFps.value" class="toolbar-secondary" variant="outline">{{ p.fps.value }} fps</Badge>
 
-      <div class="ml-auto flex items-center gap-1">
-        <Button variant="ghost" size="icon" title="返回" aria-label="返回" @click="p.pressBack()">
+      <div class="ml-auto flex shrink-0 items-center gap-1">
+        <Button class="toolbar-secondary" variant="ghost" size="icon" title="返回" aria-label="返回" @click="p.pressBack()">
           <Undo2 class="h-5 w-5" />
         </Button>
         <Button variant="ghost" size="icon" title="主页" aria-label="主页" @click="p.pressHome()">
           <Home class="h-5 w-5" />
         </Button>
-        <Button variant="ghost" size="icon" title="切换任务" aria-label="切换任务" @click="p.pressRecents()">
+        <Button class="toolbar-secondary" variant="ghost" size="icon" title="切换任务" aria-label="切换任务" @click="p.pressRecents()">
           <GalleryHorizontal class="h-5 w-5" />
         </Button>
-        <Button variant="ghost" size="icon" title="电源键" aria-label="电源键" :disabled="p.powerBusy.value" @click="p.pressPower()">
+        <Button class="toolbar-secondary" variant="ghost" size="icon" title="电源键" aria-label="电源键" :disabled="p.powerBusy.value" @click="p.pressPower()">
           <Power class="h-5 w-5" />
         </Button>
-        <Button variant="ghost" size="icon" title="横竖屏" aria-label="横竖屏" @click="p.rotate()">
+        <Button class="toolbar-secondary" variant="ghost" size="icon" title="横竖屏" aria-label="横竖屏" @click="p.rotate()">
           <RotateCw class="h-5 w-5" />
         </Button>
         <Button
+          class="toolbar-secondary"
           variant="ghost" size="icon"
           :title="p.audioTitle.value" :aria-label="p.audioTitle.value"
           :disabled="!p.audioReady.value" @click="p.toggleAudio()"
@@ -288,9 +291,9 @@ async function onReboot() {
         >
           <Square class="h-5 w-5 fill-current" />
         </Button>
-        <Popover v-else class="toolbar-optional">
+        <Popover v-else>
           <PopoverTrigger as-child>
-            <Button variant="ghost" size="icon" title="录制" aria-label="录制">
+            <Button class="toolbar-optional" variant="ghost" size="icon" title="录制" aria-label="录制">
               <Circle class="h-5 w-5 fill-current" />
             </Button>
           </PopoverTrigger>
@@ -316,9 +319,9 @@ async function onReboot() {
         >
           <Play class="h-5 w-5" />
         </Button>
-        <Popover class="toolbar-optional">
+        <Popover>
           <PopoverTrigger as-child>
-            <Button variant="ghost" size="icon" title="截图" aria-label="截图">
+            <Button class="toolbar-optional" variant="ghost" size="icon" title="截图" aria-label="截图">
               <Camera class="h-5 w-5" />
             </Button>
           </PopoverTrigger>
@@ -342,6 +345,7 @@ async function onReboot() {
         </Button>
 
         <Button
+          class="toolbar-secondary"
           variant="ghost" size="icon"
           title="检查画布与界面" aria-label="检查"
           :class="{ 'bg-accent': inspectorVisible }"
@@ -350,6 +354,7 @@ async function onReboot() {
           <ScanSearch class="h-5 w-5" />
         </Button>
         <Button
+          class="toolbar-secondary"
           variant="ghost" size="icon"
           title="模板管理" aria-label="模板管理"
           :class="{ 'bg-accent': templateOpen }"
@@ -367,6 +372,25 @@ async function onReboot() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuLabel v-if="p.showFps.value" class="xl:hidden font-mono text-xs text-muted-foreground">{{ p.fps.value }} fps</DropdownMenuLabel>
+            <DropdownMenuItem class="xl:hidden" @select="p.pressBack()"><Undo2 class="h-4 w-4" />返回</DropdownMenuItem>
+            <DropdownMenuItem class="xl:hidden" @select="p.pressRecents()"><GalleryHorizontal class="h-4 w-4" />切换任务</DropdownMenuItem>
+            <DropdownMenuItem class="xl:hidden" :disabled="p.powerBusy.value" @select="p.pressPower()"><Power class="h-4 w-4" />电源键</DropdownMenuItem>
+            <DropdownMenuItem class="xl:hidden" @select="p.rotate()"><RotateCw class="h-4 w-4" />横竖屏</DropdownMenuItem>
+            <DropdownMenuItem class="xl:hidden" :disabled="!p.audioReady.value" @select="p.toggleAudio()">
+              <VolumeX v-if="p.audioMuted.value" class="h-4 w-4" /><Volume2 v-else class="h-4 w-4" />{{ p.audioTitle.value }}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator class="xl:hidden" />
+            <DropdownMenuItem v-if="rec.running.value" class="xl:hidden" :disabled="rec.busy.value" @select="rec.stop()"><Square class="h-4 w-4" />停止录制</DropdownMenuItem>
+            <DropdownMenuItem v-else class="xl:hidden" @select="mobileTool = 'recording'"><Circle class="h-4 w-4" />录制</DropdownMenuItem>
+            <DropdownMenuItem class="xl:hidden" @select="toggleReplayPanel()"><Play class="h-4 w-4" />重放</DropdownMenuItem>
+            <DropdownMenuItem class="xl:hidden" @select="mobileTool = 'screenshots'"><Camera class="h-4 w-4" />截图</DropdownMenuItem>
+            <DropdownMenuItem class="xl:hidden" :disabled="!p.videoSize.value.w" @select="captureOpen = true"><Crop class="h-4 w-4" />区域截图</DropdownMenuItem>
+            <DropdownMenuItem class="xl:hidden" @select="p.toggleFullscreen()">
+              <Minimize v-if="p.fullscreen.value" class="h-4 w-4" /><Maximize v-else class="h-4 w-4" />{{ p.fullscreen.value ? '退出全屏' : '全屏' }}
+            </DropdownMenuItem>
+            <DropdownMenuItem class="xl:hidden" @select="toggleInspector()"><ScanSearch class="h-4 w-4" />检查</DropdownMenuItem>
+            <DropdownMenuSeparator class="xl:hidden" />
             <DropdownMenuItem @select="openFiles()"><FolderOpen class="h-4 w-4" />文件管理</DropdownMenuItem>
             <DropdownMenuItem @select="openTemplate()"><LayoutTemplate class="h-4 w-4" />模板管理</DropdownMenuItem>
             <DropdownMenuItem @select="openShell()"><Terminal class="h-4 w-4" />ADB Shell</DropdownMenuItem>
@@ -406,6 +430,25 @@ async function onReboot() {
         </DropdownMenu>
       </div>
     </header>
+    <Dialog :open="mobileTool !== null" @update:open="(open) => { if (!open) mobileTool = null }">
+      <DialogContent class="max-h-[calc(100dvh-2rem)] grid-cols-1 overflow-y-auto" :aria-describedby="undefined">
+        <DialogHeader><DialogTitle>{{ mobileTool === 'recording' ? '录制' : '截图' }}</DialogTitle></DialogHeader>
+        <RecordingPanel
+          v-if="mobileTool === 'recording'"
+          :serial="serial"
+          :minutes="rec.minutes.value" :record-audio="rec.recordAudio.value"
+          :busy="rec.busy.value" :running="rec.running.value"
+          :state-msg="rec.stateMsg.value" :history="rec.history.value" :history-error="rec.historyError.value"
+          @update:minutes="rec.minutes.value = $event"
+          @update:record-audio="rec.recordAudio.value = $event"
+          @start="rec.start(rec.minutes.value, rec.recordAudio.value)"
+          @stop="rec.stop()"
+          @replay="mobileTool = null; startReplayFromRecording($event)"
+          @delete="deleteRecordingTarget = $event"
+        />
+        <ScreenshotsPanel v-else-if="mobileTool === 'screenshots'" :serial="serial" :get-canvas="() => p.canvasRef.value" />
+      </DialogContent>
+    </Dialog>
     <Dialog v-model:open="sizeOpen">
       <DialogContent class="w-72">
         <DialogHeader><DialogTitle>显示尺寸</DialogTitle></DialogHeader>
@@ -537,7 +580,7 @@ async function onReboot() {
     grid-template-columns: minmax(0, 1fr) 8px 280px;
   }
 }
-@media (max-width: 900px) {
-  .toolbar-optional { display: none !important; }
+@media (max-width: 1279px) {
+  .toolbar-optional, .toolbar-secondary { display: none !important; }
 }
 </style>

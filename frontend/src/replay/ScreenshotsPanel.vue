@@ -102,7 +102,7 @@ defineExpose({ capture, load })
 </script>
 
 <template>
-  <div class="w-80 space-y-2 p-1">
+  <div class="w-80 max-w-full space-y-2 p-1">
     <Button class="w-full" :disabled="busy" @click="capture()">
       <Camera class="h-4 w-4" />{{ busy ? '截图上传中…' : '截取当前画面' }}
     </Button>

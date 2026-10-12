@@ -143,7 +143,7 @@ onUnmounted(() => store.stopPolling())
       </div>
 
       <!-- 初次加载骨架 -->
-      <div v-if="store.loading && store.devices.length === 0" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div v-if="store.loading && store.devices.length === 0" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Skeleton v-for="i in 6" :key="i" class="h-[92px] rounded-xl" />
       </div>
 
@@ -169,7 +169,7 @@ onUnmounted(() => store.stopPolling())
       </Empty>
 
       <!-- 设备墙 -->
-      <div v-else class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <DeviceCard v-for="d in store.filtered" :key="d.serial" :device="d" />
       </div>
     </main>
