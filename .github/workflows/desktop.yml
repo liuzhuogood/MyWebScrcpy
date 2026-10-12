@@ -48,6 +48,8 @@ jobs:
         run: python scripts/prepare-pi.py
       - name: Go regression
         run: go test ./...
+      - name: Test release version synchronization
+        run: node --test scripts/sync-version.test.mjs
       - name: Build desktop and installers
         run: node scripts/build-desktop.mjs
       - name: Verify desktop service lifecycle

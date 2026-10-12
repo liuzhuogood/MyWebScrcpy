@@ -6,7 +6,10 @@ const version = readFileSync(path.join(root, 'VERSION'), 'utf8').trim().replace(
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('VERSION 必须是正式 SemVer 版本')
 const check = process.argv.includes('--check')
 function update(file, transform) {
- const full = path.join(root,file), old = readFileSync(full,'utf8'), next = transform(old)
+ const full = path.join(root,file), old = readFileSync(full,'utf8')
+ // Windows checkout uses CRLF; compare values while preserving its line endings.
+ const newline = old.includes('\r\n') ? '\r\n' : '\n'
+ const next = transform(old.replace(/\r\n/g, '\n')).replace(/\n/g, newline)
  if (old !== next) { if (check) throw new Error(`${file} 与 VERSION 不一致`); writeFileSync(full,next) }
 }
 for (const file of ['frontend/package.json','desktop/package.json','desktop/tauri.conf.json']) {
