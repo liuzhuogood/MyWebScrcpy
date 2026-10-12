@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod backend;
+mod links;
 mod menu;
 #[cfg(feature = "native-verify")]
 mod verify;
@@ -68,10 +69,18 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![links::open_browser_link])
         .setup(move |app| {
             let data = app.path().app_data_dir()?;
             let backend = backend::Backend::start(&data).map_err(std::io::Error::other)?;
             let url = backend.ready.url.clone();
+            app.add_capability(
+                tauri::ipc::CapabilityBuilder::new("browser-links")
+                    .window("main")
+                    .local(false)
+                    .remote(format!("{url}/*"))
+                    .permission("allow-open-browser-link"),
+            )?;
  let token=serde_json::to_string(&backend.ready.token)?;
             app.manage(State { backend: Mutex::new(Some(backend)), url: url.clone(), tray_available: AtomicBool::new(false) });
             let local_origin = url.parse().map_err(std::io::Error::other)?;
@@ -88,6 +97,7 @@ fn main() {
                     tauri::webview::NewWindowResponse::Deny
                 })
                 .initialization_script(format!("Object.defineProperty(window,'__MYWEBSCRCPY_DESKTOP_TOKEN__',{{value:{token}}});"))
+                .initialization_script(links::CLICK_SCRIPT)
                 .on_navigation(move |destination| {
                     if destination.as_str().starts_with(&(url.clone()+"/")) {return true;}
                     let allowed = destination.scheme()=="https" && matches!(destination.host_str(),Some("developer.android.com"|"www.python.org"|"github.com"));
