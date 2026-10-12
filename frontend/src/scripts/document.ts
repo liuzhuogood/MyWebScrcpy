@@ -17,7 +17,7 @@ export function removeDocumentTargets(content: string): string {
 const escapeHTML = (value: string) => value.replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!)
 
 // Only exact template IDs in the selected scope become images; sanitize all Markdown HTML.
-export function renderDocument(content: string, assets: TemplateItem[]): string {
+export function renderMarkdown(content: string, assets: TemplateItem[] = []): string {
   const markdown = new Marked({ gfm: true, breaks: true })
   markdown.use({ renderer: {
     image(token) {
@@ -28,8 +28,12 @@ export function renderDocument(content: string, assets: TemplateItem[]): string 
       return `<img src="${escapeHTML(templateImageUrl(asset.id, asset.updated_at))}" alt="${escapeHTML(token.text)}" loading="lazy">`
     },
   } })
+  return DOMPurify.sanitize(markdown.parse(content, { async: false }), { USE_PROFILES: { html: true } })
+}
+
+export function renderDocument(content: string, assets: TemplateItem[]): string {
   const body = content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '')
-  return DOMPurify.sanitize(markdown.parse(body, { async: false }), { USE_PROFILES: { html: true } })
+  return renderMarkdown(body, assets)
 }
 
 export const taskStatus: Record<string, string> = {
