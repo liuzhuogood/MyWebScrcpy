@@ -8,7 +8,7 @@ import type { ScriptsWorkbench } from '@/scripts/useScriptsWorkbench'
 defineProps<{ w: ScriptsWorkbench }>()
 </script>
 <template>
-  <aside aria-label="任务列表" class="script-pane flex flex-col bg-muted/20 lg:border-r" :class="w.mobilePanel === 'tasks' ? '' : 'hidden lg:flex'">
+  <aside aria-label="任务列表" class="script-pane flex min-w-0 flex-col bg-muted/20 lg:border-r" :class="w.mobilePanel === 'tasks' ? '' : 'hidden lg:flex'">
     <div class="flex items-center justify-between px-4 pt-4 pb-3"><h2 class="flex items-center gap-2 text-sm font-semibold"><ListTodo class="size-4" />任务</h2><Button size="sm" variant="outline" @click="w.openForm(false)"><Plus class="size-3.5" />新建</Button></div>
     <div class="relative mx-3 mb-3"><Search class="absolute top-2.5 left-3 size-3.5 text-muted-foreground" /><Input v-model="w.taskSearch" aria-label="搜索任务" placeholder="搜索任务" class="h-9 pl-9 text-xs" /></div>
     <div class="min-h-0 flex-1 space-y-2 overflow-auto px-3 pb-3">
