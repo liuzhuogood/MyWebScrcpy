@@ -40,7 +40,7 @@ export interface RunningTask {
   script_name: string
   device_serial: string
   pid: number
-  status: 'running' | 'stopping' | 'completed' | 'failed' | 'killed' | 'skipped'
+  status: 'preparing' | 'running' | 'stopping' | 'completed' | 'failed' | 'killed' | 'skipped'
   exit_code: number
   error_msg: string
   started_at: number
@@ -101,7 +101,7 @@ export interface DeviceRunResult {
   error: string
 }
 
-export function runMarkdownScript(id: number): Promise<{ ok: boolean, results: DeviceRunResult[], total: number }> {
+export function runMarkdownScript(id: number): Promise<{ ok: boolean, dispatch_id: string, results: DeviceRunResult[], total: number }> {
   return request(`/api/md-scripts/${id}/run`, { method: 'POST' })
 }
 

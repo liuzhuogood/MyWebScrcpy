@@ -30,8 +30,9 @@ type DeviceRecord struct {
 
 // DB 封装 SQLite 数据库操作
 type DB struct {
-	db *sql.DB
-	mu sync.RWMutex
+	db   *sql.DB
+	path string
+	mu   sync.RWMutex
 }
 
 // Open 打开或创建 SQLite 数据库，并自动执行建表迁移
@@ -46,7 +47,7 @@ func Open(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("连接 SQLite 失败: %w", err)
 	}
 
-	d := &DB{db: db}
+	d := &DB{db: db, path: dbPath}
 	if err := d.migrate(); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("执行迁移失败: %w", err)
@@ -135,7 +136,10 @@ func (d *DB) migrate() error {
 	// 渐进式列迁移：支持已有旧数据库无缝升级
 	_ = d.addColumnIfNotExists("markdown_scripts", "last_run_at", "INTEGER NOT NULL DEFAULT 0")
 	_ = d.addColumnIfNotExists("markdown_scripts", "last_run_status", "TEXT NOT NULL DEFAULT ''")
-	return d.migrateScriptTargets()
+	if err := d.migrateScriptTargets(); err != nil {
+		return err
+	}
+	return d.migrateArtifacts()
 }
 
 func (d *DB) addColumnIfNotExists(table, column, colType string) error {

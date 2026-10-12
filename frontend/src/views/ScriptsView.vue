@@ -10,6 +10,7 @@ import ScriptTaskSidebar from '@/components/scripts/ScriptTaskSidebar.vue'
 import ScriptEditor from '@/components/scripts/ScriptEditor.vue'
 import ScriptAssistant from '@/components/scripts/ScriptAssistant.vue'
 import ScriptDialogs from '@/components/scripts/ScriptDialogs.vue'
+import ExecutionRecordsDialog from '@/components/scripts/ExecutionRecordsDialog.vue'
 import { useScriptsWorkbench } from '@/scripts/useScriptsWorkbench'
 const w = reactive(useScriptsWorkbench())
 const desktop = useMediaQuery('(min-width: 1024px)')
@@ -26,6 +27,7 @@ const desktop = useMediaQuery('(min-width: 1024px)')
       <SplitterPanel id="script-assistant" :order="2" size-unit="px" :default-size="310" :min-size="260" :max-size="720"><ScriptAssistant :w="w" /></SplitterPanel>
     </SplitterGroup>
     <div v-else class="grid min-h-0 flex-1"><ScriptTaskSidebar :w="w" /><ScriptEditor :w="w" /><ScriptAssistant :w="w" /></div>
+    <ExecutionRecordsDialog v-model:open="w.executionsOpen" :script-id="w.currentId ?? undefined" :initial-task="w.executionTask" />
     <ScriptDialogs :w="w" />
   </div>
 </template>

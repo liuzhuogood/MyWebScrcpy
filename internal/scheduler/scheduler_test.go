@@ -21,15 +21,16 @@ func TestSchedulerLifecycleAndConflictSkip(t *testing.T) {
 	defer database.Close()
 
 	taskMgr := taskmanager.NewManager(database)
+	defer taskMgr.Close()
 	sched := NewScheduler(database, mdscript.NewExecutor(database, taskMgr, func(string) (bool, bool) { return true, true }, func(string, string) error { return nil }))
 
-	// 1. 创建带每秒 Cron 的脚本 (* * * * * *)
+	// 验证真实调度注册；周期留足测试时间，避免后台 Cron 干扰手动触发。
 	created, err := database.CreateMarkdownScript(
 		"定时测试任务",
 		[]string{"10.0.0.30:5555"},
-		"---\nversion: 1.0.0\nschedule: \"* * * * * *\"\n---\n- 测试步骤",
+		"---\nversion: 1.0.0\nschedule: \"@every 1h\"\n---\n- 测试步骤",
 		"1.0.0",
-		"* * * * * *",
+		"@every 1h",
 		1,
 		10,
 	)

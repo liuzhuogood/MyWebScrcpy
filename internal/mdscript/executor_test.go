@@ -235,3 +235,48 @@ func TestGeneratedPythonQuotesAndRequiredDeviceArgument(t *testing.T) {
 		t.Fatalf("%s %v", out, err)
 	}
 }
+
+func TestDispatchSnapshotFastExitAndForeignScript(t *testing.T) {
+	d, m, executor := testExecutor(t)
+	content := "---\nversion: 1.0.0\nreport:\n  enabled: true\nrecording:\n  enabled: false\n---\n- 等待"
+	script, _ := d.CreateMarkdownScript("快照", []string{"device-A", "device-B"}, content, "1.0.0", "", 1, 5)
+	d.SaveCompiledPython(script.ID, "1.0.0", "print('快')")
+	results, e := executor.ExecuteWithTrigger(script.ID, "schedule")
+	if e != nil {
+		t.Fatal(e)
+	}
+	id := results[0].DispatchID
+	for _, result := range results {
+		if result.DispatchID != id || result.Task == nil {
+			t.Fatalf("lost batch %+v", result)
+		}
+		waitTask(t, d, result.Task.ID, "completed")
+	}
+	d.UpdateMarkdownScript(script.ID, "已改名", []string{"device-C"}, "version: 2.0", "2.0", "", 1, 5)
+	dispatch, e := d.GetDispatch(script.ID, id)
+	if e != nil || dispatch.Trigger != "schedule" || dispatch.DispatchState != "finished" {
+		t.Fatalf("%+v %v", dispatch, e)
+	}
+	var snapshot struct {
+		ScriptName    string   `json:"script_name"`
+		TargetDevices []string `json:"target_devices"`
+		CompiledHash  string   `json:"compiled_hash"`
+	}
+	json.Unmarshal(dispatch.Snapshot, &snapshot)
+	if snapshot.ScriptName != "快照" || len(snapshot.TargetDevices) != 2 || snapshot.CompiledHash == "" {
+		t.Fatalf("snapshot changed %+v", snapshot)
+	}
+	foreign, _ := d.CreateMarkdownScript("另一个", []string{"device-A"}, "version: 1", "1", "", 1, 5)
+	mux := http.NewServeMux()
+	taskmanager.NewHandler(m).RegisterRoutes(mux)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest("GET", fmt.Sprintf("/api/md-scripts/%d/dispatches/%s", foreign.ID, id), nil))
+	if response.Code != 404 {
+		t.Fatal("cross-script access", response.Code)
+	}
+	response = httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest("GET", fmt.Sprintf("/api/tasks/%s/logs?after=0&before=2", results[0].Task.ID), nil))
+	if response.Code != 400 {
+		t.Fatal("ambiguous cursor", response.Code)
+	}
+}

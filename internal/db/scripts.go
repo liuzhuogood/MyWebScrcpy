@@ -287,7 +287,7 @@ func (d *DB) ListActiveTasks() ([]RunningTaskRecord, error) {
 
 	query := `SELECT id, script_id, script_name, device_serial, pid, status,
 	                 exit_code, error_msg, started_at, ended_at
-	          FROM running_tasks WHERE status IN ('running', 'stopping')
+	          FROM running_tasks WHERE status IN ('preparing', 'running', 'stopping')
 	          ORDER BY started_at DESC`
 	rows, err := d.db.Query(query)
 	if err != nil {
@@ -318,7 +318,7 @@ func (d *DB) GetActiveTaskByDevice(deviceSerial string) (*RunningTaskRecord, err
 	query := `SELECT id, script_id, script_name, device_serial, pid, status,
 	                 exit_code, error_msg, started_at, ended_at
 	          FROM running_tasks
-	          WHERE device_serial = ? AND status IN ('running', 'stopping')
+	          WHERE device_serial = ? AND status IN ('preparing', 'running', 'stopping')
 	          LIMIT 1`
 	var item RunningTaskRecord
 	err := d.db.QueryRow(query, deviceSerial).Scan(

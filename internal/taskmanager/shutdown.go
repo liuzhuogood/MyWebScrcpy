@@ -18,4 +18,5 @@ func (m *Manager) Close() {
 		}
 	}
 	m.workers.Wait()
+	m.Artifacts.Close()
 }

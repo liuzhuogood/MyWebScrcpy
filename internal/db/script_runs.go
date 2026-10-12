@@ -48,6 +48,21 @@ func (d *DB) ReconcileScriptRunStatus(scriptID int64) error {
 		}
 		return err
 	}
+	var dispatchError string
+	if err := d.db.QueryRow(`SELECT COALESCE((SELECT error_msg FROM dispatch_details WHERE dispatch_id=?),'')`, dispatchID).Scan(&dispatchError); err != nil {
+		return err
+	}
+	if dispatchError != "" {
+		_, err := d.db.Exec(`UPDATE markdown_scripts SET last_run_status='failed' WHERE id=?`, scriptID)
+		return err
+	}
+	var dispatching int
+	if err := d.db.QueryRow(`SELECT COUNT(*) FROM dispatch_details WHERE dispatch_id=? AND state='dispatching'`, dispatchID).Scan(&dispatching); err != nil {
+		return err
+	}
+	if dispatching > 0 {
+		return nil
+	}
 	rows, err := d.db.Query(`SELECT t.status FROM script_dispatch_tasks m JOIN running_tasks t ON t.id=m.task_id WHERE m.dispatch_id=?`, dispatchID)
 	if err != nil {
 		return err
@@ -72,7 +87,7 @@ func (d *DB) ReconcileScriptRunStatus(scriptID int64) error {
 	}
 	for _, value := range statuses {
 		switch value {
-		case "running", "stopping":
+		case "preparing", "running", "stopping":
 			running++
 		case "completed":
 			completed++

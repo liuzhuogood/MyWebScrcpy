@@ -70,9 +70,9 @@ import { badgeText, getPreviewType, kindLabel } from '@/files/fileKind'
 import { formatBytes, formatTime, useFiles } from '@/files/useFiles'
 
 const route = useRoute()
-const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
+const props = withDefaults(defineProps<{ embedded?: boolean, serial?: string }>(), { embedded: false })
 const emit = defineEmits<{ close: [] }>()
-const serial = computed(() => (route.query.serial as string) || '')
+const serial = computed(() => props.serial !== undefined ? props.serial : typeof route.query.serial === 'string' ? route.query.serial : '')
 const backTo = computed(() => (serial.value ? { name: 'player', query: { serial: serial.value } } : '/'))
 const f = useFiles(serial.value)
 

@@ -565,7 +565,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     if ((el as HTMLElement).isContentEditable)
       return true
     // Reka Select/菜单把内容渲染到 body 的 portal：选项焦点是 role=option/listbox，需一并放行
-    if (el.closest?.([
+    const interactivePanel = el.closest?.([
       '[data-capture-layer]',
       '[role="dialog"]',
       '[role="listbox"]',
@@ -578,8 +578,12 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
       '.xterm',
       '.ui-inspector-panel',
       '.capture-actions',
-    ].join(', ')))
-      return true
+    ].join(', '))
+    if (interactivePanel) {
+      // 手机弹窗的外壳允许画布接收按键，内部工具弹窗仍按原规则拦截。
+      const playerDialog = stageRef.value?.closest('[data-player-dialog]')
+      return interactivePanel !== playerDialog || el !== canvasRef.value
+    }
     return false
   }
 
@@ -588,6 +592,8 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   }
 
   function shouldIgnoreKey(e: KeyboardEvent): boolean {
+    if (e.key === 'Escape' && stageRef.value?.closest('[data-player-dialog]'))
+      return true
     if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta')
       return true
     // Command / Alt 组合一律放行给浏览器
@@ -834,7 +840,8 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
         await observeScreenState(data.screenOn)
     }
     catch (e) {
-      console.warn('[screen-state] 请求失败:', e)
+      if (!disposed)
+        console.warn('[screen-state] 请求失败:', e)
     }
     finally {
       window.clearTimeout(timeout)

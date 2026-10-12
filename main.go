@@ -212,6 +212,10 @@ func main() {
 		// Markdown 脚本与任务管理器 API
 		taskMgr := taskmanager.NewManager(database)
 		updateTasks = taskMgr
+		taskMgr.Artifacts.SetRecorder(hub)
+		if err := taskMgr.Recover(); err != nil {
+			log.Fatalf("任务产物恢复失败: %v", err)
+		}
 		defer taskMgr.Close()
 		taskHandler := taskmanager.NewHandler(taskMgr)
 		taskHandler.RegisterRoutes(mux)
@@ -247,6 +251,7 @@ func main() {
 
 		// AI 模型配置与代理 API
 		aiSvc := aiprovider.NewService(database, piRuntime)
+		taskMgr.Artifacts.ConfigureReports(aiSvc.SummarizeTask)
 		aiHandler := aiprovider.NewHandler(aiSvc)
 		aiHandler.RegisterRoutes(mux)
 	}

@@ -242,6 +242,10 @@ func (h *Handler) handleCompile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if _, err := ParseOptions(existing.Content); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	meta := ParseMarkdown(existing.Content, time.UnixMilli(existing.UpdatedAt))
 	pythonCode, err := h.compiler.Compile(existing.Name, meta, existing.Content)
 	if err != nil {
@@ -290,10 +294,17 @@ func (h *Handler) handleRun(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "results": results, "total": len(results)})
+	dispatchID := ""
+	if len(results) > 0 {
+		dispatchID = results[0].DispatchID
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "dispatch_id": dispatchID, "results": results, "total": len(results)})
 }
 
 func (h *Handler) validateRequest(req scriptReq) error {
+	if _, err := ParseOptions(req.Content); err != nil {
+		return err
+	}
 	if err := h.executor.ValidateTargets(req.TargetDevices); err != nil {
 		return err
 	}

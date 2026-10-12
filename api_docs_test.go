@@ -79,6 +79,8 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"/api/templates/import",
 		"/api/templates/{id}",
 		"/api/templates/{id}/image",
+		// 文档助手
+		"/api/ai/chat",
 		// 系统元接口
 		"/api/openapi.json",
 	}

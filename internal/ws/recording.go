@@ -39,21 +39,24 @@ const (
 )
 
 type recording struct {
-	mu            sync.Mutex
-	id            string
-	serial        string
-	status        recordingStatus
-	startedAt     time.Time
-	endedAt       time.Time
-	maxDuration   time.Duration
-	recordAudio   bool
-	audioStatus   string
-	bytesWritten  int64
-	failureReason string
-	path          string
-	partialPath   string
-	stop          chan struct{}
-	stopOnce      sync.Once
+	mu                sync.Mutex
+	id                string
+	serial            string
+	ownerTaskID       string
+	taskStopRequested bool
+	videoStartedAt    time.Time
+	status            recordingStatus
+	startedAt         time.Time
+	endedAt           time.Time
+	maxDuration       time.Duration
+	recordAudio       bool
+	audioStatus       string
+	bytesWritten      int64
+	failureReason     string
+	path              string
+	partialPath       string
+	stop              chan struct{}
+	stopOnce          sync.Once
 }
 
 type recordingView struct {
@@ -107,19 +110,23 @@ func newRecordingManager(h *Hub) *recordingManager {
 func (m *recordingManager) persist(rec *recording) {
 	rec.mu.Lock()
 	id, serial, st, et, maxD, recAudio, audioStatus, bytesW := rec.id, rec.serial, rec.startedAt, rec.endedAt, rec.maxDuration, rec.recordAudio, rec.audioStatus, rec.bytesWritten
+	owner, taskStopped, videoStart := rec.ownerTaskID, rec.taskStopRequested, rec.videoStartedAt
 	rec.mu.Unlock()
 	if id == "" || serial == "" || st.IsZero() || et.IsZero() {
 		return
 	}
 	data, err := json.Marshal(map[string]any{
-		"recording_id":    id,
-		"serial":          serial,
-		"started_at":      st.UTC().Format(time.RFC3339Nano),
-		"ended_at":        et.UTC().Format(time.RFC3339Nano),
-		"max_duration_ms": maxD.Milliseconds(),
-		"record_audio":    recAudio,
-		"audio_status":    audioStatus,
-		"bytes_written":   bytesW,
+		"recording_id":        id,
+		"owner_task_id":       owner,
+		"task_stop_requested": taskStopped,
+		"video_started_at":    videoStart.UTC().Format(time.RFC3339Nano),
+		"serial":              serial,
+		"started_at":          st.UTC().Format(time.RFC3339Nano),
+		"ended_at":            et.UTC().Format(time.RFC3339Nano),
+		"max_duration_ms":     maxD.Milliseconds(),
+		"record_audio":        recAudio,
+		"audio_status":        audioStatus,
+		"bytes_written":       bytesW,
 	})
 	if err != nil {
 		return
@@ -152,14 +159,17 @@ func (m *recordingManager) loadPersisted() {
 			continue
 		}
 		var meta struct {
-			RecordingID   string `json:"recording_id"`
-			Serial        string `json:"serial"`
-			StartedAt     string `json:"started_at"`
-			EndedAt       string `json:"ended_at"`
-			MaxDurationMS int64  `json:"max_duration_ms"`
-			RecordAudio   bool   `json:"record_audio"`
-			AudioStatus   string `json:"audio_status"`
-			BytesWritten  int64  `json:"bytes_written"`
+			OwnerTaskID       string `json:"owner_task_id"`
+			TaskStopRequested bool   `json:"task_stop_requested"`
+			VideoStartedAt    string `json:"video_started_at"`
+			RecordingID       string `json:"recording_id"`
+			Serial            string `json:"serial"`
+			StartedAt         string `json:"started_at"`
+			EndedAt           string `json:"ended_at"`
+			MaxDurationMS     int64  `json:"max_duration_ms"`
+			RecordAudio       bool   `json:"record_audio"`
+			AudioStatus       string `json:"audio_status"`
+			BytesWritten      int64  `json:"bytes_written"`
 		}
 		if err := json.Unmarshal(data, &meta); err != nil {
 			continue
@@ -167,22 +177,26 @@ func (m *recordingManager) loadPersisted() {
 		if meta.RecordingID == "" || meta.Serial == "" {
 			continue
 		}
+		videoStart, _ := time.Parse(time.RFC3339Nano, meta.VideoStartedAt)
 		st, err1 := time.Parse(time.RFC3339Nano, meta.StartedAt)
 		et, err2 := time.Parse(time.RFC3339Nano, meta.EndedAt)
 		if err1 != nil || err2 != nil {
 			continue
 		}
 		rec := &recording{
-			id:           meta.RecordingID,
-			serial:       meta.Serial,
-			status:       recordingComplete,
-			startedAt:    st,
-			endedAt:      et,
-			maxDuration:  time.Duration(meta.MaxDurationMS) * time.Millisecond,
-			recordAudio:  meta.RecordAudio,
-			audioStatus:  meta.AudioStatus,
-			bytesWritten: meta.BytesWritten,
-			path:         mp4,
+			id:                meta.RecordingID,
+			ownerTaskID:       meta.OwnerTaskID,
+			taskStopRequested: meta.TaskStopRequested,
+			videoStartedAt:    videoStart,
+			serial:            meta.Serial,
+			status:            recordingComplete,
+			startedAt:         st,
+			endedAt:           et,
+			maxDuration:       time.Duration(meta.MaxDurationMS) * time.Millisecond,
+			recordAudio:       meta.RecordAudio,
+			audioStatus:       meta.AudioStatus,
+			bytesWritten:      meta.BytesWritten,
+			path:              mp4,
 		}
 		if rec.bytesWritten <= 0 {
 			if info, err := os.Stat(mp4); err == nil {
@@ -226,6 +240,9 @@ func newRecordingID() string {
 }
 
 func (m *recordingManager) start(serial string, duration time.Duration, recordAudio bool) (*recording, error) {
+	return m.startOwned(serial, duration, recordAudio, "")
+}
+func (m *recordingManager) startOwned(serial string, duration time.Duration, recordAudio bool, owner string) (*recording, error) {
 	if serial == "" {
 		return nil, badRecordingRequest("missing serial")
 	}
@@ -237,7 +254,7 @@ func (m *recordingManager) start(serial string, duration time.Duration, recordAu
 	}
 	m.cleanupExpired(time.Now())
 
-	rec := &recording{id: newRecordingID(), serial: serial, status: recordingActive, startedAt: time.Now(), maxDuration: duration, recordAudio: recordAudio, audioStatus: "disabled", stop: make(chan struct{})}
+	rec := &recording{id: newRecordingID(), serial: serial, ownerTaskID: owner, status: recordingActive, startedAt: time.Now(), maxDuration: duration, recordAudio: recordAudio, audioStatus: "disabled", stop: make(chan struct{})}
 	m.mu.Lock()
 	if _, exists := m.bySerial[serial]; exists {
 		m.mu.Unlock()
@@ -339,6 +356,11 @@ func (m *recordingManager) run(rec *recording, ms *managedSession, release func(
 				break
 			}
 			if kind == scrcpy.FrameKey {
+				if !gotKey {
+					rec.mu.Lock()
+					rec.videoStartedAt = time.Now()
+					rec.mu.Unlock()
+				}
 				gotKey = true
 			}
 			if err := m.checkQuota(rec); err != nil {

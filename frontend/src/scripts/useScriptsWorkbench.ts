@@ -19,6 +19,9 @@ export function useScriptsWorkbench() {
   const dirty = computed(() => !!current.value && content.value !== current.value.content)
   const legacyTargets = computed(() => hasDocumentTargets(content.value))
   const tab = ref('source')
+ const executionsOpen = ref(false)
+ const executionTask = ref('')
+ function openExecutions(taskId = '') { executionTask.value = taskId; executionsOpen.value = true }
   const mobilePanel = ref('editor')
   const taskSearch = ref('')
   const filteredScripts = computed(() => scripts.value.filter(item => `${item.name} ${item.target_devices.map(serial => `${deviceName(serial)} ${serial}`).join(' ')}`.toLowerCase().includes(taskSearch.value.toLowerCase())))
@@ -237,14 +240,14 @@ export function useScriptsWorkbench() {
   }
   const assistant = useScriptAssistant(currentId, content, notify)
   watch(targetKey, () => { templateScope.value = 'all'; void loadTemplates() })
-  watch(currentId, () => { void refreshStatus() })
+  watch(currentId, () => { executionsOpen.value=false; void refreshStatus() })
   let timer: ReturnType<typeof setInterval> | undefined
   onMounted(async () => {
     await Promise.allSettled([loadScripts(), loadDevices(), refreshStatus()])
     if (!disposed) { await refreshStatus(); timer = setInterval(() => { void refreshStatus() }, 3000) }
   })
   onUnmounted(() => { disposed = true; templateGeneration++; if (timer) clearInterval(timer) })
-  return { scripts, devices, current, currentId, content, dirty, legacyTargets, tab, mobilePanel, taskSearch, filteredScripts, loading, loadError, deviceError, notice, busy, deviceName, scheduleFor, currentRuns, activeTasks, taskManagerOpen, modelConfigOpen, loadScripts, loadDevices, selectTask, save, formOpen, editingId, formName, formDevices, formSearch, formError, formContent, formRemoveLegacy, formBusy, filteredDevices, openForm, toggleDevice, submitForm, assets, templateLoading, templateError, templateOpen, templateSearch, templateScope, visibleTemplates, loadTemplates, insertTemplate, insertStep, removeLegacy, compile, run, stop, toggleEnabled, deleteOpen, deleteCurrent, copyPython, ...assistant }
+  return { executionsOpen,executionTask,openExecutions,scripts, devices, current, currentId, content, dirty, legacyTargets, tab, mobilePanel, taskSearch, filteredScripts, loading, loadError, deviceError, notice, busy, deviceName, scheduleFor, currentRuns, activeTasks, taskManagerOpen, modelConfigOpen, loadScripts, loadDevices, selectTask, save, formOpen, editingId, formName, formDevices, formSearch, formError, formContent, formRemoveLegacy, formBusy, filteredDevices, openForm, toggleDevice, submitForm, assets, templateLoading, templateError, templateOpen, templateSearch, templateScope, visibleTemplates, loadTemplates, insertTemplate, insertStep, removeLegacy, compile, run, stop, toggleEnabled, deleteOpen, deleteCurrent, copyPython, ...assistant }
 }
 
 function errorText(error: unknown): string { return error instanceof Error ? error.message : '请求失败，请重试' }

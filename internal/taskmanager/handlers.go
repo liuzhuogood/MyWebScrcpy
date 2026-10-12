@@ -16,6 +16,7 @@ func NewHandler(manager *Manager) *Handler {
 }
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
+	h.registerArtifacts(mux)
 	mux.HandleFunc("GET /api/tasks/active", h.handleListActive)
 	mux.HandleFunc("POST /api/tasks/{id}/kill", h.handleKill)
 }

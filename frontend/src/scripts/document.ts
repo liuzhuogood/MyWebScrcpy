@@ -3,7 +3,7 @@ import DOMPurify from 'dompurify'
 import { templateImageUrl, type TemplateItem } from '@/api/templates'
 
 export function initialDocument(name: string): string {
-  return `---\nname: ${JSON.stringify(name)}\nversion: 1.0.0\ntimeout_sec: 120\nenabled: false\n---\n\n# 步骤流程\n- 唤醒设备\n- 等待 2 秒\n`
+  return `---\nname: ${JSON.stringify(name)}\nversion: 1.0.0\ntimeout_sec: 120\nenabled: false\nrecording:\n  enabled: false\n  record_audio: false\nreport:\n  enabled: false\n---\n\n# 步骤流程\n- 唤醒设备\n- 等待 2 秒\n`
 }
 
 export function hasDocumentTargets(content: string): boolean {
@@ -37,7 +37,7 @@ export function renderDocument(content: string, assets: TemplateItem[]): string 
 }
 
 export const taskStatus: Record<string, string> = {
-  running: '运行中', stopping: '终止中', completed: '已完成', failed: '失败', killed: '已终止', skipped: '已跳过',
+  preparing: '准备中', running: '运行中', stopping: '终止中', completed: '已完成', failed: '失败', killed: '已终止', skipped: '已跳过',
   started: '已启动', partial: '部分异常', success: '已完成',
 }
 

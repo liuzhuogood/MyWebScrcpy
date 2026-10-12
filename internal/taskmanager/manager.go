@@ -5,217 +5,247 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"mywebscrcpy/internal/db"
+	"mywebscrcpy/internal/dependencies"
+	"mywebscrcpy/internal/taskartifact"
 	"os"
 	"os/exec"
 	"sync"
 	"time"
-
-	"mywebscrcpy/internal/db"
-	"mywebscrcpy/internal/dependencies"
 )
 
 var ErrDeviceBusy = errors.New("设备正在运行其他任务")
 
-// Manager 任务管理器，统一管理 Python 进程生命周期与设备排他锁
+type managedTask struct {
+	cmd    *exec.Cmd
+	cancel context.CancelFunc
+	done   chan struct{}
+	killed bool
+}
 type Manager struct {
 	database    *db.DB
 	mu          sync.Mutex
-	procs       map[string]*exec.Cmd
+	procs       map[string]*managedTask
+	Artifacts   *taskartifact.Service
 	closed      bool
 	maintenance bool
 	workers     sync.WaitGroup
 }
 
 func NewManager(database *db.DB) *Manager {
-	return &Manager{
-		database: database,
-		procs:    make(map[string]*exec.Cmd),
-	}
+	return &Manager{database: database, procs: map[string]*managedTask{}, Artifacts: taskartifact.NewService(database)}
 }
 
-// StartTask 启动托管任务 (核心逻辑：检查设备互斥锁 -> 注册 PID -> 启动进程 -> 监听退出)
-func (m *Manager) StartTask(scriptID int64, scriptName, deviceSerial string, timeoutSec int, pythonCode string) (*db.RunningTaskRecord, error) {
+// StartTask preserves the existing API for direct callers.
+func (m *Manager) StartTask(scriptID int64, name, serial string, timeout int, python string) (*db.RunningTaskRecord, error) {
+	return m.StartDispatchedTask(scriptID, name, serial, timeout, python, "", taskartifact.Options{})
+}
+func (m *Manager) StartDispatchedTask(scriptID int64, name, serial string, timeout int, python, dispatch string, options taskartifact.Options) (*db.RunningTaskRecord, error) {
+	if e := db.ValidateTargetDevices([]string{serial}); e != nil {
+		return nil, e
+	}
+	if timeout <= 0 {
+		timeout = 120
+	}
+	id := fmt.Sprintf("task_%d", time.Now().UnixNano())
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.closed || m.maintenance {
+		m.mu.Unlock()
 		return nil, fmt.Errorf("任务管理器已停止")
 	}
-
-	if err := db.ValidateTargetDevices([]string{deviceSerial}); err != nil {
-		return nil, err
-	}
-	// 1. 检查设备排他锁
-	active, err := m.database.GetActiveTaskByDevice(deviceSerial)
-	if err != nil {
-		return nil, fmt.Errorf("检查设备排他锁失败: %w", err)
+	active, e := m.database.GetActiveTaskByDevice(serial)
+	if e != nil {
+		m.mu.Unlock()
+		return nil, e
 	}
 	if active != nil {
-		return nil, fmt.Errorf("%w：设备 [%s] 正被任务「%s」占用", ErrDeviceBusy, deviceSerial, active.ScriptName)
+		m.mu.Unlock()
+		return nil, fmt.Errorf("%w：设备 [%s] 正被任务「%s」占用", ErrDeviceBusy, serial, active.ScriptName)
 	}
-
-	taskID := fmt.Sprintf("task_%d", time.Now().UnixNano())
-
-	// 2. 准备执行隔离脚本
-	tmpFile, err := os.CreateTemp("", "mdscript_run_*.py")
-	if err != nil {
-		return nil, fmt.Errorf("创建临时运行脚本失败: %w", err)
+	if e = m.database.ReserveTask(id, scriptID, name, serial, dispatch); e != nil {
+		m.mu.Unlock()
+		return nil, e
 	}
-	defer tmpFile.Close()
-
-	if _, err := tmpFile.WriteString(pythonCode); err != nil {
-		_ = os.Remove(tmpFile.Name())
-		return nil, fmt.Errorf("写入运行脚本失败: %w", err)
+	lifecycle, cancel := context.WithCancel(context.Background())
+	job := &managedTask{cancel: cancel, done: make(chan struct{})}
+	m.procs[id] = job
+	m.workers.Add(1)
+	m.mu.Unlock()
+	w, e := m.Artifacts.Create(id, dispatch, options)
+	if e != nil {
+		m.database.FinishRunningTask(id, "failed", -1, e.Error())
+		m.Artifacts.FailedWithoutLog(id, e)
+		m.remove(id, job)
+		rec, _ := m.database.GetTaskByID(id)
+		return rec, e
 	}
-	scriptPath := tmpFile.Name()
-
-	// 设置超时 context
-	if timeoutSec <= 0 {
-		timeoutSec = 120
+	w.Event("任务已登记，准备执行")
+	fail := func(err error) (*db.RunningTaskRecord, error) {
+		m.finish(id, job, w, -1, err.Error())
+		rec, _ := m.database.GetTaskByID(id)
+		return rec, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(timeoutSec)*time.Second)
-
-	pythonPath, err := dependencies.PythonPath()
-	if err != nil {
-		cancel()
-		_ = os.Remove(scriptPath)
-		return nil, fmt.Errorf("Python 依赖不可用: %w", err)
+	m.Artifacts.PrepareRecording(lifecycle, id, serial, timeout, w)
+	if lifecycle.Err() != nil {
+		return fail(fmt.Errorf("任务已终止"))
 	}
-	cmd := exec.CommandContext(ctx, pythonPath, scriptPath, deviceSerial)
-	// 托管脚本统一输出 UTF-8，避免 Windows 默认代码页导致中文日志崩溃。
-	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8")
+	tmp, e := os.CreateTemp("", "mdscript_run_*.py")
+	if e != nil {
+		return fail(fmt.Errorf("创建临时运行脚本失败: %w", e))
+	}
+	path := tmp.Name()
+	if _, e = tmp.WriteString(python); e != nil {
+		tmp.Close()
+		os.Remove(path)
+		return fail(e)
+	}
+	if e = tmp.Close(); e != nil {
+		os.Remove(path)
+		return fail(e)
+	}
+	if e = m.Artifacts.SaveProcessPath(id, path); e != nil {
+		os.Remove(path)
+		return fail(e)
+	}
+	runCtx, runCancel := context.WithTimeout(lifecycle, time.Duration(timeout)*time.Second)
+	pythonPath, e := dependencies.PythonPath()
+	if e != nil {
+		runCancel()
+		os.Remove(path)
+		return fail(fmt.Errorf("Python 依赖不可用: %w", e))
+	}
+	cmd := exec.CommandContext(runCtx, pythonPath, "-u", path, serial)
+	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1")
+	cmd.Stdout = w.Writer("stdout")
+	cmd.Stderr = w.Writer("stderr")
 	configureTaskProcess(cmd)
 	cmd.Cancel = func() error { return terminateTaskProcess(cmd.Process.Pid) }
 	cmd.WaitDelay = 2 * time.Second
-
-	if err := cmd.Start(); err != nil {
-		cancel()
-		_ = os.Remove(scriptPath)
-		return nil, fmt.Errorf("启动进程失败: %w", err)
+	m.mu.Lock()
+	if job.killed {
+		m.mu.Unlock()
+		runCancel()
+		os.Remove(path)
+		return fail(fmt.Errorf("任务已终止"))
 	}
-
-	pid := cmd.Process.Pid
-	m.procs[taskID] = cmd
-
-	// 3. 在数据库登记任务，立即对目标设备施加排他锁
-	if err := m.database.InsertRunningTask(taskID, scriptID, scriptName, deviceSerial, pid); err != nil {
-		if killErr := terminateTaskProcess(cmd.Process.Pid); killErr != nil {
-			log.Printf("[TaskManager] task=%s 注册失败后清理进程失败: %v", taskID, killErr)
-		}
-		cancel()
-		_ = os.Remove(scriptPath)
-		delete(m.procs, taskID)
-		_ = cmd.Wait()
-		return nil, fmt.Errorf("注册任务到数据库失败: %w", err)
+	if e = cmd.Start(); e != nil {
+		m.mu.Unlock()
+		runCancel()
+		os.Remove(path)
+		return fail(fmt.Errorf("启动进程失败: %w", e))
 	}
-
-	m.workers.Add(1)
-	// 4. 异步监听进程生命周期并在结束后释放锁
+	job.cmd = cmd
+	if e = m.database.StartReservedTask(id, cmd.Process.Pid); e != nil {
+		job.cancel()
+		m.mu.Unlock()
+		cmd.Wait()
+		runCancel()
+		os.Remove(path)
+		return fail(e)
+	}
+	m.mu.Unlock()
+	m.Artifacts.Started(id)
+	w.Event(fmt.Sprintf("Python 已启动，PID %d", cmd.Process.Pid))
+	rec, e := m.database.GetTaskByID(id)
 	go func() {
-		defer m.workers.Done()
-		defer cancel()
-		defer func() {
-			_ = os.Remove(scriptPath)
-			m.mu.Lock()
-			delete(m.procs, taskID)
-			m.mu.Unlock()
-		}()
-
+		defer runCancel()
+		defer os.Remove(path)
 		waitErr := cmd.Wait()
-		exitCode := 0
-		status := "completed"
-		errMsg := ""
-
+		code := 0
+		msg := ""
 		if waitErr != nil {
-			if ctx.Err() == context.DeadlineExceeded {
-				status = "failed"
-				errMsg = fmt.Sprintf("执行超时 (%d 秒)", timeoutSec)
-				exitCode = -1
-			} else if exitErr, ok := waitErr.(*exec.ExitError); ok {
-				status = "failed"
-				exitCode = exitErr.ExitCode()
-				errMsg = exitErr.Error()
-			} else {
-				status = "failed"
-				errMsg = waitErr.Error()
+			code = -1
+			msg = waitErr.Error()
+			var exit *exec.ExitError
+			if errors.As(waitErr, &exit) {
+				code = exit.ExitCode()
+			}
+			if runCtx.Err() == context.DeadlineExceeded {
+				msg = fmt.Sprintf("执行超时 (%d 秒)", timeout)
 			}
 		}
-
-		m.mu.Lock()
-		// 检查是否已被手动强杀 (如果是 killed 则保留 killed 状态)
-		rec, readErr := m.database.GetTaskByID(taskID)
-		if readErr != nil {
-			log.Printf("[TaskManager] task=%s 读取结束状态失败: %v", taskID, readErr)
-		}
-		if rec != nil && rec.Status == "killed" {
-			m.mu.Unlock()
-			return
-		}
-		if err := m.database.FinishRunningTask(taskID, status, exitCode, errMsg); err != nil {
-			log.Printf("[TaskManager] task=%s 记录结束状态失败: %v", taskID, err)
-		}
-		m.mu.Unlock()
-		if err := m.database.ReconcileScriptRunStatus(scriptID); err != nil {
-			log.Printf("[TaskManager] script=%d 汇总结果失败: %v", scriptID, err)
-		}
-		log.Printf("[TaskManager] 任务 %s (PID: %d) 结束，状态: %s，设备 %s 已释放锁", taskID, pid, status, deviceSerial)
+		m.finish(id, job, w, code, msg)
 	}()
-
-	return &db.RunningTaskRecord{
-		ID:           taskID,
-		ScriptID:     scriptID,
-		ScriptName:   scriptName,
-		DeviceSerial: deviceSerial,
-		PID:          pid,
-		Status:       "running",
-		StartedAt:    time.Now().UnixMilli(),
-	}, nil
+	return rec, e
+}
+func (m *Manager) finish(id string, job *managedTask, w *taskartifact.LogCapture, code int, message string) {
+	m.mu.Lock()
+	status := "completed"
+	if code != 0 || message != "" {
+		status = "failed"
+	}
+	if previous, _ := m.database.GetTaskByID(id); previous != nil && previous.Status == "killed" {
+		job.killed = true
+	}
+	if job.killed {
+		status = "killed"
+		code = -9
+		message = "手动终止进程"
+	}
+	if e := m.database.FinishRunningTask(id, status, code, message); e != nil {
+		log.Printf("[TaskManager] task=%s 记录结果失败: %v", id, e)
+	}
+	m.mu.Unlock()
+	rec, e := m.database.GetTaskByID(id)
+	if e == nil && rec != nil {
+		m.Artifacts.Finish(rec, w)
+		if e = m.database.ReconcileScriptRunStatus(rec.ScriptID); e != nil {
+			log.Printf("[TaskManager] script=%d 汇总失败: %v", rec.ScriptID, e)
+		}
+	} else {
+		w.Close()
+	}
+	m.remove(id, job)
+	log.Printf("[TaskManager] task=%s status=%s exit=%d", id, status, code)
+}
+func (m *Manager) remove(id string, job *managedTask) {
+	job.cancel()
+	m.mu.Lock()
+	delete(m.procs, id)
+	close(job.done)
+	m.mu.Unlock()
+	m.workers.Done()
 }
 
-// KillTask 强制结束任务进程并立即释放设备锁
-func (m *Manager) KillTask(taskID string) error {
+// KillTask waits for the actual process exit and artifact finalization before releasing callers.
+func (m *Manager) KillTask(id string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	task, err := m.database.GetTaskByID(taskID)
-	if err != nil {
-		return fmt.Errorf("查询任务失败: %w", err)
+	task, e := m.database.GetTaskByID(id)
+	if e != nil {
+		m.mu.Unlock()
+		return e
 	}
 	if task == nil {
+		m.mu.Unlock()
 		return fmt.Errorf("任务不存在")
 	}
-
-	if task.Status != "running" && task.Status != "stopping" {
-		return fmt.Errorf("任务非运行状态: %s", task.Status)
-	}
-
-	// 杀掉系统进程
-	if cmd, ok := m.procs[taskID]; ok && cmd.Process != nil {
-		if err := terminateTaskProcess(cmd.Process.Pid); err != nil {
-			log.Printf("[TaskManager] task=%s 终止进程失败: %v", taskID, err)
+	job := m.procs[id]
+	if job == nil {
+		m.mu.Unlock()
+		if task.Status != "running" && task.Status != "stopping" && task.Status != "preparing" {
+			return fmt.Errorf("任务非运行状态: %s", task.Status)
 		}
-	} else if task.PID > 0 {
-		terminateStoredTaskProcess(task.PID)
+		if task.PID > 0 {
+			terminateStoredTaskProcess(task.PID)
+		}
+		if e := m.database.FinishRunningTask(id, "killed", -9, "手动终止进程"); e != nil {
+			return e
+		}
+		return m.database.ReconcileScriptRunStatus(task.ScriptID)
 	}
-
-	// 立即将状态置为 killed，设备锁即刻释放
-	if err := m.database.FinishRunningTask(taskID, "killed", -9, "手动终止进程"); err != nil {
-		return fmt.Errorf("更新任务状态失败: %w", err)
+	job.killed = true
+	e = m.database.StopTask(id)
+	job.cancel()
+	m.mu.Unlock()
+	if e != nil {
+		return e
 	}
-
-	delete(m.procs, taskID)
-	if err := m.database.ReconcileScriptRunStatus(task.ScriptID); err != nil {
-		log.Printf("[TaskManager] script=%d 汇总终止结果失败: %v", task.ScriptID, err)
-	}
-	log.Printf("[TaskManager] 任务 %s (PID: %d) 已被强杀，设备 %s 锁已释放", taskID, task.PID, task.DeviceSerial)
+	<-job.done
 	return nil
 }
-
-// GetActiveTaskByDevice 查询指定设备是否有活跃任务 (设备互斥排他查询)
-func (m *Manager) GetActiveTaskByDevice(deviceSerial string) (*db.RunningTaskRecord, error) {
-	return m.database.GetActiveTaskByDevice(deviceSerial)
+func (m *Manager) GetActiveTaskByDevice(serial string) (*db.RunningTaskRecord, error) {
+	return m.database.GetActiveTaskByDevice(serial)
 }
-
-// ListActiveTasks 获取当前活跃任务
 func (m *Manager) ListActiveTasks() ([]db.RunningTaskRecord, error) {
 	return m.database.ListActiveTasks()
 }

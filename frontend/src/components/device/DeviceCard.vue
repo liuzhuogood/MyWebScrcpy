@@ -23,6 +23,7 @@ const isDeleting = ref(false)
 const isManual = computed(() => props.device.source === 'manual')
 const isOnline = computed(() => props.device.state === 'device')
 const isConnecting = computed(() => props.device.state === 'connecting' || isReconnecting.value)
+const isUnauthorized = computed(() => props.device.state === 'unauthorized')
 
 async function startEdit(e: Event) {
   e.stopPropagation()
@@ -133,6 +134,10 @@ function open() {
             <span v-else-if="isConnecting" class="flex items-center gap-1 text-blue-500 font-medium">
               <Loader2 class="h-3 w-3 animate-spin" />
               连接中...
+            </span>
+            <span v-else-if="isUnauthorized" class="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium">
+              <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+              未授权
             </span>
             <span v-else class="flex items-center gap-1 text-muted-foreground">
               <span class="h-1.5 w-1.5 rounded-full bg-muted-foreground/40"></span>

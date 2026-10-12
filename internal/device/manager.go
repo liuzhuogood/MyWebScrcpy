@@ -181,13 +181,15 @@ func (m *Manager) Connect(serial string) error {
 		return fmt.Errorf("adb connect 错误: %s (%w)", strings.TrimSpace(output), err)
 	}
 
+	// 触发一次即刻刷新（包含 failed to authenticate 变为 unauthorized 的情况）
+	m.refresh()
+
 	// adb connect 成功通常输出: connected to ... 或 already connected to ...
-	if strings.Contains(output, "failed") || strings.Contains(output, "cannot connect") {
+	// 未授权时输出: failed to authenticate to ...（此时已建立连接并处于 unauthorized 状态）
+	if (strings.Contains(output, "failed") && !strings.Contains(output, "failed to authenticate")) || strings.Contains(output, "cannot connect") {
 		return fmt.Errorf("adb connect 失败: %s", strings.TrimSpace(output))
 	}
 
-	// 触发一次即刻刷新
-	m.refresh()
 	return nil
 }
 

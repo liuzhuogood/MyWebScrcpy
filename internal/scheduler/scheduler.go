@@ -171,7 +171,7 @@ func (s *Scheduler) triggerWorker(scriptID int64) {
 		log.Printf("[Scheduler] script=%d pending device configuration", scriptID)
 		return
 	}
-	results, err := s.executor.Execute(scriptID)
+	results, err := s.executor.ExecuteWithTrigger(scriptID, "schedule")
 	if err != nil {
 		log.Printf("[Scheduler] script=%d failed: %v", scriptID, err)
 		_ = s.database.UpdateScriptRunStatus(scriptID, "failed", nowMs)

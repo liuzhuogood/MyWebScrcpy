@@ -1,9 +1,12 @@
 package mdscript
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log"
+	"mywebscrcpy/internal/taskartifact"
 	"sync"
 	"time"
 
@@ -12,6 +15,7 @@ import (
 )
 
 type DeviceRunResult struct {
+	DispatchID   string                `json:"dispatch_id"`
 	DeviceSerial string                `json:"device_serial"`
 	Status       string                `json:"status"`
 	Task         *db.RunningTaskRecord `json:"task,omitempty"`
@@ -46,6 +50,10 @@ func (e *Executor) ValidateTargets(targets []string) error {
 }
 
 func (e *Executor) Execute(scriptID int64) (results []DeviceRunResult, runErr error) {
+	return e.ExecuteWithTrigger(scriptID, "manual")
+}
+
+func (e *Executor) ExecuteWithTrigger(scriptID int64, trigger string) (results []DeviceRunResult, runErr error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	script, err := e.database.GetMarkdownScript(scriptID)
@@ -58,11 +66,22 @@ func (e *Executor) Execute(scriptID int64) (results []DeviceRunResult, runErr er
 	if err := db.ValidateTargetDevices(script.TargetDevices); err != nil {
 		return nil, fmt.Errorf("请先配置目标设备: %w", err)
 	}
+	options, err := ParseOptions(script.Content)
+	if err != nil {
+		return nil, err
+	}
 	dispatchID, runAt, err := e.database.BeginScriptDispatch(script.ID)
 	if err != nil {
 		return nil, err
 	}
 	defer func() {
+		message := ""
+		if runErr != nil {
+			message = runErr.Error()
+		}
+		if err := e.database.FinishDispatch(dispatchID, message); err != nil {
+			log.Printf("[MdScript] dispatch=%s 收尾失败: %v", dispatchID, err)
+		}
 		if runErr != nil {
 			if err := e.database.UpdateScriptRunStatus(script.ID, "failed", runAt); err != nil {
 				log.Printf("[MdScript] script=%d 记录批次失败状态失败: %v", script.ID, err)
@@ -71,6 +90,10 @@ func (e *Executor) Execute(scriptID int64) (results []DeviceRunResult, runErr er
 		}
 	}()
 	meta := ParseMarkdown(script.Content, time.UnixMilli(script.UpdatedAt))
+	snapshot := taskartifact.Snapshot{Availability: "available", ScriptName: script.Name, Document: script.Content, DocumentHash: meta.ContentHash, DocumentVersion: meta.ExtractedVersion, TargetDevices: script.TargetDevices, Options: options}
+	if err := e.database.SaveDispatchSnapshot(dispatchID, trigger, snapshot); err != nil {
+		return nil, err
+	}
 	python := script.CompiledPython
 	if e.compiler.ShouldRecompile(meta.ExtractedVersion, script.CompiledVersion, python) {
 		python, err = e.compiler.Compile(script.Name, meta, script.Content)
@@ -81,9 +104,13 @@ func (e *Executor) Execute(scriptID int64) (results []DeviceRunResult, runErr er
 			return nil, err
 		}
 	}
+	compiledHash := sha256.Sum256([]byte(python))
+	if err := e.database.SetDispatchCompiledHash(dispatchID, hex.EncodeToString(compiledHash[:])); err != nil {
+		return nil, err
+	}
 	results = make([]DeviceRunResult, 0, len(script.TargetDevices))
 	for _, serial := range script.TargetDevices {
-		result := DeviceRunResult{DeviceSerial: serial, Status: "skipped"}
+		result := DeviceRunResult{DispatchID: dispatchID, DeviceSerial: serial, Status: "skipped"}
 		known, online := e.deviceLookup(serial)
 		if !known {
 			result.Error = "目标设备不存在"
@@ -100,8 +127,9 @@ func (e *Executor) Execute(scriptID int64) (results []DeviceRunResult, runErr er
 			}
 		}
 		if result.Error == "" {
-			task, err := e.manager.StartTask(script.ID, script.Name, serial, meta.TimeoutSec, python)
+			task, err := e.manager.StartDispatchedTask(script.ID, script.Name, serial, meta.TimeoutSec, python, dispatchID, options)
 			if err != nil {
+				result.Task = task
 				result.Error = err.Error()
 				if !errors.Is(err, taskmanager.ErrDeviceBusy) {
 					result.Status = "failed"
@@ -111,16 +139,20 @@ func (e *Executor) Execute(scriptID int64) (results []DeviceRunResult, runErr er
 				result.Status = "started"
 			}
 		}
-		if result.Error != "" {
+		if result.Error != "" && result.Task == nil {
 			task, err := e.database.RecordSkippedTask(script.ID, script.Name, serial, result.Status, result.Error)
 			if err != nil {
 				return results, fmt.Errorf("记录设备执行结果失败: %w", err)
 			}
 			result.Task = task
+			if err := e.database.AttachDispatchTask(dispatchID, task.ID); err != nil {
+				return results, err
+			}
+			if err := e.manager.Artifacts.Rejected(task, dispatchID, options); err != nil {
+				return results, err
+			}
 		}
-		if err := e.database.AttachDispatchTask(dispatchID, result.Task.ID); err != nil {
-			return results, fmt.Errorf("记录执行批次失败: %w", err)
-		}
+
 		log.Printf("[MdScript] script=%d device=%s status=%s error=%s", script.ID, serial, result.Status, result.Error)
 		results = append(results, result)
 	}
@@ -143,6 +175,9 @@ func (e *Executor) Execute(scriptID int64) (results []DeviceRunResult, runErr er
 		status = "partial"
 	}
 	if err := e.database.UpdateScriptRunStatus(script.ID, status, runAt); err != nil {
+		return results, err
+	}
+	if err := e.database.FinishDispatch(dispatchID, ""); err != nil {
 		return results, err
 	}
 	if err := e.database.ReconcileScriptRunStatus(script.ID); err != nil {
