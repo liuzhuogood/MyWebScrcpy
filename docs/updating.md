@@ -41,7 +41,7 @@ Windows/Linux 的安装与签名校验由 Tauri 更新器处理，保留升级�
 
 ## 版本和 Actions
 
-根目录 `VERSION` 是正式版本源。修改后执行 `node scripts/sync-version.mjs`，同步前端、桌面配置、Cargo 包及锁文件；`--check` 只校验。发布 tag 必须与 `VERSION` 相同。
+根目录 `VERSION` 是正式版本源。修改后执行 `node scripts/sync-version.mjs`，同步前端、桌面配置、Cargo 包及锁文件和 Python SDK；`--check` 只校验。发布 tag 必须与 `VERSION` 相同。Python SDK 的 PyPI 版本去掉 `v` 前缀，主分支版本更新后由 `Publish Python SDK` 工作流自动发布；仓库需配置 `PYPI_API_TOKEN` Actions Secret，已发布的完整版本会跳过。
 
 从 v1.20.1 起，`.github/workflows/release.yml` 发布 5 个 CLI、Windows GUI exe/安装包和 macOS Intel/Apple Silicon 两种 GUI DMG，共 9 个程序。`desktop-latest.json` 只包含 Windows 安装包的签名更新信息；macOS 使用 DMG 手动安装和更新，Linux 使用 CLI。缺少约定资产或版本不一致时发布失败。Docker 继续使用 Linux AMD64 CLI。
 

@@ -1,0 +1,147 @@
+name: Publish Python SDK
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths:
+      - VERSION
+      - packages/python-sdk/**
+      - scripts/sync-version.mjs
+      - scripts/sync-version.test.mjs
+      - .github/workflows/python-sdk.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: python-sdk-pypi
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      needs_upload: ${{ steps.pypi.outputs.needs_upload }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Synchronize SDK with application version
+        id: version
+        env:
+          RELEASE_REF: ${{ github.ref }}
+          RELEASE_REF_NAME: ${{ github.ref_name }}
+        run: |
+          node scripts/sync-version.mjs
+          node scripts/sync-version.mjs --check
+          node --test scripts/sync-version.test.mjs
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          tag = Path('VERSION').read_text().strip()
+          if os.environ['RELEASE_REF'].startswith('refs/tags/'):
+              assert tag == os.environ['RELEASE_REF_NAME'], 'Tag must match VERSION'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'version={tag.removeprefix("v")}\n')
+          PY
+      - name: Build and validate distributions
+        run: |
+          python -m pip install build twine
+          python -m build packages/python-sdk
+          python -m twine check --strict packages/python-sdk/dist/*
+      - name: Test installed wheel
+        run: |
+          python -m pip install packages/python-sdk/dist/*.whl
+          python -m unittest discover -s packages/python-sdk/tests -v
+          python - <<'PY'
+          from importlib.metadata import version
+          from pathlib import Path
+          import mywebscrcpy
+          expected = Path('VERSION').read_text().strip().removeprefix('v')
+          assert version('mywebscrcpy-sdk') == mywebscrcpy.__version__ == expected
+          PY
+      - name: Test source distribution in a clean environment
+        run: |
+          python -m venv "$RUNNER_TEMP/sdk-sdist"
+          "$RUNNER_TEMP/sdk-sdist/bin/python" -m pip install packages/python-sdk/dist/*.tar.gz
+          "$RUNNER_TEMP/sdk-sdist/bin/python" -m unittest discover -s packages/python-sdk/tests -v
+      - name: Check published version
+        id: pypi
+        env:
+          SDK_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from urllib.error import HTTPError
+          from urllib.request import urlopen
+          url = f'https://pypi.org/pypi/mywebscrcpy-sdk/{os.environ["SDK_VERSION"]}/json'
+          try:
+              with urlopen(url, timeout=30) as response:
+                  release = json.load(response)
+          except HTTPError as error:
+              if error.code != 404:
+                  raise
+              published = set()
+          else:
+              assert release['info']['version'] == os.environ['SDK_VERSION']
+              published = {item['filename'] for item in release['urls']}
+          expected = {item.name for item in Path('packages/python-sdk/dist').iterdir()}
+          needs_upload = not expected.issubset(published)
+          print('Release needs upload' if needs_upload else 'Complete release already exists; skipping upload')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'needs_upload={str(needs_upload).lower()}\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-sdk-dist
+          path: packages/python-sdk/dist/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: needs.build.outputs.needs_upload == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-sdk-dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
+          attestations: false
+
+  verify:
+    needs: [build, publish]
+    if: always() && needs.build.result == 'success' && (needs.publish.result == 'success' || needs.publish.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install published release from PyPI
+        env:
+          SDK_VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          python -m pip install --no-cache-dir --index-url https://pypi.org/simple "mywebscrcpy-sdk==$SDK_VERSION"
+          python - <<'PY'
+          import os
+          from importlib.metadata import version
+          import mywebscrcpy
+          assert version('mywebscrcpy-sdk') == mywebscrcpy.__version__ == os.environ['SDK_VERSION']
+          from mywebscrcpy import Client, Device, CommandResult, PageInfo
+          print(f'Verified mywebscrcpy-sdk {mywebscrcpy.__version__} installed from PyPI')
+          PY
