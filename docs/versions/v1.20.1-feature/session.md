@@ -27,3 +27,13 @@
 修复后本机验收：桌面服务脚本并行启动 10 次全通过；Go 全量、前端/原型构建、Rust 服务缓存测试及 clippy、版本同步与发布清单契约通过。工作流结构检查确认只剩 5 目标 CLI、Windows 桌面、Release 与 Docker，后两者均等待前两项成功。
 
 第二次运行 38347272584：5 个 CLI、Windows 安装包和签名校验成功；Windows Go 全量回归暴露既有多设备测试的 3 秒 Python 启动期限过短。测试改为共享 15 秒启动期限，读取设备参数标记并检查任务仍运行，提前退出立即失败；测试脚本保持运行直至显式停止，独立停止不受 Python 启动耗时及 10 秒自然结束影响。60 秒任务超时及测试清理仍限制生命周期。用户已明确授权更新 v1.20.1 标签并持续修复发布。
+
+## 发布验收完成
+
+第三次运行 [38348468105](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/38348468105) 全部成功，发布源码与标签提交为 `4c3cf5f582d5845af842d250c5fc44d49a3d355b`。5 个 CLI 目标、Windows 桌面、Release 和 Docker 共 8 个作业均成功。Windows Go 全量回归、多设备启动/独立停止重复 3 次、服务缓存、独立 GUI 服务启动/退出、桌面生命周期、发布清单和更新签名校验全部通过。
+
+[Release v1.20.1](https://github.com/liuzhuogood/MyWebScrcpy/releases/tag/v1.20.1) 实际包含约定的 7 个程序与 `desktop-latest.json`，无重复 CLI、macOS/Linux GUI 或独立签名资产。全部 8 个文件已真实下载，大小及 SHA-256 与 GitHub 资产 digest 一致；5 个 CLI 的 Go 构建信息均指向上述源码提交。更新索引只包含 Windows，指向同版本 GUI 安装包；独立验签通过且篡改安装包被拒绝。发布的 macOS ARM64 CLI 实测默认服务、GUI 模式拒绝、缺依赖启动、配置及受控退出通过。
+
+Docker Hub 的 `liuzhuogood/mywebscrcpy:v1.20.1` 和 `latest` 均可读取 Linux AMD64 清单，镜像摘要一致：`sha256:3c5cf027a17ca9e86f0a78937041cf1ffecb193557e8a22397bd01e994f44e3d`。本轮核对构建、推送与远端清单，不包含本机 Docker 容器运行或真实手机验收。Windows GUI 验证包含独立 exe 的内嵌服务运行，不包含窗口/手机交互验收。
+
+原 v1.20.1 标签更新已获用户明确授权，使用精确旧标签对象的 force-with-lease 推送并核对远端。最终验收记录在发布后补写，仅普通推送 main，标签继续保留在已通过 CI 的源码提交，不因文档收尾再次触发发布。
