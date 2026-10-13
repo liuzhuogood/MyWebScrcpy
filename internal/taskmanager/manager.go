@@ -21,6 +21,7 @@ import (
 var ErrDeviceBusy = errors.New("设备正在运行其他任务")
 
 type managedTask struct {
+	ctx      context.Context
 	cmd      *exec.Cmd
 	cancel   context.CancelFunc
 	done     chan struct{}
@@ -29,15 +30,16 @@ type managedTask struct {
 	serial   string
 }
 type Manager struct {
-	database    *db.DB
-	mu          sync.Mutex
-	procs       map[string]*managedTask
-	Artifacts   *taskartifact.Service
-	closed      bool
-	maintenance bool
-	workers     sync.WaitGroup
-	apiURL      string
-	apiServer   *http.Server
+	TemplateReadable func(id, serial string) bool
+	database         *db.DB
+	mu               sync.Mutex
+	procs            map[string]*managedTask
+	Artifacts        *taskartifact.Service
+	closed           bool
+	maintenance      bool
+	workers          sync.WaitGroup
+	apiURL           string
+	apiServer        *http.Server
 }
 
 func NewManager(database *db.DB) *Manager {
@@ -82,7 +84,7 @@ func (m *Manager) StartDispatchedTask(scriptID int64, name, serial string, timeo
 		m.database.FinishRunningTask(id, "failed", -1, err.Error())
 		return nil, err
 	}
-	job := &managedTask{cancel: cancel, done: make(chan struct{}), apiToken: token, serial: serial}
+	job := &managedTask{ctx: lifecycle, cancel: cancel, done: make(chan struct{}), apiToken: token, serial: serial}
 	m.procs[id] = job
 	m.workers.Add(1)
 	m.mu.Unlock()

@@ -3583,6 +3583,66 @@
           }
         }
       }
+    },
+    "/api/templates/{id}/images": {
+      "post": {
+        "tags": [
+          "模板管理"
+        ],
+        "summary": "为模板添加参考图片",
+        "description": "上传一张 PNG/JPEG 参考图片，返回更新后的模板元数据。主图片接口仍返回主图片；SDK 首版不聚合参考图匹配。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "image"
+                ],
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "更新后的模板",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Template"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "图片或模板无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

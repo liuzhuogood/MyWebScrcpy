@@ -11,9 +11,9 @@ description: 将 Markdown 流程转换为调用可安装 mywebscrcpy SDK 的独�
 
 按文档顺序生成真实动作、条件、等待和有限循环，逐步骤打印必要日志。循环只使用常量整数 range，每层最多 1000 次。SDK 检查 HTTP 与业务执行结果，失败异常非零退出；不捕获后假装成功。属性按已确认类型读取，不猜字段或替代接口。调度、多设备、录像和报告由宿主处理。
 
-基础动作使用 device.adb(args, timeout=秒)，明确传入命令参数数组，不包含 adb 可执行文件和设备切换参数。按键、像素点击、滑动、ASCII 输入分别使用明确的 adb input 子命令；比例坐标先读取 device.page_info 的 width/height 并显式转换。等待使用 time.sleep。避免把动作替换成打印日志。
+基础动作使用 device.adb(args, timeout=秒)，明确传入命令参数数组，不包含 adb 可执行文件和设备切换参数。需要原生命令时，按键、像素点击、滑动、ASCII 输入使用明确的 adb input 子命令；比例坐标先读取 device.page_info 的 width/height 并显式转换。等待使用 time.sleep。避免把动作替换成打印日志。
 
-目前只实现 adb/page_info 基础 SDK。Vision 取帧、模板匹配、OCR、中文输入及 tap/swipe/key/text 等专用 SDK 方法尚未交付，不生成这些调用。缺少坐标、包名、Activity 或其他必需参数，或要求未实现能力时，返回 needs_input 并指出步骤。不生成占位实现。
+SDK 已实现 Vision 取帧、主图片匹配、等待目标、持续匹配及 tap/swipe/key/text。视觉流程可参考 [等待点击示例](assets/vision-example.py)，将示例 ID 替换为冻结资料中的真实 ID。模板操作只使用 templates.json 已核对的 ID、作用域和启用状态；优先 wait_for + tap_match，避免把归一化坐标当像素。未知算法、OCR、多参考图聚合与未验证中文输入能力不生成调用。缺少坐标、包名、Activity 或其他必需参数，或要求未实现能力时，返回 needs_input 并指出步骤。不生成占位实现。
 
 最终仅返回一个严格 JSON 对象，无代码围栏和解释文字：
 

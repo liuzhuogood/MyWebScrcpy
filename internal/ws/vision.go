@@ -58,9 +58,11 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 	// handshake meta in both live and replay modes.
 	width, height := meta.Width, meta.Height
 	_ = writeJSON(map[string]interface{}{"type": "hello", "protocol_version": "1", "device_id": serial, "session_id": meta.SessionID, "format": "scrcpy-frame", "codec": meta.Codec, "width": meta.Width, "height": meta.Height})
+	actionCtx, cancelActions := context.WithCancel(r.Context())
+	defer cancelActions()
 	done := make(chan struct{})
 	var stopOnce sync.Once
-	stop := func() { stopOnce.Do(func() { close(done) }) }
+	stop := func() { stopOnce.Do(func() { close(done); cancelActions() }) }
 	defer stop()
 	go func() {
 		defer stop()
@@ -112,7 +114,7 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 				}
 				h.publishResult(serial, msg)
 			} else if msg.Type == "action.request" {
-				result := <-ms.actions.Submit(context.Background(), action.Request{RequestID: msg.RequestID, DeviceID: serial, Source: "vision", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, Text: msg.Text, Keycode: msg.Keycode, MetaState: msg.MetaState, FrameID: msg.FrameID, ExpiresMS: msg.ExpiresMS, Humanize: msg.Humanize, Mode: msg.Mode, DurationMS: msg.DurationMS})
+				result := <-ms.actions.Submit(actionCtx, action.Request{RequestID: msg.RequestID, DeviceID: serial, Source: "vision", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, Text: msg.Text, Keycode: msg.Keycode, MetaState: msg.MetaState, FrameID: msg.FrameID, ExpiresMS: msg.ExpiresMS, Humanize: msg.Humanize, Mode: msg.Mode, DurationMS: msg.DurationMS})
 				h.recordEvent(debuglog.Event{Type: "action.result", DeviceID: serial, SessionID: meta.SessionID, RequestID: result.RequestID, Fields: map[string]interface{}{"accepted": result.Accepted, "executed": result.Executed, "error_code": result.ErrorCode}})
 				_ = writeJSON(map[string]interface{}{"type": "action.result", "request_id": result.RequestID, "device_id": serial, "session_id": meta.SessionID, "accepted": result.Accepted, "executed": result.Executed, "error_code": result.ErrorCode})
 			}
@@ -124,13 +126,23 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 	var lastSent time.Time
 	for {
 		select {
+		case <-actionCtx.Done():
+			return
 		case <-done:
 			return
 		default:
 		}
-		frame, ok := <-frames
-		if !ok {
+		var frame sharedVideoFrame
+		var ok bool
+		select {
+		case <-actionCtx.Done():
 			return
+		case <-done:
+			return
+		case frame, ok = <-frames:
+			if !ok {
+				return
+			}
 		}
 		data := frame.data
 		frameID++

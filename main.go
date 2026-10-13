@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image/png"
 	"io/fs"
 	"log"
 	"net/http"
@@ -299,6 +303,29 @@ func main() {
 		aiSvc := aiprovider.NewService(database, pibundle.Paths{})
 		aiSvc.RuntimeResolver = dependencyManager.AcquirePi
 		generator := mdscript.NewGenerator(database, aiSvc, filepath.Join(skillsDir, "markdown-to-python"), openAPISpec)
+		generator.TemplateSnapshot = func(id string) (json.RawMessage, error) {
+			tmpl, err := templateStorage.GetTemplate(id)
+			if err != nil {
+				return nil, err
+			}
+			img, err := templateStorage.GetTemplateImage(id)
+			if err != nil {
+				return nil, err
+			}
+			var buffer bytes.Buffer
+			if err := png.Encode(&buffer, img); err != nil {
+				return nil, err
+			}
+			hash := sha256.Sum256(buffer.Bytes())
+			return json.Marshal(struct {
+				Template  *template.Template `json:"template"`
+				ImageHash string             `json:"image_sha256"`
+			}{tmpl, hex.EncodeToString(hash[:])})
+		}
+		taskMgr.TemplateReadable = func(id, serial string) bool {
+			tmpl, err := templateStorage.GetTemplate(id)
+			return err == nil && (tmpl.Serial == template.GlobalSerial || tmpl.Serial == serial)
+		}
 		executor.ArtifactCheck = generator.Check
 		mdHandler.Generator = generator
 		taskMgr.Artifacts.ConfigureReports(aiSvc.SummarizeTask)

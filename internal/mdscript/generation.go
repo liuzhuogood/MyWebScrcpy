@@ -35,12 +35,13 @@ type GenerationEvent struct {
 }
 
 type Generator struct {
-	Database    *db.DB
-	Provider    GenerationProvider
-	SkillDir    string
-	APIDocument string
-	mu          sync.Mutex
-	active      map[int64]bool
+	Database         *db.DB
+	Provider         GenerationProvider
+	SkillDir         string
+	APIDocument      string
+	TemplateSnapshot func(id string) (json.RawMessage, error)
+	mu               sync.Mutex
+	active           map[int64]bool
 }
 
 func NewGenerator(database *db.DB, provider GenerationProvider, skillDir string, apiDocument []byte) *Generator {
@@ -109,16 +110,28 @@ func (g *Generator) contextFiles(script db.MarkdownScriptRecord) (map[string]str
 	files["task.json"] = string(task)
 	files["current.md"] = script.Content
 	meta := ParseMarkdown(script.Content, time.UnixMilli(script.UpdatedAt))
+	assets := make([]json.RawMessage, 0, len(meta.Templates))
+	for _, ref := range meta.Templates {
+		if g.TemplateSnapshot == nil {
+			return nil, "", errors.New("模板资料接口尚未配置")
+		}
+		asset, err := g.TemplateSnapshot(ref.ID)
+		if err != nil {
+			return nil, "", fmt.Errorf("读取模板 %s 失败：%w", ref.ID, err)
+		}
+		assets = append(assets, asset)
+	}
 	templates, _ := json.Marshal(struct {
-		References        []TemplateRef `json:"references"`
-		MatchingSupported bool          `json:"matching_supported"`
-	}{meta.Templates, false})
+		References        []TemplateRef     `json:"references"`
+		Assets            []json.RawMessage `json:"assets"`
+		MatchingSupported bool              `json:"matching_supported"`
+	}{meta.Templates, assets, true})
 	files["templates.json"] = string(templates)
 	files["api/openapi.json"] = g.APIDocument
 	if !json.Valid([]byte(g.APIDocument)) {
 		return nil, "", errors.New("缺少有效 API 文档")
 	}
-	files["capabilities.json"] = `{"contract_version":"sdk-v1","sdk_methods":["Client","device.adb","device.page_info"],"python_dependencies":["mywebscrcpy-sdk"],"template_matching":false,"text_encoding":"ASCII"}`
+	files["capabilities.json"] = `{"contract_version":"sdk-v2","sdk_methods":["Client","device.adb","device.page_info","device.frame","device.match","device.wait_for","device.tap_match","device.tap","device.swipe","device.key","device.text","device.watch_templates"],"python_dependencies":["mywebscrcpy-sdk[vision]"],"template_matching":true,"text_encoding":"ASCII"}`
 	frozen, err := json.Marshal(struct {
 		Files   map[string]string
 		Runtime string
@@ -266,7 +279,11 @@ func (g *Generator) Generate(ctx context.Context, snapshot db.MarkdownScriptReco
 		}
 		if validationErr == nil {
 			validationCtx, stop := context.WithTimeout(ctx, 10*time.Second)
-			validationErr = pythoncheck.Validate(validationCtx, pythonPath, *output.Python)
+			ids := make([]string, 0)
+			for _, ref := range ParseMarkdown(snapshot.Content, time.UnixMilli(snapshot.UpdatedAt)).Templates {
+				ids = append(ids, ref.ID)
+			}
+			validationErr = pythoncheck.ValidateTemplates(validationCtx, pythonPath, *output.Python, ids)
 			stop()
 		}
 		if ctx.Err() != nil {

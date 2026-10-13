@@ -4,10 +4,14 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mywebscrcpy-sdk"
-version = "0.1.0"
+version = "0.2.0"
 description = "Python client for MyWebScrcpy device automation"
 requires-python = ">=3.10"
-dependencies = ["httpx>=0.28,<1"]
+dependencies = ["httpx>=0.28,<1", "websocket-client>=1.8,<2"]
+
+[project.optional-dependencies]
+test = ["websockets>=14,<18"]
+vision = ["av>=14,<20", "opencv-python-headless>=4.10,<5", "numpy>=1.26,<3"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

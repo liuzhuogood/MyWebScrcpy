@@ -1,6 +1,6 @@
 # v1.22.0-feature：Python SDK 与进程内模板匹配设计
 
-当前完整方案仍待实施；v1.21 已承接统一 SDK 的基础 HTTP 能力，具体边界见文末。
+本版已在版本分支实现 SDK 0.2.0；软件验证与待完成的真机/平台验收见 tasks.md 和 session.md。v1.21 的基础能力继续沿用。
 
 ## 背景与目标
 
@@ -14,7 +14,7 @@
 
 本版封装模板 CRUD、主图片、参考图上传、ZIP 导入导出、设备列表、Vision 会话、取帧、单次匹配、等待匹配、持续匹配和 tap/swipe/key/text 动作。设备会话连接直接使用现有 Vision 握手，不假设存在新的 HTTP connect 接口。
 
-不做所有后台 API 的一揽子封装、不新增 UI、不改 Markdown 编译器、不增加调度器、不自动启动主服务、不恢复旧 matches/status/detect/click 路由。现有截图 HTTP API 是截图资产上传和管理，不能当作实时截屏接口；SDK 的 frame() 来自视频解码。
+不做所有后台 API 的一揽子封装、不新增 UI、不增加调度器、不自动启动主服务、不恢复旧 matches/status/detect/click 路由。现有截图 HTTP API 是截图资产上传和管理，不能当作实时截屏接口；SDK 的 frame() 来自视频解码。
 
 不发布到 PyPI、不自动部署，也不删除或替换现有独立模板匹配实现。首版暂不支持全异步 API、YOLO/OCR、多参考图自动聚合匹配与未确认鉴权协议。
 
@@ -44,13 +44,13 @@ packages/python-sdk/
 
 基础安装包含 HTTPX、websocket-client；导入包和管理模板时不得加载 OpenCV/PyAV。`[vision]` 包含 PyAV、opencv-python-headless、NumPy，调用取帧或匹配前检查依赖，缺失给出安装命令。不自行编写 HTTP/WebSocket/视频解码库。
 
-采用 pyproject.toml、src 布局、成熟 setuptools 构建 wheel/sdist。初期可从本地目录或 wheel 安装，候选分发名 `mywebscrcpy-sdk`、导入名 `mywebscrcpy`；PyPI 名称及公开发布另行确认。SDK 元数据只使用纯 SemVer，不把 feature 后缀写入包版本。
+采用 pyproject.toml、src 布局、成熟 setuptools 构建 wheel/sdist。初期可从本地目录或 wheel 安装，候选分发名 `mywebscrcpy-sdk`、导入名 `mywebscrcpy`；PyPI 名称及公开发布另行确认。SDK 元数据只使用纯 SemVer，不把 feature 后缀写入包版本。本版包版本为 0.2.0，主项目 VERSION 不变。
 
 参考：[HTTPX 官方文档](https://www.python-httpx.org/)、[websocket-client 官方文档](https://websocket-client.readthedocs.io/en/latest/)、[PyPA 打包指南](https://packaging.python.org/en/latest/tutorials/packaging-projects/)。
 
 ## API 设计
 
-以下均为拟议 API，当前尚不可运行：
+以下 API 已实现，示例中的模板 ID 必须替换为实际已确认 ID：
 
 ```bash
 pip install './packages/python-sdk[vision]'
@@ -64,7 +64,7 @@ with Client('http://127.0.0.1:8080') as client:
     with client.device('10.0.0.30:5555') as device:
         matches = device.match(template_id='模板ID', timeout=5.0)
         if matches:
-            result = device.tap(matches[0].center)
+            result = device.tap_match(matches[0])
 
         target = device.wait_for(template_id='模板ID', timeout=10.0)
         result = device.tap_match(target, max_age_ms=600)
@@ -75,10 +75,10 @@ with Client('http://127.0.0.1:8080') as client:
 
 | 调用 | 行为与结果 |
 | --- | --- |
-| client.devices.list() | GET /api/devices，返回设备列表；精确 DTO 在实施前核对 |
+| client.devices.list() | GET /api/devices，返回设备列表；已按 Go 实际 DTO 核对 |
 | client.templates.list/create/get/update/delete | 对应现有 HTTP 模板资产接口 |
 | client.templates.image/add_image/import_zip/export_zip | 下载主图片、上传参考图、导入导出 ZIP |
-| client.device(serial) | 创建惰性会话；进入上下文或首次需要会话时握手 |
+| client.device(serial) | 创建惰性会话；首次需要视频或专用动作时握手 |
 | device.adb(args, timeout=30) | 已由 v1.21 基础 SDK 提供；同步调用 POST /api/adb/commands，绑定设备，检查退出码与状态，不自动重试 |
 | device.page_info(timeout=10) | 已由 v1.21 基础 SDK 提供；严格读取 HTTP display.width/height |
 | device.frame(timeout) | 获取调用后到达的下一幅可解码画面，返回 Frame；不返回旧缓存冒充新帧 |
@@ -105,7 +105,7 @@ Frame 包含 frame_id、session_id、device_id、尺寸、服务端时间戳（�
 | 检测结果上行 | 同一 stream 连接发送 detection.result |
 | 检测结果订阅 | WebSocket /api/vision/results?serial=... |
 
-以 Go 注册路由、模型及握手为准；OpenAPI 用来交叉核对，当前 `/images` 未完整列入 OpenAPI，实施时补齐相应文档。所有字段按已确认结构解析，必填字段缺失抛 ProtocolError，不做别名字段、跨层级读取或磁盘回退。允许协议明确声明的可选字段默认值，须在 DTO 中定义。
+以 Go 注册路由、模型及握手为准；OpenAPI 用来交叉核对，本版已补齐 `/images` 的 OpenAPI 描述。所有字段按已确认结构解析，必填字段缺失抛 ProtocolError，不做别名字段、跨层级读取或磁盘回退。允许协议明确声明的可选字段默认值，须在 DTO 中定义。
 
 当前模板元数据包含 method、image_count，但现有 Python 匹配器固定使用 TM_CCOEFF_NORMED，主图片接口只返回一张图。首版明确支持该算法和主图片匹配；其它 method 明确抛 UnsupportedTemplateMethod，多参考图模板返回主图片匹配范围说明，不能宣称全部参考图已参与。实施前需核对服务端 method 的确切值及默认值，不猜测枚举字符串。
 
@@ -149,7 +149,7 @@ sequenceDiagram
 - 首版断流终止任务并报错，由调用方显式重连；重连后不得使用旧 session_id、旧帧或旧 Match。动作绝不自动重发；超时表示执行结果未知，不能等同于未执行。
 - tap_match 校验来源设备、会话、monotonic 帧龄和坐标范围；action.request 中 frame_id/expires_ms 按实际协议发送。当前后端 expires_ms 主要限制动作执行期限，SDK 本地新鲜度检查不能宣称消除了画面变化和点击之间的竞态。
 - 请求包含 protocol_version='1'，透传握手 session_id，使用唯一 request_id。发送互斥，收包按 request_id 唤醒对应动作调用。检测空结果照常上行，用于清除绿框；匹配结果 TTL 默认沿用 600ms，客户端与服务端系统时间偏差可能导致过期拒绝。
-- 默认验证 TLS，支持显式 CA 路径；禁用验证必须显式配置并记录警告。预留显式 headers/cookies 配置，不读取或记录未知凭据。
+- 默认验证 TLS，支持显式 CA 路径；禁用验证必须显式配置并记录警告。提供显式 headers 配置，不读取或记录未知凭据。
 - 使用标准 logging，不修改宿主 root logger。记录连接、会话变化、模板刷新、匹配耗时、重置、超时及动作结果；不记录输入文本、凭据或完整图片。高频帧仅 DEBUG，回调异常可见。
 
 ## 迁移与回滚
@@ -179,4 +179,4 @@ sequenceDiagram
 
 2026-10-13 用户确认先完成 SDK 基础能力并接入 v1.21，完整视频解码与模板匹配留在 v1.22。统一包为 packages/python-sdk、分发名 mywebscrcpy-sdk、导入名 mywebscrcpy；v1.21 基础版 0.1.0 提供 Client、Device.adb/page_info、结果和异常，使用 HTTPX，不另建 mywebscrcpy_runtime。生成脚本通过 ADB 参数执行基础动作，可安装包后在应用外运行。
 
-本版继续在同一 SDK 增加模板管理、Vision 会话、解码、匹配与 action.request/result；不重复 HTTP 连接、错误类型或建立第二套设备封装。当前基础 Device 上下文只管理 HTTP 操作，不开启 Vision；完整会话握手和专用 tap/swipe/key/text 仍按本版契约实施。基础版尚不提供 [vision] 安装项；可选依赖及 websocket-client 在相应能力实现时增加。Markdown 生成和运行接入由 v1.21 完成，本版不再修改该生成链路。
+本版继续在同一 SDK 增加模板管理、Vision 会话、解码、匹配与 action.request/result；不重复 HTTP 连接、错误类型或建立第二套设备封装。当前基础 Device 上下文只管理 HTTP 操作，不开启 Vision；本版已实现完整会话握手和专用 tap/swipe/key/text，并增加 [vision] 安装项与 websocket-client。用户随后授权完整 SDK 实施及 Pi 接入，本版将现有生成契约升级为 sdk-v2，增加视觉方法校验、真实模板 ID 校验与模板内容指纹，并扩展任务桥接的只读模板和 Vision 通路；沿用现有生成流程。

@@ -5,12 +5,16 @@ import json
 import sys
 
 IMPORTS = {"argparse", "os", "time", "shlex"}
-BUILTINS = {"print", "str", "int", "float", "len", "range", "bool", "abs", "min", "max", "RuntimeError", "SystemExit"}
+BUILTINS = {"print", "str", "int", "float", "len", "range", "bool", "abs", "min", "max", "next", "RuntimeError", "SystemExit"}
 ENV_KEYS = {"MYWEBSCRCPY_API_URL", "MYWEBSCRCPY_API_TOKEN"}
-METHODS = {"adb": "args, timeout=30", "page_info": "timeout=10"}
+METHODS = {"adb": "args, timeout=30", "page_info": "timeout=10", "frame": "timeout=10",
+           "match": "template_id, timeout=10", "wait_for": "template_id, timeout=10",
+           "tap_match": "match, max_age_ms=600, timeout=10", "tap": "point, timeout=10",
+           "swipe": "start, end, duration_ms=300, timeout=10", "key": "keycode, meta_state=0, timeout=10",
+           "text": "text, timeout=10", "watch_templates": "publish=False, max_fps=5, timeout=10"}
 
 
-def validate(source):
+def validate(source, allowed_templates=None):
     tree = ast.parse(source)
     compile(tree, "generated.py", "exec")
     imports = [n for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))]
@@ -53,12 +57,14 @@ def validate(source):
                     client_scope = True
                 elif ast.unparse(call.func) == "client.device" and target == "device":
                     device_scope = True
+                elif ast.unparse(call.func) == "device.watch_templates" and target == "watch":
+                    pass
                 else:
-                    raise ValueError("with 仅允许 Client/client.device 上下文")
+                    raise ValueError("with 仅允许 Client/client.device/watch_templates 上下文")
         if isinstance(node, ast.Name):
             if node.id.startswith("_") or isinstance(node.ctx, ast.Store) and node.id in IMPORTS | BUILTINS | {"Client", "main"}:
                 raise ValueError("不允许内部名称或重写导入/入口")
-        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id in {"client", "device"} for t in node.targets):
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id in {"client", "device", "watch"} for t in node.targets):
             raise ValueError("不能重写已绑定的 client/device")
         if isinstance(node, ast.Attribute):
             if node.attr.startswith("_") or isinstance(node.ctx, ast.Store):
@@ -70,7 +76,7 @@ def validate(source):
                 "os": {"environ"}, "os.environ": {"get"}, "argparse": {"ArgumentParser"},
                 "time": {"sleep"}, "shlex": {"quote"}, "client": {"device"}, "device": set(METHODS),
             }
-            local = {"serial", "base_url", "token", "add_argument", "parse_args", "stdout", "stderr", "exit_code", "status", "truncated", "width", "height"}
+            local = {"serial", "base_url", "token", "add_argument", "parse_args", "stdout", "stderr", "exit_code", "status", "truncated", "width", "height", "center", "template_id", "name", "confidence", "x", "y", "w", "h", "frame_id", "session_id", "device_id", "timestamp", "received_at", "accepted", "executed", "error_code", "request_id"}
             if node.attr not in allowed.get(root, local):
                 raise ValueError(f"不支持的属性：{root}.{node.attr}")
         if isinstance(node, ast.Call):
@@ -88,6 +94,14 @@ def validate(source):
                 raise ValueError("client.device 必须传入单个设备参数")
             if isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) and node.func.value.id == "device":
                 signatures[node.func.attr].bind(*node.args, **{k.arg: k.value for k in node.keywords})
+            if name in {"device.match", "device.wait_for"}:
+                template_id = node.args[0] if node.args else next((k.value for k in node.keywords if k.arg == "template_id"), None)
+                if not isinstance(template_id, ast.Constant) or not isinstance(template_id.value, str) or not template_id.value:
+                    raise ValueError("模板 ID 必须是已确认的字符串常量")
+                if allowed_templates is not None and template_id.value not in allowed_templates:
+                    raise ValueError("模板 ID 不在当前文档的冻结引用中")
+            if name == "next" and (len(node.args) != 1 or ast.unparse(node.args[0]) != "watch" or node.keywords):
+                raise ValueError("next 只能读取 watch_templates 的迭代器")
             if name == "os.environ.get" and (not node.args or not isinstance(node.args[0], ast.Constant) or node.args[0].value not in ENV_KEYS):
                 raise ValueError("只能读取服务地址和本次连接令牌")
             if name == "time.sleep" and (len(node.args) != 1 or not isinstance(node.args[0], ast.Constant) or type(node.args[0].value) not in {int, float} or not 0 <= node.args[0].value <= 600):
@@ -108,7 +122,7 @@ def validate(source):
 
 
 try:
-    validate(sys.stdin.read(256 * 1024 + 1))
+    validate(sys.stdin.read(256 * 1024 + 1), json.loads(sys.argv[1]) if len(sys.argv) > 1 else None)
     print(json.dumps({"ok": True}))
 except Exception as error:
     print(json.dumps({"ok": False, "error": str(error)}, ensure_ascii=False))
