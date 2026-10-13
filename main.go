@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -62,21 +61,28 @@ func main() {
 		return
 	}
 	httpsFlag, listenFlag, readyFlag := opts.HTTPS, opts.Listen, opts.Ready
-	executable, err := os.Executable()
-	if err != nil {
-		log.Fatalf("定位程序目录失败: %v", err)
-	}
-	executable, err = filepath.EvalSymlinks(executable)
-	if err != nil {
-		log.Fatalf("解析程序路径失败: %v", err)
-	}
 	piSkills, err := fs.Sub(piSkillsFS, ".pi/skills")
 	if err != nil {
 		log.Fatalf("读取内置技能失败: %v", err)
 	}
-	piRuntime, err := pibundle.Prepare(filepath.Dir(executable), piSkills)
+	dataDir, err := os.Getwd()
 	if err != nil {
-		log.Fatalf("初始化内置 Pi 失败: %v", err)
+		log.Fatal(err)
+	}
+	skillsDir := filepath.Join(dataDir, ".pi", "skills")
+	if err := pibundle.InstallSkills(skillsDir, piSkills); err != nil {
+		log.Fatalf("释放项目技能失败: %v", err)
+	}
+	dependencyManager, err := dependencies.Initialize(dataDir, skillsDir)
+	if err != nil {
+		log.Fatalf("读取依赖配置失败: %v", err)
+	}
+	defer dependencyManager.Close()
+	dependencyManager.BeforeMutation = func() error {
+		if updatePrepared.Load() {
+			return fmt.Errorf("更新正在进行，请稍后修改依赖")
+		}
+		return nil
 	}
 
 	adbPath := findADB()
@@ -124,7 +130,10 @@ func main() {
 	uiPage := uipage.New(adbPath)
 
 	mux := http.NewServeMux()
-	dependencies.RegisterRoutes(mux, *readyFlag != "")
+	dependencies.RegisterRoutes(mux, true)
+	if *readyFlag == "" {
+		dependencies.RegisterSettings(mux, func(next http.HandlerFunc) http.HandlerFunc { return next })
+	}
 	mux.HandleFunc("/api/openapi.json", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			w.Header().Set("Allow", http.MethodGet)
@@ -151,16 +160,27 @@ func main() {
 	}
 
 	var updateTasks *taskmanager.Manager
+	dependencyResume := func() {}
 	updatePrepare = func() error {
 		if !updatePrepared.CompareAndSwap(false, true) {
 			return fmt.Errorf("更新正在进行")
 		}
 		prepared := false
+		freezeDependencies, freezeErr := dependencyManager.BeginMaintenance()
+		if freezeErr != nil {
+			updatePrepared.Store(false)
+			return freezeErr
+		}
+		dependencyResume = freezeDependencies
 		defer func() {
 			if !prepared {
+				dependencyResume()
 				updatePrepared.Store(false)
 			}
 		}()
+		if err := dependencyManager.CheckIdle(); err != nil {
+			return err
+		}
 		if !updateGate.TryLock() {
 			return fmt.Errorf("请关闭投屏连接并等待当前操作完成后再更新")
 		}
@@ -189,6 +209,29 @@ func main() {
 			updateTasks.EndMaintenance()
 		}
 		updateGate.Unlock()
+		dependencyResume()
+	}
+
+	dependencyManager.BeforeADBChange = func() (func(), error) {
+		if !updateGate.TryLock() {
+			return nil, fmt.Errorf("请关闭投屏连接并等待当前操作完成")
+		}
+		if err := hub.CheckDependencyIdle(); err != nil {
+			updateGate.Unlock()
+			return nil, err
+		}
+		if updateTasks != nil {
+			if err := updateTasks.BeginMaintenance(); err != nil {
+				updateGate.Unlock()
+				return nil, err
+			}
+		}
+		return func() {
+			if updateTasks != nil {
+				updateTasks.EndMaintenance()
+			}
+			updateGate.Unlock()
+		}, nil
 	}
 
 	// 模板管理与匹配 API
@@ -250,7 +293,8 @@ func main() {
 		mdHandler.RegisterRoutes(mux)
 
 		// AI 模型配置与代理 API
-		aiSvc := aiprovider.NewService(database, piRuntime)
+		aiSvc := aiprovider.NewService(database, pibundle.Paths{})
+		aiSvc.RuntimeResolver = dependencyManager.AcquirePi
 		taskMgr.Artifacts.ConfigureReports(aiSvc.SummarizeTask)
 		aiHandler := aiprovider.NewHandler(aiSvc)
 		aiHandler.RegisterRoutes(mux)
@@ -260,6 +304,10 @@ func main() {
 	mux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
+			if _, err := dependencies.ADBPath(); err != nil {
+				http.Error(w, "ADB 不可用，请在首页系统配置中安装或配置 ADB", http.StatusServiceUnavailable)
+				return
+			}
 			devices := dm.Devices()
 			w.Header().Set("Content-Type", "application/json")
 			if devices == nil {
@@ -369,18 +417,18 @@ func main() {
 			return
 		}
 		// 先杀掉设备上的 scrcpy server，确保重连时全新启动
-		exec.Command(adbPath, "-s", serial, "shell", "pkill", "-f", "scrcpy").Run()
+		dependencies.Command(adbPath, "-s", serial, "shell", "pkill", "-f", "scrcpy").Run()
 		time.Sleep(300 * time.Millisecond)
 		// 关闭自动旋转
-		exec.Command(adbPath, "-s", serial, "shell", "settings", "put", "system", "accelerometer_rotation", "0").Run()
+		dependencies.Command(adbPath, "-s", serial, "shell", "settings", "put", "system", "accelerometer_rotation", "0").Run()
 		// 读取当前旋转值并切换 0↔1
-		out, _ := exec.Command(adbPath, "-s", serial, "shell", "settings", "get", "system", "user_rotation").Output()
+		out, _ := dependencies.Command(adbPath, "-s", serial, "shell", "settings", "get", "system", "user_rotation").Output()
 		current := strings.TrimSpace(string(out))
 		newRot := "1"
 		if current == "1" {
 			newRot = "0"
 		}
-		exec.Command(adbPath, "-s", serial, "shell", "settings", "put", "system", "user_rotation", newRot).Run()
+		dependencies.Command(adbPath, "-s", serial, "shell", "settings", "put", "system", "user_rotation", newRot).Run()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"rotation": newRot})
 	})
@@ -394,7 +442,7 @@ func main() {
 			return
 		}
 		// 执行 adb shell dumpsys power 获取电源状态
-		out, err := exec.Command(adbPath, "-s", serial, "shell", "dumpsys", "power").Output()
+		out, err := dependencies.Command(adbPath, "-s", serial, "shell", "dumpsys", "power").Output()
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]interface{}{
@@ -429,7 +477,7 @@ func main() {
 			http.Error(w, "missing serial", http.StatusBadRequest)
 			return
 		}
-		if err := exec.Command(adbPath, "-s", serial, "reboot").Run(); err != nil {
+		if err := dependencies.Command(adbPath, "-s", serial, "reboot").Run(); err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusBadGateway)
 			json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": err.Error()})
@@ -474,21 +522,7 @@ func main() {
 }
 
 // findADB 查找 adb 可执行文件。
-func findADB() string {
-	path, err := dependencies.ADBPath()
-	if err == nil {
-		return path
-	}
-	if value := os.Getenv("MYWEBSCRCPY_ADB"); value != "" {
-		log.Printf("ADB 配置不可用: %v", err)
-		return value
-	}
-	if value := dependencies.Current().ADB; value != "" {
-		log.Printf("ADB 配置不可用: %v", err)
-		return value
-	}
-	return "adb"
-}
+func findADB() string { return dependencies.ManagedADB }
 
 // writeJarToTemp 把嵌入的 server jar 写到临时文件。
 func writeJarToTemp() (string, error) {

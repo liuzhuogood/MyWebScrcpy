@@ -238,3 +238,29 @@ func TestRestartKeepsRelativeDataDirectory(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestBackupRuntimeIncludesDependencySettings(t *testing.T) {
+	root := t.TempDir()
+	backup := t.TempDir()
+	p := filepath.Join(root, "dependencies", "config.json")
+	if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
+		t.Fatal(err)
+	}
+	original := []byte(`{"schema":1,"adb":{"source":"system","path":"/original/adb"},"pi":{"source":"builtin"}}`)
+	if err := os.WriteFile(p, original, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := BackupRuntime(root, backup); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Dir(p)); err != nil {
+		t.Fatal(err)
+	}
+	if err := RestoreRuntime(root, backup); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(p)
+	if err != nil || string(got) != string(original) {
+		t.Fatalf("dependency settings were not restored: %s %v", got, err)
+	}
+}

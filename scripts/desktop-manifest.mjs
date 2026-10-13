@@ -10,7 +10,7 @@ function files(dir) {
 const signatures = files(bundle).filter(file => file.endsWith('.sig'))
 if (signatures.length !== 1) throw new Error(`预期一个更新包签名，实际 ${signatures.length}`)
 const signature = signatures[0]
-const extensions = { 'darwin-aarch64': '.app.tar.gz', 'darwin-x86_64': '.app.tar.gz', 'windows-x86_64': '-setup.exe', 'linux-x86_64': '.AppImage' }
+const extensions = { 'darwin-aarch64': '.app.tar.gz', 'darwin-x86_64': '.app.tar.gz', 'windows-x86_64': '-gui-setup.exe', 'linux-x86_64': '.AppImage' }
 if (!extensions[target]) throw new Error(`未知更新平台 ${target}`)
 const artifact = signature.slice(0,-4)
 const name = `mywebscrcpy-${tag}-${target}${extensions[target]}`

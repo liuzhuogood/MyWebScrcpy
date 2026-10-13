@@ -8,9 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"mywebscrcpy/internal/dependencies"
 	"net/http"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -425,7 +425,7 @@ func (h *Hub) invalidateJarReady(serial string) {
 // probeDeviceEnv 在单次 adb shell 往返中同时获取 Android SDK 版本与设备端 jar 文件大小。
 func probeDeviceEnv(adbPath, serial string) (sdk int, jarSize int64, err error) {
 	script := "getprop ro.build.version.sdk; stat -c %s " + scrcpy.DeviceServerPath + " 2>/dev/null || true"
-	out, err := exec.Command(adbPath, "-s", serial, "shell", script).Output()
+	out, err := dependencies.Command(adbPath, "-s", serial, "shell", script).Output()
 	if err != nil {
 		return 0, -1, err
 	}
@@ -454,7 +454,7 @@ func probeDeviceEnv(adbPath, serial string) (sdk int, jarSize int64, err error) 
 }
 
 func androidSDK(adbPath, serial string) (int, error) {
-	out, err := exec.Command(adbPath, "-s", serial, "shell", "getprop", "ro.build.version.sdk").Output()
+	out, err := dependencies.Command(adbPath, "-s", serial, "shell", "getprop", "ro.build.version.sdk").Output()
 	if err != nil {
 		return 0, err
 	}

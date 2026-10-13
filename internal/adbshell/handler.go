@@ -24,9 +24,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"mywebscrcpy/internal/dependencies"
 	"net/http"
 	"os"
-	"os/exec"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -113,9 +113,14 @@ func Handler(adbPath string, online IsOnline) http.HandlerFunc {
 		}()
 
 		// 启动 adb shell 并分配 PTY。
-		cmd := exec.CommandContext(ctx, adbPath, "-s", serial, "shell")
+		cmd := dependencies.CommandContext(ctx, adbPath, "-s", serial, "shell")
 		cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-		ptmx, err := pty.Start(cmd)
+		if err := cmd.Acquire(); err != nil {
+			writeError(conn, err.Error())
+			return
+		}
+		defer cmd.Release()
+		ptmx, err := pty.Start(cmd.Cmd)
 		if err != nil {
 			writeError(conn, fmt.Sprintf("PTY 启动失败: %v", err))
 			return

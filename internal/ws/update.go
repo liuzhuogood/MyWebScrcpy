@@ -18,3 +18,20 @@ func (h *Hub) CheckUpdateIdle() error {
 	}
 	return nil
 }
+
+// CheckDependencyIdle rejects changing ADB while sessions retain forwards and
+// cached device metadata, including sessions waiting for their idle timeout.
+func (h *Hub) CheckDependencyIdle() error {
+	if err := h.CheckUpdateIdle(); err != nil {
+		return err
+	}
+	h.sessionMu.Lock()
+	defer h.sessionMu.Unlock()
+	if len(h.sessions) > 0 || len(h.inflight) > 0 {
+		return fmt.Errorf("请关闭投屏并等待会话释放后再修改 ADB")
+	}
+	h.envMu.Lock()
+	h.deviceEnvs = make(map[string]deviceEnv)
+	h.envMu.Unlock()
+	return nil
+}

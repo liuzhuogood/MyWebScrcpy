@@ -3,7 +3,6 @@ package dependencies
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -14,18 +13,22 @@ import (
 )
 
 type Tool struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Purpose     string `json:"purpose"`
-	Installed   bool   `json:"installed"`
-	Path        string `json:"path"`
-	Version     string `json:"version"`
-	Error       string `json:"error"`
-	DownloadURL string `json:"download_url"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Purpose     string            `json:"purpose"`
+	Installed   bool              `json:"installed"`
+	Path        string            `json:"path"`
+	Version     string            `json:"version"`
+	Error       string            `json:"error"`
+	DownloadURL string            `json:"download_url"`
+	SearchPaths map[string]string `json:"search_paths,omitempty"`
 }
 
 func PythonPath() (string, error) { return configuredPath("MYWEBSCRCPY_PYTHON", "python3") }
 func ADBPath() (string, error) {
+	if active != nil {
+		return active.resolveADB(active.Settings().ADB)
+	}
 	if path := chosenPath("MYWEBSCRCPY_ADB", Current().ADB); path != "" {
 		return checkExecutable(path)
 	}
@@ -65,7 +68,11 @@ func inspect(tool Tool, path string, pathErr error, args ...string) Tool {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Dir = os.TempDir()
-	output, err := cmd.CombinedOutput()
+	var bounded boundedOutput
+	cmd.Stdout = &bounded
+	cmd.Stderr = &bounded
+	err := cmd.Run()
+	output := bounded.Bytes()
 	if err != nil {
 		tool.Error = "程序检查失败: " + err.Error()
 		return tool
@@ -80,6 +87,13 @@ func inspect(tool Tool, path string, pathErr error, args ...string) Tool {
 	return tool
 }
 func List() []Tool {
+	if active != nil {
+		release, e := active.acquire("adb")
+		if e != nil {
+			return []Tool{{ID: "adb", Name: "ADB", Error: e.Error()}}
+		}
+		defer release()
+	}
 	adb, adbErr := ADBPath()
 	python, pythonErr := PythonPath()
 	return []Tool{
@@ -94,17 +108,24 @@ func checkExecutable(path string) (string, error) {
 	}
 	executable, err := exec.LookPath(path)
 	if err != nil {
-		return "", fmt.Errorf("程序不可用: %w", err)
+		return "", fmt.Errorf("找不到或无法执行程序：%s", path)
 	}
 	return executable, nil
 }
 func RegisterRoutes(mux *http.ServeMux, configurable bool) {
 	mux.HandleFunc("GET /api/dependencies", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(struct {
-			Tools        []Tool `json:"tools"`
-			Paths        Paths  `json:"paths"`
-			Configurable bool   `json:"configurable"`
-		}{List(), Current(), configurable})
+		var managed []ManagedTool
+		var settings Settings
+		if active != nil {
+			managed = active.Tools()
+			settings = active.Settings()
+		}
+		respond(w, struct {
+			Tools        []Tool        `json:"tools"`
+			Paths        Paths         `json:"paths"`
+			Configurable bool          `json:"configurable"`
+			Managed      []ManagedTool `json:"managed"`
+			Config       Settings      `json:"config"`
+		}{List(), Current(), configurable, managed, settings})
 	})
 }

@@ -1,0 +1,36 @@
+{
+  "headers": {
+    "Content-Type": "application/json",
+    "Host": "proxy.example:8080",
+    "Origin": "https://frontend.example",
+    "Sec-Fetch-Site": "cross-site"
+  },
+  "results": [
+    {
+      "method": "POST",
+      "endpoint": "/api/dependencies/detect",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "endpoint": "/api/dependencies/install",
+      "status": 409
+    },
+    {
+      "method": "PUT",
+      "endpoint": "/api/dependencies/config",
+      "status": 409
+    },
+    {
+      "method": "DELETE",
+      "endpoint": "/api/dependencies/installed/unknown",
+      "status": 409
+    },
+    {
+      "method": "DELETE",
+      "endpoint": "/api/dependencies/install/unknown",
+      "status": 409
+    }
+  ],
+  "configurable": true
+}

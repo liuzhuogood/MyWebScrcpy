@@ -153,9 +153,17 @@ func MatchAsset(assets []ReleaseAsset, goos, goarch string) *ReleaseAsset {
 		expectedSuffix = fmt.Sprintf("%s-%s", goos, goarch)
 	}
 
-	for _, a := range assets {
-		if a.Name == "mywebscrcpy-"+expectedSuffix {
-			return &a
+	cliSuffix := expectedSuffix + "-cli"
+	if goos == "windows" && goarch == "amd64" {
+		cliSuffix = "windows-cli-amd64.exe"
+	}
+	// Prefer the CLI distribution. The exact historical name remains supported
+	// for releases published before CLI and GUI assets were separated.
+	for _, name := range []string{"mywebscrcpy-" + cliSuffix, "mywebscrcpy-" + expectedSuffix} {
+		for _, a := range assets {
+			if a.Name == name {
+				return &a
+			}
 		}
 	}
 	return nil

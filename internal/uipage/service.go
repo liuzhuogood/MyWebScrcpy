@@ -4,7 +4,7 @@ package uipage
 import (
 	"context"
 	"errors"
-	"os/exec"
+	"mywebscrcpy/internal/dependencies"
 	"regexp"
 	"strconv"
 	"strings"
@@ -54,7 +54,7 @@ type Service struct {
 // New creates a Service using real adb binary.
 func New(adbPath string) *Service {
 	return NewWithRunner(func(ctx context.Context, args ...string) ([]byte, error) {
-		return exec.CommandContext(ctx, adbPath, args...).Output()
+		return dependencies.CommandContext(ctx, adbPath, args...).Output()
 	})
 }
 

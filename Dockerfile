@@ -15,7 +15,7 @@ WORKDIR /app
 ENV MYWEBSCRCPY_RUNTIME=docker
 
 # 复制二进制文件
-COPY mywebscrcpy-linux-amd64 /app/mywebscrcpy
+COPY mywebscrcpy-linux-amd64-cli /app/mywebscrcpy
 
 # 创建数据目录
 RUN mkdir -p /data

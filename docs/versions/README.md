@@ -10,7 +10,7 @@
 - **已被后续版本替代**：历史功能、入口或决定已由后续版本修正或移除，原勾选只表示当时实施。
 - **待实施**：仅有方案或文档，当前未完成代码实现。
 
-版本目录名、提交标题、正式 `VERSION` 和部署状态分别核对。当前正式 `VERSION` 为 `v1.12.0`。v1.12 于 2026-10-09 调整为 Web 端重构；旧 `v1.12` 提交只有原方案文档；本次重构发布使用 `v1.12.0` 标签，提交和远端指向以 Git 记录为准。
+版本目录名、提交标题、正式 `VERSION` 和部署状态分别核对。当前正式 `VERSION` 为 `v1.20.1`。v1.12 于 2026-10-09 调整为 Web 端重构；旧 `v1.12` 提交只有原方案文档；本次重构发布使用 `v1.12.0` 标签，提交和远端指向以 Git 记录为准。
 
 ## 主项目
 
@@ -46,8 +46,11 @@
 | [v1.19.0-feature](v1.19.0-feature/version.md) | 已实现并完成真机压测 | 投屏启动加速与会话并发优化：`cleanup=false` 保留设备端 Jar、按设备缓存 SDK 与 Jar 状态、移除 1500ms 硬编码等待与冗余校验、按 serial 单飞建连并延长保活至 60s。真机冷启动首帧由 2.66s 降至 0.53s~0.89s（提速 3.0x~3.9x）。 |
 | [v1.19.1-fix](v1.19.1-fix/version.md) | 五平台编译成功；发布被运行测试拦截 | Windows 进程树清理测试通过；原生测试发现中文输出编码与调度测试文件追加问题，转 `v1.19.2-fix` 处理。 |
 | [v1.19.2-fix](v1.19.2-fix/version.md) | 已修复并发布 | 2026-10-12 [GitHub Actions](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/38155571572) 的五平台编译、Windows 原生测试、Release 和 Docker 全部成功；[Release](https://github.com/liuzhuogood/MyWebScrcpy/releases/tag/v1.19.2) 已发布五个程序文件。修复提交 `b6d2077`，保留前序标签。 |
+| [v1.19.5-feature](v1.19.5-feature/version.md) | 已实现；纳入 v1.20.1 | 首页系统配置、三主题、Pi/ADB 独立安装与来源配置；scrcpy-server 继续内嵌。本次正式版本为 v1.20.1。 |
 
 | [v1.20.0-feature](v1.20.0-feature/version.md) | 进行中 | Tauri 桌面窗口、原生菜单、托盘、GUI/服务模式与独立依赖管理；三平台验证分别记录。 |
+| [v1.20.1-feature](v1.20.1-feature/version.md) | 正式版本已同步；发布包另行验收 | 系统配置、主题、Pi/ADB 按需安装与卸载、系统路径自动检测、主程序依赖拆包；保留 v1.21.0 设计记录。 |
+| [v1.21.0-feature](v1.21.0-feature/version.md) | 已创建设计；待实施 | Pi 专用技能生成 Python、基础运行库、产物校验与来源记录；旧编译路径切换和模板匹配范围待确认。 |
 
 ## Vue 前端迁移版本
 

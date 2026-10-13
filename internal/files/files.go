@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"mywebscrcpy/internal/dependencies"
 	"os"
-	"os/exec"
 	"path"
 	"sort"
 	"strconv"
@@ -72,7 +72,7 @@ func NewManager(adbPath string) *Manager {
 
 func (m *Manager) exec(serial string, args ...string) ([]byte, error) {
 	commandArgs := append([]string{"-s", serial}, args...)
-	output, err := exec.Command(m.adbPath, commandArgs...).CombinedOutput()
+	output, err := dependencies.Command(m.adbPath, commandArgs...).CombinedOutput()
 	if err != nil && len(output) > 0 {
 		return output, fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
 	}
@@ -81,7 +81,7 @@ func (m *Manager) exec(serial string, args ...string) ([]byte, error) {
 
 func (m *Manager) execStream(serial string, dst io.Writer, args ...string) error {
 	commandArgs := append([]string{"-s", serial}, args...)
-	cmd := exec.Command(m.adbPath, commandArgs...)
+	cmd := dependencies.Command(m.adbPath, commandArgs...)
 	cmd.Stdout = dst
 	stderr, err := cmd.StderrPipe()
 	if err != nil {

@@ -15,6 +15,10 @@ type runtimeOptions struct {
 	Exit          bool
 }
 
+// Release CLI builds set this with -X main.distributionMode=cli.
+// Development and desktop sidecars retain the existing automatic launcher.
+var distributionMode = "auto"
+
 func parseRuntimeOptions() runtimeOptions {
 	httpsFlag := flag.Bool("https", false, "启用 HTTPS（使用内置证书）")
 	guiFlag := flag.Bool("gui", false, "启动桌面窗口")
@@ -24,6 +28,12 @@ func parseRuntimeOptions() runtimeOptions {
 	printModeFlag := flag.Bool("print-mode", false, "输出自动选择的启动模式")
 	readyFlag := flag.String("desktop-ready", "", "桌面宿主专用就绪文件")
 	flag.Parse()
+	if distributionMode == "cli" {
+		if *guiFlag {
+			log.Fatal("CLI 版本仅运行服务，请使用 GUI 版本打开桌面窗口")
+		}
+		*noGUIFlag = true
+	}
 	if flag.NArg() != 0 {
 		log.Fatalf("不支持的位置参数: %v", flag.Args())
 	}

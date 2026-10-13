@@ -3,8 +3,8 @@ package device
 import (
 	"context"
 	"fmt"
+	"mywebscrcpy/internal/dependencies"
 	"os"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +15,7 @@ import (
 // Device 表示一台设备，融合了 adb 动态状态与持久化配置。
 type Device struct {
 	Serial        string `json:"serial"`
-	State         string `json:"state"` // "device", "offline", "connecting", "unauthorized" 等
+	State         string `json:"state"`  // "device", "offline", "connecting", "unauthorized" 等
 	Source        string `json:"source"` // "auto" (自动发现) 或 "manual" (手动添加)
 	Alias         string `json:"alias,omitempty"`
 	Product       string `json:"product,omitempty"`
@@ -27,11 +27,11 @@ type Device struct {
 
 // Manager 负责跟踪 adb 设备列表并守护手动添加设备的连接与持久化。
 type Manager struct {
-	adbPath  string
-	db       *db.DB
-	mu       sync.RWMutex
-	devices  []Device
-	stop     chan struct{}
+	adbPath string
+	db      *db.DB
+	mu      sync.RWMutex
+	devices []Device
+	stop    chan struct{}
 }
 
 // NewManager 创建设备管理器。
@@ -174,7 +174,7 @@ func (m *Manager) Connect(serial string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, m.adbPath, "connect", serial)
+	cmd := dependencies.CommandContext(ctx, m.adbPath, "connect", serial)
 	cmd.Dir = os.TempDir()
 	out, err := cmd.CombinedOutput()
 	output := string(out)
@@ -240,7 +240,7 @@ func (m *Manager) RemoveManualDevice(serial string) error {
 
 	// 可选尝试断开 adb disconnect
 	go func() {
-		cmd := exec.Command(m.adbPath, "disconnect", serial)
+		cmd := dependencies.Command(m.adbPath, "disconnect", serial)
 		cmd.Dir = os.TempDir()
 		_ = cmd.Run()
 	}()
@@ -265,7 +265,7 @@ func (m *Manager) UpdateAlias(serial, alias string) error {
 
 // ListDevices 执行一次 adb devices -l 并返回解析结果。
 func (m *Manager) ListDevices() ([]Device, error) {
-	cmd := exec.Command(m.adbPath, "devices", "-l")
+	cmd := dependencies.Command(m.adbPath, "devices", "-l")
 	cmd.Dir = os.TempDir()
 	out, err := cmd.Output()
 	if err != nil {

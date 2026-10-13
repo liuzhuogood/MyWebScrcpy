@@ -25,7 +25,16 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, emit func(Cha
 	if err != nil {
 		return fmt.Errorf("读取模型配置失败: %w", err)
 	}
-	err = runPi(ctx, s.piRuntime, cfg, req, emit)
+	paths := s.piRuntime
+	if s.RuntimeResolver != nil {
+		resolved, release, e := s.RuntimeResolver()
+		if e != nil {
+			return e
+		}
+		defer release()
+		paths = resolved
+	}
+	err = runPi(ctx, paths, cfg, req, emit)
 	if err != nil && cfg.APIKey != "" && strings.Contains(err.Error(), cfg.APIKey) {
 		return errors.New(strings.ReplaceAll(err.Error(), cfg.APIKey, "[已隐藏]"))
 	}
@@ -39,8 +48,8 @@ func runPi(ctx context.Context, paths pibundle.Paths, cfg ModelConfig, req ChatR
 	if cfg.APIKey == "" && cfg.Provider != "ollama" {
 		return errors.New("请先配置模型 API Key")
 	}
-	if !filepath.IsAbs(paths.Executable) || !filepath.IsAbs(paths.ToolsDir) {
-		return errors.New("内置 Pi 运行环境路径无效")
+	if !filepath.IsAbs(paths.Executable) || !filepath.IsAbs(paths.FD) || !filepath.IsAbs(paths.RG) {
+		return errors.New("Pi 运行环境路径无效")
 	}
 	skillsDir, err := resolvePiSkillsDir(paths.SkillsDir)
 	if err != nil {
@@ -57,7 +66,7 @@ func runPi(ctx context.Context, paths pibundle.Paths, cfg ModelConfig, req ChatR
 	if err := preparePiWorkspace(agentDir, workspace, cfg, req); err != nil {
 		return err
 	}
-	if err := preparePiTools(paths.ToolsDir, agentDir); err != nil {
+	if err := preparePiTools(paths, agentDir); err != nil {
 		return fmt.Errorf("准备 Pi 搜索工具失败: %w", err)
 	}
 	systemPrompt := req.Messages[0].Content + "\n你是文档助手，只提交建议，不执行手机操作或修改文件。current.md 是当前文档，conversation.json 是对话历史。可用只读工具调研这些资料。以最后一条用户消息为本次需求。"
@@ -91,7 +100,7 @@ func runPi(ctx context.Context, paths pibundle.Paths, cfg ModelConfig, req ChatR
 		return fmt.Errorf("创建 Pi 输出失败: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("启动内置 Pi 失败: %w", err)
+		return fmt.Errorf("启动 Pi 失败: %w", err)
 	}
 	started := time.Now()
 	log.Printf("[ScriptAssistant] Pi 启动 pid=%d skills_dir=%q", cmd.Process.Pid, skillsDir)
@@ -212,16 +221,16 @@ func piEnvironment(agentDir, key string) []string {
 }
 
 // Pi resolves managed fd/rg from its private agent bin directory first.
-func preparePiTools(toolsDir, agentDir string) error {
+func preparePiTools(paths pibundle.Paths, agentDir string) error {
 	binDir := filepath.Join(agentDir, "bin")
 	if err := os.Mkdir(binDir, 0700); err != nil {
 		return err
 	}
-	for _, name := range []string{"fd", "rg"} {
+	for name, sourcePath := range map[string]string{"fd": paths.FD, "rg": paths.RG} {
 		if runtime.GOOS == "windows" {
 			name += ".exe"
 		}
-		if err := copyPiTool(filepath.Join(toolsDir, name), filepath.Join(binDir, name)); err != nil {
+		if err := copyPiTool(sourcePath, filepath.Join(binDir, name)); err != nil {
 			return err
 		}
 	}

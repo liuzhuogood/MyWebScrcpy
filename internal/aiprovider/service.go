@@ -37,9 +37,10 @@ type ChatRequest struct {
 }
 
 type Service struct {
-	database  *db.DB
-	client    *http.Client
-	piRuntime pibundle.Paths
+	database        *db.DB
+	client          *http.Client
+	piRuntime       pibundle.Paths
+	RuntimeResolver func() (pibundle.Paths, func(), error)
 }
 
 func NewService(database *db.DB, piRuntime pibundle.Paths) *Service {

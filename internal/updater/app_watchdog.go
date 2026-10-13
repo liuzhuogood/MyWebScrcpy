@@ -25,7 +25,7 @@ type AppPlan struct {
 	Pending string `json:"pending"`
 }
 
-var runtimeFiles = []string{"data/mywebscrcpy.db", "data/mywebscrcpy.db-wal", "data/mywebscrcpy.db-shm", "dependencies.json"}
+var runtimeFiles = []string{"data/mywebscrcpy.db", "data/mywebscrcpy.db-wal", "data/mywebscrcpy.db-shm", "dependencies.json", "dependencies/config.json"}
 
 func BackupRuntime(data, destination string) error {
 	if err := os.MkdirAll(destination, 0700); err != nil {
@@ -59,6 +59,9 @@ func RestoreRuntime(data, source string) error {
 		}
 	}
 	for _, name := range present {
+		if err = os.MkdirAll(filepath.Dir(filepath.Join(data, name)), 0700); err != nil {
+			return err
+		}
 		if err = copyFile(filepath.Join(source, filepath.Base(name)), filepath.Join(data, name)); err != nil {
 			return err
 		}

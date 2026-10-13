@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
-import { Ellipsis, FileCode2, Github, LayoutGrid, Sparkles } from 'lucide-vue-next'
+import { onMounted, ref } from 'vue'
+import { Ellipsis, FileCode2, Github, LayoutGrid, Settings, Sparkles } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { useUpdaterStore } from '@/stores/updater'
 import UpdateNoticeDialog from '@/components/updater/UpdateNoticeDialog.vue'
+import SystemConfigDialog from '@/components/system/SystemConfigDialog.vue'
+const configOpen = ref(false)
 
 defineProps<{ deviceCountText: string }>()
 
@@ -84,9 +86,10 @@ onMounted(() => {
           <a href="/api-docs.html" target="_blank" rel="noopener">API 文档</a>
         </Button>
       </div>
+      <Button variant="ghost" size="sm" class="ml-auto shrink-0 xl:ml-0" aria-label="系统配置" @click="configOpen = true"><Settings class="size-4" /><span class="hidden sm:inline">系统配置</span></Button>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
-          <Button class="ml-auto xl:hidden" variant="ghost" size="icon" title="更多" aria-label="更多">
+          <Button class="xl:hidden" variant="ghost" size="icon" title="更多" aria-label="更多">
             <Ellipsis class="h-5 w-5" />
           </Button>
         </DropdownMenuTrigger>
@@ -111,5 +114,6 @@ onMounted(() => {
       </DropdownMenu>
     </div>
     <UpdateNoticeDialog />
+    <SystemConfigDialog v-model:open="configOpen" />
   </header>
 </template>

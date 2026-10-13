@@ -1,6 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod backend;
+#[cfg(any(test, all(windows, not(debug_assertions))))]
+mod embedded_service;
 mod links;
 mod menu;
 mod update_backup;

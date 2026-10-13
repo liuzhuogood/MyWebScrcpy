@@ -23,26 +23,33 @@ pub struct Backend {
 }
 
 pub fn executable() -> Result<PathBuf, String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let name = if cfg!(windows) {
-        "mywebscrcpy.exe"
-    } else {
-        "mywebscrcpy"
-    };
-    let bundled = exe.parent().ok_or("无法定位 App 目录")?.join(name);
-    if bundled.is_file() {
-        return Ok(bundled);
+    #[cfg(all(windows, not(debug_assertions)))]
+    {
+        return crate::embedded_service::executable();
     }
-    // cargo run/check uses the target-specific, explicitly configured sidecar.
-    let suffix = if cfg!(windows) { ".exe" } else { "" };
-    let development = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-        "binaries/mywebscrcpy-{}{suffix}",
-        env!("DESKTOP_TARGET")
-    ));
-    if cfg!(debug_assertions) && development.is_file() {
-        return Ok(development);
+    #[cfg(not(all(windows, not(debug_assertions))))]
+    {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let name = if cfg!(windows) {
+            "mywebscrcpy.exe"
+        } else {
+            "mywebscrcpy"
+        };
+        let bundled = exe.parent().ok_or("无法定位 App 目录")?.join(name);
+        if bundled.is_file() {
+            return Ok(bundled);
+        }
+        // cargo run/check uses the target-specific, explicitly configured sidecar.
+        let suffix = if cfg!(windows) { ".exe" } else { "" };
+        let development = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+            "binaries/mywebscrcpy-{}{suffix}",
+            env!("DESKTOP_TARGET")
+        ));
+        if cfg!(debug_assertions) && development.is_file() {
+            return Ok(development);
+        }
+        Err(format!("缺少配套服务程序: {}", bundled.display()))
     }
-    Err(format!("缺少配套服务程序: {}", bundled.display()))
 }
 
 pub fn command(path: &Path) -> Command {

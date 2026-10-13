@@ -128,11 +128,11 @@ pnpm --dir frontend dev
 ```
 
 打开 `http://localhost:5173/`。开发服务器将 HTTP API 和 WebSocket 请求代理到 `http://localhost:8080`。
-发布时使用 `bash scripts/build.sh`：前端产物、目标平台的 Pi 独立程序和项目 `.pi/skills/` 一起嵌入 Go 程序。运行时无需安装 Pi 或 Node.js，启动时释放到程序旁的 `.pi/`，保留已有技能修改。详细说明见 [Pi 文档助手](docs/pi-assistant.md)。
-直接运行 `go build` 不会更新前端产物，也不会准备 Pi 依赖；需先运行 `python3 scripts/prepare-pi.py`。跨平台构建示例：
+发布时使用 `bash scripts/build.sh`：前端、scrcpy-server.jar 和项目技能嵌入 Go 程序；Pi/fd/rg 不再打进主程序或桌面安装包。首页顶端“系统配置”支持主题切换、Pi/ADB 按需安装、内置/系统来源及路径设置和卸载。内置依赖安装在数据根目录的 `dependencies/`；项目技能仍保留用户修改。详细说明见 [系统配置](docs/system-config.md) 和 [Pi 文档助手](docs/pi-assistant.md)。
+直接运行 `go build` 不会更新前端产物；主程序构建不需要准备或下载 Pi。跨平台构建示例：
 
 ```bash
-GOOS=linux GOARCH=amd64 CGO_ENABLED=0 bash scripts/build.sh -o mywebscrcpy-linux-amd64
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 bash scripts/build.sh -ldflags="-s -w -X main.distributionMode=cli" -o mywebscrcpy-linux-amd64-cli
 ```
 
 文件管理从投屏页面“更多”菜单打开，操作对象是当前选定手机的 `/storage/emulated/0` 共享存储。多手机场景下，每个投屏页面都会绑定自己的设备。

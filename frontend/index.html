@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="%BASE_URL%app-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      try {
+        const mode = localStorage.getItem('mywebscrcpy-theme') || 'auto';
+        document.documentElement.classList.toggle('dark', mode === 'dark' || mode === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
+      } catch (_) { document.documentElement.classList.toggle('dark', matchMedia('(prefers-color-scheme: dark)').matches); }
+    </script>
     <title>MyWebScrcpy - 设备列表</title>
   </head>
   <body>

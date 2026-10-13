@@ -13,7 +13,7 @@ export interface Device {
 export async function fetchDevices(): Promise<Device[]> {
   const res = await fetch('/api/devices')
   if (!res.ok)
-    throw new Error(`获取设备列表失败（${res.status}）`)
+    throw new Error((await res.text()).trim() || `获取设备列表失败（${res.status}）`)
   return res.json()
 }
 

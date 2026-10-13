@@ -1,7 +1,7 @@
 package aiprovider
 
 import (
-	"errors"
+	"os"
 	"testing"
 	"testing/fstest"
 
@@ -10,10 +10,11 @@ import (
 
 func bundledPiForTest(t *testing.T) pibundle.Paths {
 	t.Helper()
-	paths, err := pibundle.Prepare(t.TempDir(), fstest.MapFS{})
-	if errors.Is(err, pibundle.ErrUnprepared) {
-		t.Skip("先运行 python3 scripts/prepare-pi.py 以验证内置 Pi")
+	source := os.Getenv("MYWEBSCRCPY_PI_TEST_PAYLOAD")
+	if source == "" {
+		t.Skip("设置 MYWEBSCRCPY_PI_TEST_PAYLOAD 验证独立 Pi 包")
 	}
+	paths, err := pibundle.PrepareFrom(t.TempDir(), fstest.MapFS{}, os.DirFS(source))
 	if err != nil {
 		t.Fatal(err)
 	}
