@@ -127,6 +127,8 @@ jobs:
         run: node scripts/verification/update-signature.mjs
       - name: Go regression
         run: go test ./...
+      - name: Verify multi-device startup and independent stop repeatedly
+        run: go test -count=3 ./internal/mdscript -run TestMultiDeviceArgumentsAndIndependentStop
       - name: Verify embedded service cache
         run: cargo test --locked --manifest-path desktop/Cargo.toml embedded_service::tests
       - name: Verify standalone Windows GUI service

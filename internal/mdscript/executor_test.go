@@ -56,14 +56,16 @@ func waitTask(t *testing.T, d *db.DB, id, status string) {
 
 func TestMultiDeviceArgumentsAndIndependentStop(t *testing.T) {
 	d, mgr, executor := testExecutor(t)
-	content := "version: 1.0.0\ntimeout_sec: 10\n# 流程\n- 等待\n"
-	script, err := d.CreateMarkdownScript("多设备", []string{"device-A", "device-B"}, content, "1.0.0", "", 1, 10)
+	content := "version: 1.0.0\ntimeout_sec: 60\n# 流程\n- 等待\n"
+	script, err := d.CreateMarkdownScript("多设备", []string{"device-A", "device-B"}, content, "1.0.0", "", 1, 60)
 	if err != nil {
 		t.Fatal(err)
 	}
 	outputDir := t.TempDir()
 	directory, _ := json.Marshal(outputDir)
-	python := fmt.Sprintf("import sys, pathlib, time\np = pathlib.Path(%s) / sys.argv[1]\np.write_text(sys.argv[1], encoding='utf-8')\ntime.sleep(10)\n", directory)
+	// Stay alive until the test stops each task; slow interpreter startup must
+	// not consume the other device's lifetime before independent-stop checks.
+	python := fmt.Sprintf("import sys, pathlib, time\np = pathlib.Path(%s) / sys.argv[1]\np.write_text(sys.argv[1], encoding='utf-8')\nwhile True:\n    time.sleep(0.1)\n", directory)
 	if err := d.SaveCompiledPython(script.ID, "1.0.0", python); err != nil {
 		t.Fatal(err)
 	}
@@ -71,22 +73,27 @@ func TestMultiDeviceArgumentsAndIndependentStop(t *testing.T) {
 	if err != nil || len(results) != 2 || results[0].Status != "started" || results[1].Status != "started" {
 		t.Fatalf("%+v %v", results, err)
 	}
+	deadline := time.Now().Add(15 * time.Second)
 	for _, result := range results {
-		deadline := time.Now().Add(3 * time.Second)
 		var data []byte
 		for time.Now().Before(deadline) {
 			data, err = os.ReadFile(filepath.Join(outputDir, result.DeviceSerial))
 			if err == nil && string(data) == result.DeviceSerial {
 				break
 			}
+			record, taskErr := d.GetTaskByID(result.Task.ID)
+			if taskErr != nil || record == nil || record.Status != "running" {
+				t.Fatalf("Python exited before device readiness: task=%+v error=%v", record, taskErr)
+			}
 			time.Sleep(20 * time.Millisecond)
 		}
 		if string(data) != result.DeviceSerial {
-			t.Fatalf("Python did not receive device argument: %q %v", data, err)
+			record, taskErr := d.GetTaskByID(result.Task.ID)
+			t.Fatalf("Python readiness timed out: argument=%q fileError=%v task=%+v taskError=%v", data, err, record, taskErr)
 		}
 	}
 	// Editing future targets must not change either running instance's device.
-	if err := d.UpdateMarkdownScript(script.ID, script.Name, []string{"device-C"}, content, "1.0.0", "", 1, 10); err != nil {
+	if err := d.UpdateMarkdownScript(script.ID, script.Name, []string{"device-C"}, content, "1.0.0", "", 1, 60); err != nil {
 		t.Fatal(err)
 	}
 	if err := mgr.KillTask(results[0].Task.ID); err != nil {
