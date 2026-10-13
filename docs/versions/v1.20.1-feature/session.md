@@ -37,3 +37,11 @@
 Docker Hub 的 `liuzhuogood/mywebscrcpy:v1.20.1` 和 `latest` 均可读取 Linux AMD64 清单，镜像摘要一致：`sha256:3c5cf027a17ca9e86f0a78937041cf1ffecb193557e8a22397bd01e994f44e3d`。本轮核对构建、推送与远端清单，不包含本机 Docker 容器运行或真实手机验收。Windows GUI 验证包含独立 exe 的内嵌服务运行，不包含窗口/手机交互验收。
 
 原 v1.20.1 标签更新已获用户明确授权，使用精确旧标签对象的 force-with-lease 推送并核对远端。最终验收记录在发布后补写，仅普通推送 main，标签继续保留在已通过 CI 的源码提交，不因文档收尾再次触发发布。
+
+## macOS DMG 补充
+
+用户追加要求增加 macOS DMG。下载清单增加 Intel AMD64 和 Apple Silicon ARM64 两个 GUI 安装包，共 9 个程序与原 Windows 更新索引。采用 Tauri 原生 DMG 打包，原生 macOS runner 分别构建，并验证桌面服务、挂载磁盘镜像、App 版本、GUI/Go 服务架构和代码签名。未增加 macOS 自动更新归档，DMG 使用手动安装更新。
+
+新增可复用 `macOS DMG` 工作流，正式 Release 与 Docker 等待两种 DMG 验证成功。用户明确要求在 GitHub Actions 中加入两个产物后重新打标签发布，因此本次提交推送后更新 v1.20.1 标签，完整重新构建，所有产物使用同一标签源码。远程构建与实际资产验收结果待构建完成后补充。
+
+同时核查用户询问的目录清理：根目录无 `piundle`，`internal/pibundle` 仍被技能安装、独立依赖解压校验与测试引用，不能整目录删除。可再生成的旧 payload、Pi 下载/测试缓存、桌面编译目标及生成的 sidecar 可清理；数据库、已安装依赖、技能与源码保留。本次未执行删除。

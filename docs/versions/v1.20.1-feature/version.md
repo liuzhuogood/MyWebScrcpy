@@ -20,7 +20,9 @@
 - `mywebscrcpy-windows-cli-amd64.exe`
 - `mywebscrcpy-windows-gui-amd64.exe`
 - `mywebscrcpy-v1.20.1-windows-x86_64-gui-setup.exe`
+- `mywebscrcpy-v1.20.1-macos-amd64-gui.dmg`
+- `mywebscrcpy-v1.20.1-macos-arm64-gui.dmg`
 
-另保留用户确认的 `desktop-latest.json` 小型 GUI 自动更新索引，签名包含在索引中，不另外发布 `.sig`。Windows GUI exe 内嵌 Go 服务，可独立释放并启动；系统需具备 WebView2，安装包会处理缺失的 WebView2。CLI 默认服务模式，更新器优先精确匹配新 CLI 文件名，保留旧版本精确名称读取；Docker 使用新 Linux CLI。旧 CLI 若不能匹配新资产名需手动下载一次。macOS/Linux GUI 包停止发布，现有 GUI 后续可选择 CLI 或自行构建。
+另保留用户确认的 `desktop-latest.json` 小型 GUI 自动更新索引，签名包含在索引中，不另外发布 `.sig`。Windows GUI exe 内嵌 Go 服务，可独立释放并启动；系统需具备 WebView2，安装包会处理缺失的 WebView2。CLI 默认服务模式，更新器优先精确匹配新 CLI 文件名，保留旧版本精确名称读取；Docker 使用新 Linux CLI。旧 CLI 若不能匹配新资产名需手动下载一次。按用户追加要求补充 macOS 两种 GUI DMG，拖到 Applications 安装，使用 DMG 手动更新；Linux GUI 包停止发布。
 
 Windows GUI 安装版使用索引自动更新；独立 GUI exe 使用完整安装包更新，避免安装器更新后仍重新打开旧便携文件。

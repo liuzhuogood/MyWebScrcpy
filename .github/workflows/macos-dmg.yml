@@ -1,0 +1,68 @@
+name: macOS DMG
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            arch: arm64
+          - os: macos-15-intel
+            arch: amd64
+    runs-on: ${{ matrix.os }}
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      DESKTOP_BUNDLES: dmg
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '11.7.0'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.90.0'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Validate tagged source
+        run: |
+          test "$(cat VERSION | tr -d '\r\n')" = "$RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+          node scripts/sync-version.mjs --check
+          node --test scripts/sync-version.test.mjs
+      - run: pnpm --dir frontend install --frozen-lockfile
+      - run: pnpm --dir desktop install --frozen-lockfile
+      - name: Build macOS GUI disk image
+        run: node scripts/build-desktop.mjs
+      - name: Verify mounted DMG and name GUI asset
+        run: node scripts/verification/macos-dmg.mjs desktop/target/release/bundle ${{ matrix.arch }} "$RELEASE_TAG" dmg-artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos-${{ matrix.arch }}-dmg
+          path: dmg-artifacts/*.dmg
+          if-no-files-found: error

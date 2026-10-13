@@ -29,13 +29,13 @@ try {
  run('scripts/merge-desktop-manifests.mjs',['artifacts','windows-x86_64'])
  const windows=JSON.parse(await readFile(path.join(temp,'desktop-latest.json'),'utf8'))
  assert.deepEqual(Object.keys(windows.platforms),['windows-x86_64'])
- const programs=['mywebscrcpy-linux-amd64-cli','mywebscrcpy-linux-arm64-cli','mywebscrcpy-macos-amd64-cli','mywebscrcpy-macos-arm64-cli','mywebscrcpy-windows-cli-amd64.exe','mywebscrcpy-windows-gui-amd64.exe']
+ const programs=['mywebscrcpy-linux-amd64-cli','mywebscrcpy-linux-arm64-cli','mywebscrcpy-macos-amd64-cli','mywebscrcpy-macos-arm64-cli','mywebscrcpy-windows-cli-amd64.exe','mywebscrcpy-windows-gui-amd64.exe',`mywebscrcpy-${version}-macos-amd64-gui.dmg`,`mywebscrcpy-${version}-macos-arm64-gui.dmg`]
  for(const name of programs) await writeFile(path.join(temp,'artifacts',name),'program')
  await writeFile(path.join(temp,'artifacts','old-unwanted.exe'),'old asset')
  run('scripts/release-assets.mjs',['artifacts','desktop-latest.json','release-assets'])
  const {readdir}=await import('node:fs/promises')
  assert.deepEqual((await readdir(path.join(temp,'release-assets'))).sort(),[...programs,`mywebscrcpy-${version}-windows-x86_64-gui-setup.exe`,'desktop-latest.json'].sort())
- await rm(path.join(temp,'artifacts',programs[0]))
+ await rm(path.join(temp,'artifacts',programs.at(-1)))
  run('scripts/release-assets.mjs',['artifacts','desktop-latest.json','incomplete-release'],1)
  console.log('PASS: platform filenames, manifest merge, architecture separation and incomplete release rejection')
 }finally{await rm(temp,{recursive:true,force:true,maxRetries:10,retryDelay:200})}

@@ -59,8 +59,12 @@ macOS Finder 启动不会继承终端临时环境变量。首页“系统配置 
 
 ## v1.20.1 Release 下载
 
-Linux/macOS 仅发布 CLI，Windows 发布 CLI、独立 GUI exe 和 GUI 安装包。CLI 文件默认只启动服务，`--gui` 请使用 GUI 分发。Windows GUI 内嵌 Go 服务，启动时释放到 `%LOCALAPPDATA%/com.mywebscrcpy.desktop/runtime/<SHA-256>/`，无需旁边的服务 exe；安装包也使用同一个内嵌服务。独立 exe 需要系统 WebView2，安装包会自动安装缺失的 WebView2。
+Linux 发布 CLI，macOS 发布 CLI 和 Intel/Apple Silicon 两种 GUI DMG，Windows 发布 CLI、独立 GUI exe 和 GUI 安装包。CLI 文件默认只启动服务，`--gui` 请使用 GUI 分发。Windows GUI 内嵌 Go 服务，启动时释放到 `%LOCALAPPDATA%/com.mywebscrcpy.desktop/runtime/<SHA-256>/`，无需旁边的服务 exe；安装包也使用同一个内嵌服务。独立 exe 需要系统 WebView2，安装包会自动安装缺失的 WebView2。
 
-Release 保留 7 个程序与 `desktop-latest.json` 自动更新索引。Windows CLI 统一为 `mywebscrcpy-windows-cli-amd64.exe`，GUI 为 `mywebscrcpy-windows-gui-amd64.exe`，安装包为 `mywebscrcpy-v1.20.1-windows-x86_64-gui-setup.exe`。不再发布 macOS/Linux GUI 包；这些平台此前安装的 GUI 后续需选择 CLI 或自行构建桌面版。此前 CLI 版本若不能匹配新文件名，请手工下载一次新 CLI，之后使用新名称自动更新。
+Release 保留 9 个程序与 `desktop-latest.json` 自动更新索引。macOS GUI 安装包为 `mywebscrcpy-v1.20.1-macos-amd64-gui.dmg` 和 `mywebscrcpy-v1.20.1-macos-arm64-gui.dmg`，打开后将 App 拖到 Applications 安装。Windows CLI 统一为 `mywebscrcpy-windows-cli-amd64.exe`，GUI 为 `mywebscrcpy-windows-gui-amd64.exe`，安装包为 `mywebscrcpy-v1.20.1-windows-x86_64-gui-setup.exe`。Linux 不发布 GUI 包。此前 CLI 版本若不能匹配新文件名，请手工下载一次新 CLI，之后使用新名称自动更新。
 
 Windows GUI 安装版使用索引自动更新；独立 GUI exe 使用完整安装包更新，避免安装器更新后仍重新打开旧便携文件。
+
+macOS 使用 DMG 手动更新；本次未增加 `.app.tar.gz` 自动更新资产，索引仍只包含 Windows。DMG 构建包含配套 Go 服务和 scrcpy-server，Pi/ADB 在系统配置中按需安装。Apple 正式签名与公证取决于仓库 Apple 凭据，缺少凭据时使用 ad-hoc 签名。
+
+标签发布会自动调用 `macOS DMG` 工作流构建两种 DMG，Release 和 Docker 等待两个 macOS 架构均验证成功。所有产物使用同一发布标签源码。

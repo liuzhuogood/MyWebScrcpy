@@ -4,6 +4,7 @@ import path from 'node:path'
 const [artifacts, index, output] = process.argv.slice(2)
 if (!artifacts || !index || !output) throw new Error('需要 artifacts、index、output')
 const version = readFileSync('VERSION', 'utf8').trim()
+const windowsInstaller = `mywebscrcpy-${version}-windows-x86_64-gui-setup.exe`
 const programs = [
   'mywebscrcpy-linux-amd64-cli',
   'mywebscrcpy-linux-arm64-cli',
@@ -11,7 +12,9 @@ const programs = [
   'mywebscrcpy-macos-arm64-cli',
   'mywebscrcpy-windows-cli-amd64.exe',
   'mywebscrcpy-windows-gui-amd64.exe',
-  `mywebscrcpy-${version}-windows-x86_64-gui-setup.exe`,
+  windowsInstaller,
+  `mywebscrcpy-${version}-macos-amd64-gui.dmg`,
+  `mywebscrcpy-${version}-macos-arm64-gui.dmg`,
 ]
 function files(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap(item =>
@@ -28,7 +31,7 @@ if (manifest.version !== version || Object.keys(manifest.platforms).join(',') !=
   throw new Error('GUI 更新索引必须对应当前版本的 Windows 安装包')
 }
 const platform = manifest.platforms['windows-x86_64']
-const expected = `https://github.com/liuzhuogood/MyWebScrcpy/releases/download/${version}/${programs.at(-1)}`
+const expected = `https://github.com/liuzhuogood/MyWebScrcpy/releases/download/${version}/${windowsInstaller}`
 if (platform.url !== expected || !platform.signature) throw new Error('GUI 更新索引地址或签名错误')
 mkdirSync(output, { recursive: true })
 if (readdirSync(output).length) throw new Error('发布目录必须为空')

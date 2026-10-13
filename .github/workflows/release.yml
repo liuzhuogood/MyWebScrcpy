@@ -157,8 +157,14 @@ jobs:
             desktop-manifest-${{ matrix.target }}.json
             desktop/target/release/mywebscrcpy-windows-gui-amd64.exe
 
+  macos-dmg:
+    uses: ./.github/workflows/macos-dmg.yml
+    with:
+      tag: ${{ github.ref_name }}
+    secrets: inherit
+
   release:
-    needs: [build, desktop]
+    needs: [build, desktop, macos-dmg]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -200,7 +206,7 @@ jobs:
           RELEASE_NOTES_FILE: ${{ steps.notes.outputs.notes_file }}
         run: node scripts/merge-desktop-manifests.mjs artifacts windows-x86_64
 
-      - name: Select seven programs and the GUI update index
+      - name: Select nine programs and the GUI update index
         run: node scripts/release-assets.mjs artifacts desktop-latest.json release-assets
 
       - name: Create Release (with version.md)
@@ -224,7 +230,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
-    needs: [build, desktop]
+    needs: [build, desktop, macos-dmg]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
