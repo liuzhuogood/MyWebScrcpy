@@ -10,7 +10,7 @@ const directory = await mkdtemp(path.join(os.tmpdir(), 'mywebscrcpy-service-test
 const readyFile = path.join(directory, 'ready.json')
 const child = spawn(path.resolve(executable), ['--no-gui', '--listen', '127.0.0.1:0', '--data-dir', directory, '--desktop-ready', readyFile], {
   stdio: ['pipe', 'ignore', 'pipe'],
-  env: { ...process.env, TLS_CERT: '', TLS_KEY: '', SCRIPTS_DIR: path.join(directory, 'scripts'), TEMPLATES_DIR: path.join(directory, 'templates') },
+  env: { ...process.env, MYWEBSCRCPY_ADB: path.join(directory, 'missing-adb'), TLS_CERT: '', TLS_KEY: '', PORT: '', SCRIPTS_DIR: path.join(directory, 'scripts'), TEMPLATES_DIR: path.join(directory, 'templates') },
 })
 let errorLog = ''
 child.stderr.on('data', data => { errorLog = (errorLog + data.toString()).slice(-8192) })
@@ -27,6 +27,20 @@ try {
   assert.match(ready.url, /^http:\/\/127\.0\.0\.1:\d+$/)
   const authenticated = { Authorization: `Bearer ${ready.token}` }
   const request = (endpoint, init) => fetch(ready.url + endpoint, init)
+  const savePaths = async value => {
+    const deadline = Date.now() + 5000
+    for (;;) {
+      const response = await request('/api/dependencies/paths', {
+        method: 'PUT', headers: authenticated, body: JSON.stringify(value),
+      })
+      const body = await response.text()
+      if (response.status !== 409 || body.trim() !== '依赖正在使用，请稍后重试') {
+        return { status: response.status, body }
+      }
+      assert(Date.now() < deadline, `ADB 检测持续占用依赖: ${body}\n${errorLog}`)
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+  }
   assert.equal((await request('/api/desktop/health')).status, 401)
   assert.equal((await request('/api/desktop/shutdown', { method: 'POST' })).status, 401)
   assert.equal((await request('/api/desktop/health', { headers: authenticated })).status, 200)
@@ -34,8 +48,10 @@ try {
   assert.equal(dependencies.configurable, true)
   assert.deepEqual(dependencies.tools.map(tool => tool.id), ['adb', 'python', 'scrcpy-server'])
   assert.equal((await request('/api/dependencies/paths', { method: 'PUT', body: '{}' })).status, 401)
-  assert.equal((await request('/api/dependencies/paths', { method: 'PUT', headers: authenticated, body: JSON.stringify({ adb: 'relative/adb', python: '' }) })).status, 400)
-  assert.equal((await request('/api/dependencies/paths', { method: 'PUT', headers: authenticated, body: JSON.stringify({ adb: '', python: '' }) })).status, 204)
+  const invalid = await savePaths({ adb: 'relative/adb', python: '' })
+  assert.equal(invalid.status, 400, invalid.body)
+  const saved = await savePaths({ adb: '', python: '' })
+  assert.equal(saved.status, 204, saved.body)
   assert.equal((await request('/api/version/upgrade', { method: 'POST' })).status, 409)
   const page = await request('/dependencies')
   assert.equal(page.status, 200)

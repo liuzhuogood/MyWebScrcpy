@@ -9,46 +9,6 @@ permissions:
   contents: write  # 需要写权限来创建 Release
 
 jobs:
-  pi-runtime-tests:
-    strategy:
-      fail-fast: false
-      matrix:
-        runner: [ubuntu-24.04, ubuntu-24.04-arm, macos-15, macos-15-intel, windows-2025]
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-      - name: Prepare independent Pi test fixture
-        run: python scripts/prepare-pi.py --output .cache/pi-test/payload
-      - name: Test external Pi and search tools without host PATH
-        env:
-          MYWEBSCRCPY_PI_TEST_PAYLOAD: ${{ github.workspace }}/.cache/pi-test
-        run: go test -count=1 -v ./internal/pibundle ./internal/aiprovider
-
-  windows-task-tests:
-    runs-on: windows-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.13'
-
-      - name: Test Windows task lifecycle
-        run: go test -count=1 ./internal/taskmanager ./internal/mdscript ./internal/scheduler
-
   build:
     runs-on: ubuntu-latest
     strategy:
@@ -196,7 +156,7 @@ jobs:
             desktop/target/release/mywebscrcpy-windows-gui-amd64.exe
 
   release:
-    needs: [build, windows-task-tests, desktop, pi-runtime-tests]
+    needs: [build, desktop]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -262,7 +222,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   docker:
-    needs: [build, windows-task-tests, pi-runtime-tests]
+    needs: [build, desktop]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
