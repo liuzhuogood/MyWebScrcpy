@@ -42,6 +42,14 @@ Docker Hub 的 `liuzhuogood/mywebscrcpy:v1.20.1` 和 `latest` 均可读取 Linux
 
 用户追加要求增加 macOS DMG。下载清单增加 Intel AMD64 和 Apple Silicon ARM64 两个 GUI 安装包，共 9 个程序与原 Windows 更新索引。采用 Tauri 原生 DMG 打包，原生 macOS runner 分别构建，并验证桌面服务、挂载磁盘镜像、App 版本、GUI/Go 服务架构和代码签名。未增加 macOS 自动更新归档，DMG 使用手动安装更新。
 
-新增可复用 `macOS DMG` 工作流，正式 Release 与 Docker 等待两种 DMG 验证成功。用户明确要求在 GitHub Actions 中加入两个产物后重新打标签发布，因此本次提交推送后更新 v1.20.1 标签，完整重新构建，所有产物使用同一标签源码。远程构建与实际资产验收结果待构建完成后补充。
+新增可复用 `macOS DMG` 工作流，正式 Release 与 Docker 等待两种 DMG 验证成功。用户明确要求在 GitHub Actions 中加入两个产物后重新打标签发布，已将 v1.20.1 更新到 `e46ba8a984875495974e903d5e1168fc0598e855`；远端标签对象为 `36245bcfcff48f5185fd14d0ec77cf6dcd8e0cec`。完整重新构建，所有产物使用同一标签源码。
 
 同时核查用户询问的目录清理：根目录无 `piundle`，`internal/pibundle` 仍被技能安装、独立依赖解压校验与测试引用，不能整目录删除。可再生成的旧 payload、Pi 下载/测试缓存、桌面编译目标及生成的 sidecar 可清理；数据库、已安装依赖、技能与源码保留。本次未执行删除。
+
+追加发布运行 [38356763736](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/38356763736) 全部成功，共 10 个作业：5 个 CLI、Windows GUI、两种 macOS DMG、Release、Docker。两个 macOS runner 均验证了挂载镜像、App 版本、GUI/服务架构、代码签名与包内服务启动/配置/受控退出。Apple 凭据未配置，当前两个包使用 ad-hoc 签名，未通过 Apple 正式签名和公证。
+
+Release 实际包含 9 个程序与 Windows 更新索引，共 10 个文件；全部已下载到 `/tmp/mywebscrcpy-v1.20.1-release-e46ba8a`，大小与 SHA-256 均匹配 GitHub 资产 digest。5 个 CLI 构建信息和两个 DMG 内 Go 服务均指向本次标签提交。下载后的两个 DMG 再次通过镜像校验、只读挂载、App 版本/标识/架构及签名检查；ARM64 包内服务生命周期通过。Intel DMG 为 14,783,676 字节，ARM64 为 13,916,937 字节。下载的 Windows 安装包独立验签通过，篡改包被拒绝；ARM64 CLI 的默认服务模式与 GUI 模式拒绝通过。真实下载文件再执行发布资产选择，得到 9 个程序和 1 个索引。
+
+Docker 的 `v1.20.1` 和 `latest` 均含 Linux AMD64，索引摘要一致为 `sha256:fa54de85ad30a5d1b276e2bc0d9bdd7160c0e309da171ff14166c564cd6bc9f9`。本轮不包含本机 Docker 容器运行或真实 GUI 窗口/手机交互验收。
+
+用户已追加授权在发布验收后清理 `desktop/target`、生成的 `desktop/binaries` 程序、`.cache/pi`、`.cache/pi-test` 和旧 payload ZIP/清单。清理目标不包含受 Git 管理的文件；27 个需保留文件已记录 SHA-256。源码、README、data、dependencies、.pi/skills 和 binaries/.gitkeep 均保留。
