@@ -219,3 +219,57 @@ pub fn mark_launcher_ready(path: Option<&Path>) -> Result<(), String> {
     }
     Ok(())
 }
+
+#[cfg(target_os = "macos")]
+pub fn fix_macos_env() {
+    let current_path = std::env::var("PATH").unwrap_or_default();
+    if current_path != "/usr/bin:/bin:/usr/sbin:/sbin" && !current_path.is_empty() {
+        return;
+    }
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+    let mut command = Command::new(&shell);
+    command.args([
+        "-l",
+        "-i",
+        "-c",
+        "printf '__MYWEBSCRCPY_ENV_START__\\n'; env -0; printf '__MYWEBSCRCPY_ENV_END__\\n'",
+    ]);
+    if let Ok(output) = command.output() {
+        let stdout = output.stdout;
+        let start_tag = b"__MYWEBSCRCPY_ENV_START__\n";
+        let end_tag = b"__MYWEBSCRCPY_ENV_END__\n";
+        if let Some(start_pos) = stdout.windows(start_tag.len()).position(|w| w == start_tag) {
+            let payload = &stdout[start_pos + start_tag.len()..];
+            let end_pos = payload
+                .windows(end_tag.len())
+                .position(|w| w == end_tag)
+                .unwrap_or(payload.len());
+            let env_bytes = &payload[..end_pos];
+            for entry in env_bytes.split(|&b| b == 0) {
+                if entry.is_empty() {
+                    continue;
+                }
+                if let Some(eq_pos) = entry.iter().position(|&b| b == b'=') {
+                    if let (Ok(key), Ok(val)) = (
+                        std::str::from_utf8(&entry[..eq_pos]),
+                        std::str::from_utf8(&entry[eq_pos + 1..]),
+                    ) {
+                        match key {
+                            "PATH" | "ANDROID_HOME" | "ANDROID_SDK_ROOT" | "NVM_DIR" => {
+                                std::env::set_var(key, val);
+                            }
+                            _ => {
+                                if std::env::var(key).is_err()
+                                    && !key.starts_with("XPC_")
+                                    && !key.starts_with("__CF")
+                                {
+                                    std::env::set_var(key, val);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

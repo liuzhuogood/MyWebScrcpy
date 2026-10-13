@@ -26,6 +26,9 @@ pub struct State {
 }
 
 fn main() {
+    #[cfg(target_os = "macos")]
+    backend::fix_macos_env();
+
     let args: Vec<String> = std::env::args().skip(1).collect();
     #[allow(unused_mut)]
     let mut service_args = args.clone();

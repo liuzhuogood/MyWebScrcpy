@@ -20,6 +20,7 @@ type runtimeOptions struct {
 var distributionMode = "auto"
 
 func parseRuntimeOptions() runtimeOptions {
+	desktop.InitEnvironment()
 	httpsFlag := flag.Bool("https", false, "启用 HTTPS（使用内置证书）")
 	guiFlag := flag.Bool("gui", false, "启动桌面窗口")
 	noGUIFlag := flag.Bool("no-gui", false, "仅启动服务")
