@@ -26,3 +26,11 @@
 另保留用户确认的 `desktop-latest.json` 小型 GUI 自动更新索引，签名包含在索引中，不另外发布 `.sig`。Windows GUI exe 内嵌 Go 服务，可独立释放并启动；系统需具备 WebView2，安装包会处理缺失的 WebView2。CLI 默认服务模式，更新器优先精确匹配新 CLI 文件名，保留旧版本精确名称读取；Docker 使用新 Linux CLI。旧 CLI 若不能匹配新资产名需手动下载一次。按用户追加要求补充 macOS 两种 GUI DMG，拖到 Applications 安装，使用 DMG 手动更新；Linux GUI 包停止发布。
 
 Windows GUI 安装版使用索引自动更新；独立 GUI exe 使用完整安装包更新，避免安装器更新后仍重新打开旧便携文件。
+
+## macOS 首次打开
+
+将 DMG 中的 App 拖到“应用程序”后，若提示“Apple could not verify”，是因为当前版本尚未经过 Apple 公证。确认应用来自本项目 [Release](https://github.com/liuzhuogood/MyWebScrcpy/releases) 并信任它后，在终端执行：
+
+```bash
+sudo xattr -rd com.apple.quarantine "/Applications/MyWebScrcpy.app"
+```

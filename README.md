@@ -118,6 +118,14 @@ bash scripts/build.sh
 
 既有服务端构建与运行方式保留。桌面内部服务使用回环动态端口和系统用户数据目录；不捆绑 ADB/Python。桌面安装包、WebView 投屏兼容性和各平台原生验证分别记录在 [v1.20 版本任务](docs/versions/v1.20.0-feature/tasks.md)。
 
+#### macOS 首次打开
+
+将 DMG 中的 App 拖到“应用程序”后，若提示“Apple could not verify”，是因为当前版本尚未经过 Apple 公证。确认应用来自本项目 [Release](https://github.com/liuzhuogood/MyWebScrcpy/releases) 并信任它后，在终端执行：
+
+```bash
+sudo xattr -rd com.apple.quarantine "/Applications/MyWebScrcpy.app"
+```
+
 ### 前端开发
 
 在 Go 后端运行后，执行：

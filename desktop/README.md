@@ -68,3 +68,11 @@ Windows GUI 安装版使用索引自动更新；独立 GUI exe 使用完整安�
 macOS 使用 DMG 手动更新；本次未增加 `.app.tar.gz` 自动更新资产，索引仍只包含 Windows。DMG 构建包含配套 Go 服务和 scrcpy-server，Pi/ADB 在系统配置中按需安装。Apple 正式签名与公证取决于仓库 Apple 凭据，缺少凭据时使用 ad-hoc 签名。
 
 标签发布会自动调用 `macOS DMG` 工作流构建两种 DMG，Release 和 Docker 等待两个 macOS 架构均验证成功。所有产物使用同一发布标签源码。
+
+## macOS 首次打开
+
+将 DMG 中的 App 拖到“应用程序”后，若提示“Apple could not verify”，是因为当前版本尚未经过 Apple 公证。确认应用来自本项目 [Release](https://github.com/liuzhuogood/MyWebScrcpy/releases) 并信任它后，在终端执行：
+
+```bash
+sudo xattr -rd com.apple.quarantine "/Applications/MyWebScrcpy.app"
+```
