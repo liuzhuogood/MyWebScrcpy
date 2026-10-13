@@ -72,3 +72,7 @@ sequenceDiagram
 - 内置依赖验证：本机 macOS ARM64 在子进程 `PATH` 指向空目录时，真实内置 Pi 完成流式对话，真实 `read`、`grep`、`find` 工具均返回结果，技能与参考资料按需加载。
 - 便携程序验证：用完整构建脚本产生约 47.2 MiB 的 macOS ARM64 程序，从两个不同的工作目录启动，首次自动释放依赖和技能，再次启动复用运行环境、保留技能修改，真实 HTTP SSE 对话通过。未重启现有服务。
 - 五个目标的依赖均按官方 SHA-256 校验，Windows AMD64、macOS AMD64 / ARM64、Linux AMD64 / ARM64 均完成编译。Windows、Linux 和 macOS Intel 的原生运行测试已加入发布流程，本次未运行这些 CI，也没有启动本机 Docker 服务。
+
+## Markdown 生成 Python
+
+生成按钮使用独立 Pi 入口，与文档聊天分开；冻结文档、技能、实际 OpenAPI 与 SDK 约定，流式展示活动。只使用只读工具，后端校验并保存源码。执行不再自动编译，历史或过期产物需重新生成。转换技能为 `.pi/skills/markdown-to-python`，外部安装与脚本运行见 [生成说明](python-generation.md)。

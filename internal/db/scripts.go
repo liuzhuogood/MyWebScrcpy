@@ -25,6 +25,7 @@ type MarkdownScriptRecord struct {
 	LastRunStatus            string   `json:"last_run_status"`
 	CreatedAt                int64    `json:"created_at"`
 	UpdatedAt                int64    `json:"updated_at"`
+	NeedsGeneration          bool     `json:"needs_generation"`
 }
 
 // RunningTaskRecord 对应 SQLite 中的任务管理器活跃/历史任务
@@ -167,10 +168,7 @@ func (d *DB) UpdateMarkdownScript(id int64, name string, targetDevices []string,
 	now := time.Now().UnixMilli()
 	query := `UPDATE markdown_scripts SET
 		name = ?, target_devices = ?, content = ?, extracted_version = ?,
-		schedule_cron = ?, is_enabled = ?, timeout_sec = ?, updated_at = ?,
- compiled_python = CASE WHEN content != ? OR name != ? THEN '' ELSE compiled_python END,
- compiled_version = CASE WHEN content != ? OR name != ? THEN '' ELSE compiled_version END,
- compiled_at = CASE WHEN content != ? OR name != ? THEN 0 ELSE compiled_at END
+		schedule_cron = ?, is_enabled = ?, timeout_sec = ?, updated_at = MAX(?, updated_at + 1)
 		WHERE id = ?`
 	if err := ValidateTargetDevices(targetDevices); err != nil {
 		return err
@@ -179,7 +177,7 @@ func (d *DB) UpdateMarkdownScript(id int64, name string, targetDevices []string,
 	if err != nil {
 		return err
 	}
-	res, err := d.db.Exec(query, name, string(encodedTargets), content, extractedVer, scheduleCron, isEnabled, timeoutSec, now, content, name, content, name, content, name, id)
+	res, err := d.db.Exec(query, name, string(encodedTargets), content, extractedVer, scheduleCron, isEnabled, timeoutSec, now, id)
 	if err != nil {
 		return err
 	}

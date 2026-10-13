@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"mywebscrcpy/internal/aiprovider"
 	"mywebscrcpy/internal/db"
 )
 
@@ -20,16 +21,15 @@ type ScriptChangeNotifier interface {
 }
 
 type Handler struct {
-	database *db.DB
-	compiler *Compiler
-	executor *Executor
-	notifier ScriptChangeNotifier
+	database  *db.DB
+	Generator *Generator
+	executor  *Executor
+	notifier  ScriptChangeNotifier
 }
 
 func NewHandler(database *db.DB, executor *Executor, notifier ScriptChangeNotifier) *Handler {
 	return &Handler{
 		database: database,
-		compiler: NewCompiler(),
 		executor: executor,
 		notifier: notifier,
 	}
@@ -65,6 +65,9 @@ func (h *Handler) handleList(w http.ResponseWriter, r *http.Request) {
 	if list == nil {
 		list = []db.MarkdownScriptRecord{}
 	}
+	for i := range list {
+		h.annotate(&list[i])
+	}
 	writeJSON(w, http.StatusOK, map[string]interface{}{"scripts": list, "total": len(list)})
 }
 
@@ -85,7 +88,8 @@ func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	meta := ParseMarkdown(item.Content, time.UnixMilli(item.UpdatedAt))
-	recompile := h.compiler.ShouldRecompile(meta.ExtractedVersion, item.CompiledVersion, item.CompiledPython)
+	h.annotate(item)
+	recompile := item.NeedsGeneration
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"script":           item,
 		"meta":             meta,
@@ -140,6 +144,7 @@ func (h *Handler) handleCreate(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[MdScript] script=%d 调度重载失败: %v", created.ID, err)
 		}
 	}
+	h.annotate(created)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "script": created, "meta": meta})
 }
 
@@ -208,6 +213,7 @@ func (h *Handler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 			log.Printf("[MdScript] script=%d 调度重载失败: %v", id, err)
 		}
 	}
+	h.annotate(updated)
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "script": updated, "meta": meta})
 }
 
@@ -228,47 +234,60 @@ func (h *Handler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
 }
 
+func (h *Handler) annotate(script *db.MarkdownScriptRecord) {
+	script.NeedsGeneration = h.Generator == nil || h.Generator.Check(*script) != nil
+}
+
 func (h *Handler) handleCompile(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "无效脚本 ID")
+		writeError(w, 400, "无效脚本 ID")
 		return
 	}
-
+	if h.Generator == nil {
+		writeError(w, 503, "Python 生成服务不可用")
+		return
+	}
 	existing, err := h.database.GetMarkdownScript(id)
-	if err != nil || existing == nil {
-		writeError(w, http.StatusNotFound, "脚本不存在")
+	if err != nil {
+		writeError(w, 500, err.Error())
 		return
 	}
-
+	if existing == nil {
+		writeError(w, 404, "脚本不存在")
+		return
+	}
 	if _, err := ParseOptions(existing.Content); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, 400, err.Error())
 		return
 	}
-	meta := ParseMarkdown(existing.Content, time.UnixMilli(existing.UpdatedAt))
-	pythonCode, err := h.compiler.Compile(existing.Name, meta, existing.Content)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "编译失败: "+err.Error())
+	if err := h.executor.ValidateTargets(existing.TargetDevices); err != nil {
+		writeError(w, 400, err.Error())
 		return
 	}
-
-	if err := h.database.SaveCompiledPython(id, meta.ExtractedVersion, pythonCode); err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeError(w, 500, "当前连接不支持实时输出")
 		return
 	}
-
-	updated, err := h.database.GetMarkdownScript(id)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+	emit := func(event GenerationEvent) error {
+		data, err := json.Marshal(event)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
+			return err
+		}
+		flusher.Flush()
+		return nil
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"ok":               true,
-		"script":           updated,
-		"compiled_version": meta.ExtractedVersion,
-		"compiled_python":  pythonCode,
-	})
+	if err := h.Generator.Generate(r.Context(), *existing, emit); err != nil {
+		log.Printf("[PythonGeneration] script=%d failed: %v", id, err)
+		_ = emit(GenerationEvent{ChatEvent: aiprovider.ChatEvent{Type: "error", Error: err.Error()}})
+	}
 }
 
 func (h *Handler) handleRun(w http.ResponseWriter, r *http.Request) {

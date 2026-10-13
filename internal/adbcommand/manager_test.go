@@ -117,3 +117,21 @@ func TestExecuteDirect(t *testing.T) {
 		t.Fatal("expected error for canceled context, got nil")
 	}
 }
+
+func TestSynchronousCancellationAndAsynchronousLifetime(t *testing.T) {
+	m := testManager(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	command, err := m.SubmitContext(ctx, "phone", Request{Args: []string{"sleep"}})
+	if err != nil || command.Snapshot().Status != Failed {
+		t.Fatalf("cancelled command: %v %+v", err, command.Snapshot())
+	}
+	async, err := m.SubmitContext(ctx, "phone", Request{Args: []string{"sleep"}, Async: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-async.done
+	if async.Snapshot().Status != Completed {
+		t.Fatalf("async lifetime changed: %+v", async.Snapshot())
+	}
+}

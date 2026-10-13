@@ -22,7 +22,9 @@ func TestSchedulerLifecycleAndConflictSkip(t *testing.T) {
 
 	taskMgr := taskmanager.NewManager(database)
 	defer taskMgr.Close()
-	sched := NewScheduler(database, mdscript.NewExecutor(database, taskMgr, func(string) (bool, bool) { return true, true }, func(string, string) error { return nil }))
+	executor := mdscript.NewExecutor(database, taskMgr, func(string) (bool, bool) { return true, true }, func(string, string) error { return nil })
+	executor.ArtifactCheck = func(db.MarkdownScriptRecord) error { return nil }
+	sched := NewScheduler(database, executor)
 
 	// 验证真实调度注册；周期留足测试时间，避免后台 Cron 干扰手动触发。
 	created, err := database.CreateMarkdownScript(
@@ -38,6 +40,7 @@ func TestSchedulerLifecycleAndConflictSkip(t *testing.T) {
 		t.Fatalf("创建脚本失败: %v", err)
 	}
 
+	database.SaveCompiledPython(created.ID, "1.0.0", "import time\ntime.sleep(1)")
 	// 2. 启动调度器并验证注册
 	if err := sched.Start(); err != nil {
 		t.Fatalf("启动调度器失败: %v", err)

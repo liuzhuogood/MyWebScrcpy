@@ -8,8 +8,12 @@ import (
 	"mywebscrcpy/internal/db"
 	"mywebscrcpy/internal/dependencies"
 	"mywebscrcpy/internal/taskartifact"
+	pythonsdk "mywebscrcpy/packages/python-sdk"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -17,10 +21,12 @@ import (
 var ErrDeviceBusy = errors.New("设备正在运行其他任务")
 
 type managedTask struct {
-	cmd    *exec.Cmd
-	cancel context.CancelFunc
-	done   chan struct{}
-	killed bool
+	cmd      *exec.Cmd
+	cancel   context.CancelFunc
+	done     chan struct{}
+	killed   bool
+	apiToken string
+	serial   string
 }
 type Manager struct {
 	database    *db.DB
@@ -30,6 +36,8 @@ type Manager struct {
 	closed      bool
 	maintenance bool
 	workers     sync.WaitGroup
+	apiURL      string
+	apiServer   *http.Server
 }
 
 func NewManager(database *db.DB) *Manager {
@@ -67,7 +75,14 @@ func (m *Manager) StartDispatchedTask(scriptID int64, name, serial string, timeo
 		return nil, e
 	}
 	lifecycle, cancel := context.WithCancel(context.Background())
-	job := &managedTask{cancel: cancel, done: make(chan struct{})}
+	token, err := apiToken()
+	if err != nil {
+		m.mu.Unlock()
+		cancel()
+		m.database.FinishRunningTask(id, "failed", -1, err.Error())
+		return nil, err
+	}
+	job := &managedTask{cancel: cancel, done: make(chan struct{}), apiToken: token, serial: serial}
 	m.procs[id] = job
 	m.workers.Add(1)
 	m.mu.Unlock()
@@ -89,33 +104,50 @@ func (m *Manager) StartDispatchedTask(scriptID int64, name, serial string, timeo
 	if lifecycle.Err() != nil {
 		return fail(fmt.Errorf("任务已终止"))
 	}
-	tmp, e := os.CreateTemp("", "mdscript_run_*.py")
+	directory, e := os.MkdirTemp("", "mdscript_run_*")
 	if e != nil {
+		return fail(e)
+	}
+	if e = pythonsdk.Install(directory); e != nil {
+		os.RemoveAll(directory)
+		return fail(e)
+	}
+	tmp, e := os.Create(filepath.Join(directory, "script.py"))
+	if e != nil {
+		os.RemoveAll(directory)
 		return fail(fmt.Errorf("创建临时运行脚本失败: %w", e))
 	}
 	path := tmp.Name()
 	if _, e = tmp.WriteString(python); e != nil {
 		tmp.Close()
-		os.Remove(path)
+		os.RemoveAll(directory)
 		return fail(e)
 	}
 	if e = tmp.Close(); e != nil {
-		os.Remove(path)
+		os.RemoveAll(directory)
 		return fail(e)
 	}
 	if e = m.Artifacts.SaveProcessPath(id, path); e != nil {
-		os.Remove(path)
+		os.RemoveAll(directory)
 		return fail(e)
 	}
 	runCtx, runCancel := context.WithTimeout(lifecycle, time.Duration(timeout)*time.Second)
 	pythonPath, e := dependencies.PythonPath()
 	if e != nil {
 		runCancel()
-		os.Remove(path)
+		os.RemoveAll(directory)
 		return fail(fmt.Errorf("Python 依赖不可用: %w", e))
 	}
 	cmd := exec.CommandContext(runCtx, pythonPath, "-u", path, serial)
-	cmd.Env = append(os.Environ(), "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1")
+	cmd.Env = make([]string, 0, len(os.Environ())+5)
+	for _, value := range os.Environ() {
+		name, _, _ := strings.Cut(value, "=")
+		if name == "MYWEBSCRCPY_API_URL" || name == "MYWEBSCRCPY_API_TOKEN" || name == "PYTHONPATH" || name == "PYTHONIOENCODING" || name == "PYTHONUNBUFFERED" {
+			continue
+		}
+		cmd.Env = append(cmd.Env, value)
+	}
+	cmd.Env = append(cmd.Env, "PYTHONPATH="+directory, "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1", "MYWEBSCRCPY_API_URL="+m.apiURL, "MYWEBSCRCPY_API_TOKEN="+token)
 	cmd.Stdout = w.Writer("stdout")
 	cmd.Stderr = w.Writer("stderr")
 	configureTaskProcess(cmd)
@@ -125,13 +157,13 @@ func (m *Manager) StartDispatchedTask(scriptID int64, name, serial string, timeo
 	if job.killed {
 		m.mu.Unlock()
 		runCancel()
-		os.Remove(path)
+		os.RemoveAll(directory)
 		return fail(fmt.Errorf("任务已终止"))
 	}
 	if e = cmd.Start(); e != nil {
 		m.mu.Unlock()
 		runCancel()
-		os.Remove(path)
+		os.RemoveAll(directory)
 		return fail(fmt.Errorf("启动进程失败: %w", e))
 	}
 	job.cmd = cmd
@@ -140,7 +172,7 @@ func (m *Manager) StartDispatchedTask(scriptID int64, name, serial string, timeo
 		m.mu.Unlock()
 		cmd.Wait()
 		runCancel()
-		os.Remove(path)
+		os.RemoveAll(directory)
 		return fail(e)
 	}
 	m.mu.Unlock()
@@ -149,7 +181,7 @@ func (m *Manager) StartDispatchedTask(scriptID int64, name, serial string, timeo
 	rec, e := m.database.GetTaskByID(id)
 	go func() {
 		defer runCancel()
-		defer os.Remove(path)
+		defer os.RemoveAll(directory)
 		waitErr := cmd.Wait()
 		code := 0
 		msg := ""

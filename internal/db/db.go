@@ -139,6 +139,9 @@ func (d *DB) migrate() error {
 	if err := d.migrateScriptTargets(); err != nil {
 		return err
 	}
+	if err := d.migrateGenerations(); err != nil {
+		return err
+	}
 	return d.migrateArtifacts()
 }
 

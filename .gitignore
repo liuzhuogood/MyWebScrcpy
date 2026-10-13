@@ -36,3 +36,14 @@ internal/pibundle/payload/manifest.json
 # Downloaded and managed external dependencies
 /dependencies/
 .cache/pi-test/
+
+# Isolated Python SDK verification environment
+.cache/sdk-test/
+packages/python-sdk/build/
+packages/python-sdk/dist/
+packages/python-sdk/src/*.egg-info/
+packages/python-sdk/**/__pycache__/
+
+# Keep SDK sources despite the executable basename ignore rule.
+!packages/python-sdk/src/mywebscrcpy/
+!packages/python-sdk/src/mywebscrcpy/*.py

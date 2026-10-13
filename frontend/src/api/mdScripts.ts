@@ -9,6 +9,7 @@ export interface MarkdownScript {
   is_enabled: number
   timeout_sec: number
   compiled_version: string
+  needs_generation: boolean
   compiled_python: string
   compiled_at: number
   last_run_at: number
@@ -90,9 +91,7 @@ export function deleteMarkdownScript(id: number): Promise<{ ok: boolean }> {
   return request(`/api/md-scripts/${id}`, { method: 'DELETE' })
 }
 
-export function compileMarkdownScript(id: number): Promise<{ ok: boolean, script: MarkdownScript, compiled_version: string, compiled_python: string }> {
-  return request(`/api/md-scripts/${id}/compile`, { method: 'POST' })
-}
+
 
 export interface DeviceRunResult {
   device_serial: string

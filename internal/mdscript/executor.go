@@ -27,13 +27,13 @@ type Executor struct {
 	mu            sync.Mutex
 	database      *db.DB
 	manager       *taskmanager.Manager
-	compiler      *Compiler
+	ArtifactCheck func(db.MarkdownScriptRecord) error
 	deviceLookup  func(string) (known bool, online bool)
 	templateCheck func(serial, id string) error
 }
 
 func NewExecutor(database *db.DB, manager *taskmanager.Manager, deviceLookup func(string) (bool, bool), templateCheck func(string, string) error) *Executor {
-	return &Executor{database: database, manager: manager, compiler: NewCompiler(), deviceLookup: deviceLookup, templateCheck: templateCheck}
+	return &Executor{database: database, manager: manager, deviceLookup: deviceLookup, templateCheck: templateCheck}
 }
 
 func (e *Executor) ValidateTargets(targets []string) error {
@@ -70,6 +70,12 @@ func (e *Executor) ExecuteWithTrigger(scriptID int64, trigger string) (results [
 	if err != nil {
 		return nil, err
 	}
+	if e.ArtifactCheck == nil {
+		return nil, fmt.Errorf("Python 产物校验服务不可用")
+	}
+	if err := e.ArtifactCheck(*script); err != nil {
+		return nil, err
+	}
 	dispatchID, runAt, err := e.database.BeginScriptDispatch(script.ID)
 	if err != nil {
 		return nil, err
@@ -95,15 +101,6 @@ func (e *Executor) ExecuteWithTrigger(scriptID int64, trigger string) (results [
 		return nil, err
 	}
 	python := script.CompiledPython
-	if e.compiler.ShouldRecompile(meta.ExtractedVersion, script.CompiledVersion, python) {
-		python, err = e.compiler.Compile(script.Name, meta, script.Content)
-		if err != nil {
-			return nil, fmt.Errorf("执行前编译失败: %w", err)
-		}
-		if err := e.database.SaveCompiledPython(script.ID, meta.ExtractedVersion, python); err != nil {
-			return nil, err
-		}
-	}
 	compiledHash := sha256.Sum256([]byte(python))
 	if err := e.database.SetDispatchCompiledHash(dispatchID, hex.EncodeToString(compiledHash[:])); err != nil {
 		return nil, err
