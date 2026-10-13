@@ -254,6 +254,9 @@ func main() {
 	} else {
 		// Markdown 脚本与任务管理器 API
 		taskMgr := taskmanager.NewManager(database)
+		if err := taskMgr.ConfigureAPI(mux); err != nil {
+			log.Fatalf("任务运行接口初始化失败: %v", err)
+		}
 		updateTasks = taskMgr
 		taskMgr.Artifacts.SetRecorder(hub)
 		if err := taskMgr.Recover(); err != nil {
@@ -295,6 +298,9 @@ func main() {
 		// AI 模型配置与代理 API
 		aiSvc := aiprovider.NewService(database, pibundle.Paths{})
 		aiSvc.RuntimeResolver = dependencyManager.AcquirePi
+		generator := mdscript.NewGenerator(database, aiSvc, filepath.Join(skillsDir, "markdown-to-python"), openAPISpec)
+		executor.ArtifactCheck = generator.Check
+		mdHandler.Generator = generator
 		taskMgr.Artifacts.ConfigureReports(aiSvc.SummarizeTask)
 		aiHandler := aiprovider.NewHandler(aiSvc)
 		aiHandler.RegisterRoutes(mux)

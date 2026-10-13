@@ -18,5 +18,8 @@ func (m *Manager) Close() {
 		}
 	}
 	m.workers.Wait()
+	if m.apiServer != nil {
+		_ = m.apiServer.Close()
+	}
 	m.Artifacts.Close()
 }

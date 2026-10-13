@@ -152,7 +152,7 @@ func (s *Scheduler) registerScriptLocked(item db.MarkdownScriptRecord) {
 	log.Printf("[Scheduler] 成功注册调度项: 脚本 %d (「%s」), Cron: %s (EntryID: %d)", item.ID, item.Name, item.ScheduleCron, entryID)
 }
 
-// triggerWorker 到点触发执行单元 (核心：版本自动编译 -> 设备排他锁判定 -> 启动任务管理器)
+// triggerWorker 到点触发执行单元 (核心：产物有效性检查 -> 设备排他锁判定 -> 启动任务管理器)
 func (s *Scheduler) triggerWorker(scriptID int64) {
 	nowMs := time.Now().UnixMilli()
 

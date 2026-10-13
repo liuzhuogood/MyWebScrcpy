@@ -42,6 +42,10 @@ func (s *Service) StreamChat(ctx context.Context, req ChatRequest, emit func(Cha
 }
 
 func runPi(ctx context.Context, paths pibundle.Paths, cfg ModelConfig, req ChatRequest, emit func(ChatEvent) error) error {
+	return runPiSession(ctx, paths, cfg, req, nil, emit)
+}
+
+func runPiSession(ctx context.Context, paths pibundle.Paths, cfg ModelConfig, req ChatRequest, generation *GenerationInput, emit func(ChatEvent) error) error {
 	if err := validateChat(req); err != nil {
 		return err
 	}
@@ -66,10 +70,28 @@ func runPi(ctx context.Context, paths pibundle.Paths, cfg ModelConfig, req ChatR
 	if err := preparePiWorkspace(agentDir, workspace, cfg, req); err != nil {
 		return err
 	}
+	if generation != nil {
+		for name, content := range generation.Files {
+			if filepath.IsAbs(name) || !filepath.IsLocal(name) {
+				return errors.New("生成上下文路径无效")
+			}
+			path := filepath.Join(workspace, name)
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				return err
+			}
+			if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+				return err
+			}
+		}
+		skillsDir = filepath.Join(workspace, "skill")
+	}
 	if err := preparePiTools(paths, agentDir); err != nil {
 		return fmt.Errorf("准备 Pi 搜索工具失败: %w", err)
 	}
 	systemPrompt := req.Messages[0].Content + "\n你是文档助手，只提交建议，不执行手机操作或修改文件。current.md 是当前文档，conversation.json 是对话历史。可用只读工具调研这些资料。以最后一条用户消息为本次需求。"
+	if generation != nil {
+		systemPrompt = req.Messages[0].Content + "\n必须读取 current.md、task.json、capabilities.json、templates.json 和 skill/references/sdk-api.md、api/openapi.json。最终只返回技能约定的 JSON。"
+	}
 	args := []string{"--mode", "rpc", "--no-session", "--offline",
 		"--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files",
 		"--provider", "mywebscrcpy", "--model", cfg.Model, "--tools", "read,grep,find,ls"}

@@ -22,7 +22,7 @@ func (h *Hub) submitADBCommand(w http.ResponseWriter, r *http.Request) {
 		writeADBError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return
 	}
-	job, err := h.commands.Submit(r.URL.Query().Get("serial"), req)
+	job, err := h.commands.SubmitContext(r.Context(), r.URL.Query().Get("serial"), req)
 	if err != nil {
 		writeADBError(w, http.StatusBadRequest, "invalid_request", err.Error())
 		return

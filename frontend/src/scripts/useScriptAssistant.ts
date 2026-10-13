@@ -16,7 +16,7 @@ export interface AssistantMessage {
 interface Proposal { content: string, base: string }
 interface Conversation { messages: AssistantMessage[], prompt: string, busy: boolean, proposal?: Proposal }
 
-function updateActivity(message: AssistantMessage, event: ChatStreamEvent) {
+export function updateActivity(message: AssistantMessage, event: ChatStreamEvent) {
   const activities = message.activities!
   const last = activities.at(-1)
   switch (event.type) {

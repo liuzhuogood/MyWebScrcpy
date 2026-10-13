@@ -1,10 +1,11 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { fetchDevices, type Device } from '@/api/devices'
-import { compileMarkdownScript, createMarkdownScript, deleteMarkdownScript, killTask, listActiveTasks, listMarkdownScripts, listScriptRuns, runMarkdownScript, updateMarkdownScript, type MarkdownScript, type RunningTask } from '@/api/mdScripts'
+import { createMarkdownScript, deleteMarkdownScript, killTask, listActiveTasks, listMarkdownScripts, listScriptRuns, runMarkdownScript, updateMarkdownScript, type MarkdownScript, type RunningTask } from '@/api/mdScripts'
 import { listScheduleEntries, toggleSchedule, type ScheduleEntry } from '@/api/scheduler'
 import { listTemplates, type TemplateItem } from '@/api/templates'
 import { hasDocumentTargets, initialDocument, removeDocumentTargets } from './document'
 import { useScriptAssistant } from './useScriptAssistant'
+import { useScriptGeneration } from './useScriptGeneration'
 
 export function useScriptsWorkbench() {
   const scripts = ref<MarkdownScript[]>([])
@@ -23,6 +24,7 @@ export function useScriptsWorkbench() {
  const executionTask = ref('')
  function openExecutions(taskId = '') { executionTask.value = taskId; executionsOpen.value = true }
   const mobilePanel = ref('editor')
+  const pythonGeneration = useScriptGeneration(currentId)
   const taskSearch = ref('')
   const filteredScripts = computed(() => scripts.value.filter(item => `${item.name} ${item.target_devices.map(serial => `${deviceName(serial)} ${serial}`).join(' ')}`.toLowerCase().includes(taskSearch.value.toLowerCase())))
   const loading = ref(true)
@@ -193,15 +195,22 @@ export function useScriptsWorkbench() {
   function removeLegacy() { content.value = removeDocumentTargets(content.value) }
   async function compile() {
     const script = current.value
-    if (!script || busy.value || dirty.value) return
-    busy.value = 'compile'
-    try { replaceScript((await compileMarkdownScript(script.id)).script); tab.value = 'python'; notify('Python 已生成') }
-    catch (error) { notify(errorText(error)); console.error('[Scripts] 编译失败', error) }
-    finally { busy.value = '' }
+    if (!script || busy.value || dirty.value || pythonGeneration.generation.value?.busy) return
+    mobilePanel.value = 'assistant'
+    try {
+      const generated = await pythonGeneration.generatePython(script.id)
+      replaceScript(generated)
+      if (currentId.value === script.id) {
+        if (content.value !== script.content) notify('文档已有新的修改，请保存后重新生成')
+        else tab.value = 'python'
+      }
+    } catch (error) {
+      console.error('[Scripts] 生成失败', error)
+    }
   }
   async function run() {
     const script = current.value
-    if (!script || busy.value || dirty.value || script.needs_device_configuration) return
+    if (!script || busy.value || dirty.value || script.needs_device_configuration || script.needs_generation || pythonGeneration.generation.value?.busy) return
     busy.value = 'run'
     try {
       const res = await runMarkdownScript(script.id)
@@ -247,7 +256,7 @@ export function useScriptsWorkbench() {
     if (!disposed) { await refreshStatus(); timer = setInterval(() => { void refreshStatus() }, 3000) }
   })
   onUnmounted(() => { disposed = true; templateGeneration++; if (timer) clearInterval(timer) })
-  return { executionsOpen,executionTask,openExecutions,scripts, devices, current, currentId, content, dirty, legacyTargets, tab, mobilePanel, taskSearch, filteredScripts, loading, loadError, deviceError, notice, busy, deviceName, scheduleFor, currentRuns, activeTasks, taskManagerOpen, modelConfigOpen, loadScripts, loadDevices, selectTask, save, formOpen, editingId, formName, formDevices, formSearch, formError, formContent, formRemoveLegacy, formBusy, filteredDevices, openForm, toggleDevice, submitForm, assets, templateLoading, templateError, templateOpen, templateSearch, templateScope, visibleTemplates, loadTemplates, insertTemplate, insertStep, removeLegacy, compile, run, stop, toggleEnabled, deleteOpen, deleteCurrent, copyPython, ...assistant }
+  return { ...pythonGeneration, executionsOpen,executionTask,openExecutions,scripts, devices, current, currentId, content, dirty, legacyTargets, tab, mobilePanel, taskSearch, filteredScripts, loading, loadError, deviceError, notice, busy, deviceName, scheduleFor, currentRuns, activeTasks, taskManagerOpen, modelConfigOpen, loadScripts, loadDevices, selectTask, save, formOpen, editingId, formName, formDevices, formSearch, formError, formContent, formRemoveLegacy, formBusy, filteredDevices, openForm, toggleDevice, submitForm, assets, templateLoading, templateError, templateOpen, templateSearch, templateScope, visibleTemplates, loadTemplates, insertTemplate, insertStep, removeLegacy, compile, run, stop, toggleEnabled, deleteOpen, deleteCurrent, copyPython, ...assistant }
 }
 
 function errorText(error: unknown): string { return error instanceof Error ? error.message : '请求失败，请重试' }

@@ -28,6 +28,7 @@ func TestScheduledTargetsUseSavedListAndReloadForFutureRuns(t *testing.T) {
 		d.Close()
 	}()
 	executor := mdscript.NewExecutor(d, mgr, func(string) (bool, bool) { return true, true }, func(string, string) error { return nil })
+	executor.ArtifactCheck = func(db.MarkdownScriptRecord) error { return nil }
 	sched := NewScheduler(d, executor)
 	content := "version: 1.0.0\n- 等待"
 	script, _ := d.CreateMarkdownScript("多设备定时", []string{"device-A", "device-B"}, content, "1.0.0", "0 9 * * *", 1, 10)

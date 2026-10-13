@@ -1,5 +1,7 @@
 # v1.22.0-feature：Python SDK 与进程内模板匹配设计
 
+当前完整方案仍待实施；v1.21 已承接统一 SDK 的基础 HTTP 能力，具体边界见文末。
+
 ## 背景与目标
 
 当前 Go 主服务管理模板资产、提供 `/api/vision/stream` 和 `/api/vision/results`，本身不执行模板匹配。`scripts/template_matcher/` 通过 HTTP 加载模板、PyAV 解码 H.264、OpenCV 匹配，再回传 `detection.result`。使用者目前必须运行独立脚本或自己拼接协议。
@@ -77,6 +79,8 @@ with Client('http://127.0.0.1:8080') as client:
 | client.templates.list/create/get/update/delete | 对应现有 HTTP 模板资产接口 |
 | client.templates.image/add_image/import_zip/export_zip | 下载主图片、上传参考图、导入导出 ZIP |
 | client.device(serial) | 创建惰性会话；进入上下文或首次需要会话时握手 |
+| device.adb(args, timeout=30) | 已由 v1.21 基础 SDK 提供；同步调用 POST /api/adb/commands，绑定设备，检查退出码与状态，不自动重试 |
+| device.page_info(timeout=10) | 已由 v1.21 基础 SDK 提供；严格读取 HTTP display.width/height |
 | device.frame(timeout) | 获取调用后到达的下一幅可解码画面，返回 Frame；不返回旧缓存冒充新帧 |
 | device.match(template_id, timeout) | 拉取启用模板、取新帧并本地匹配，返回 list[Match]；正常未命中为 [] |
 | device.wait_for(template_id, timeout) | 在总期限内持续取帧匹配，返回最高分 Match；到期抛 MatchTimeout |
@@ -173,4 +177,6 @@ sequenceDiagram
 
 ## 更新后与 v1.21 的关系
 
-2026-10-13 更新远端后确认 v1.21.0-feature 已规划 Pi 技能生成 Python 与基础运行库。本版专注可安装 SDK 与真实模板匹配，两者应共享设备连接和动作契约。实施前先核对 v1.21 的运行库边界，避免重复建立另一套连接与动作封装；本次不修改 v1.21 的设计或旧执行路径。
+2026-10-13 用户确认先完成 SDK 基础能力并接入 v1.21，完整视频解码与模板匹配留在 v1.22。统一包为 packages/python-sdk、分发名 mywebscrcpy-sdk、导入名 mywebscrcpy；v1.21 基础版 0.1.0 提供 Client、Device.adb/page_info、结果和异常，使用 HTTPX，不另建 mywebscrcpy_runtime。生成脚本通过 ADB 参数执行基础动作，可安装包后在应用外运行。
+
+本版继续在同一 SDK 增加模板管理、Vision 会话、解码、匹配与 action.request/result；不重复 HTTP 连接、错误类型或建立第二套设备封装。当前基础 Device 上下文只管理 HTTP 操作，不开启 Vision；完整会话握手和专用 tap/swipe/key/text 仍按本版契约实施。基础版尚不提供 [vision] 安装项；可选依赖及 websocket-client 在相应能力实现时增加。Markdown 生成和运行接入由 v1.21 完成，本版不再修改该生成链路。

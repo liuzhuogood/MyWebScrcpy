@@ -4,17 +4,17 @@ import { Bot, Send, Settings2, Square, Loader2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import MarkdownContent from './MarkdownContent.vue'
+import AssistantActivities from './AssistantActivities.vue'
 import type { ScriptsWorkbench } from '@/scripts/useScriptsWorkbench'
 const props = defineProps<{ w: ScriptsWorkbench }>()
 const streamBox = ref<HTMLElement>()
 const followStream = ref(true)
-const toolStatus = { running: '执行中', completed: '已完成', failed: '失败', interrupted: '已中断' }
 function onScroll() {
   const box = streamBox.value
   if (box) followStream.value = box.scrollHeight - box.scrollTop - box.clientHeight < 48
 }
 watch(() => props.w.currentId, () => { followStream.value = true })
-watch(() => props.w.conversation, async () => {
+watch(() => [props.w.conversation, props.w.generation], async () => {
   if (!followStream.value) return
   await nextTick()
   if (streamBox.value) streamBox.value.scrollTop = streamBox.value.scrollHeight
@@ -28,18 +28,12 @@ watch(() => props.w.conversation, async () => {
       <Button variant="ghost" size="icon-sm" aria-label="模型配置" @click="w.modelConfigOpen = true"><Settings2 class="size-3.5" /></Button>
     </div>
     <div ref="streamBox" aria-live="polite" class="min-h-0 flex-1 space-y-5 overflow-auto p-4" @scroll="onScroll">
+      <section v-if="w.generation" aria-label="Python 生成进度" class="space-y-3 border-b pb-4">
+        <div class="flex items-center gap-2"><p role="status" class="flex-1 text-sm">{{ w.generation.status }}</p><Button v-if="w.generation.busy" size="sm" variant="outline" @click="w.stopGeneration"><Square class="size-3.5" />停止生成</Button></div>
+        <AssistantActivities :activities="w.generation.message.activities" />
+      </section>
       <div v-for="(message, index) in w.conversation.messages" :key="index" :class="message.role === 'user' ? 'ml-6 rounded-lg bg-primary/10 p-3' : 'mr-2'" class="min-w-0 space-y-3 text-sm leading-6 break-words">
-        <template v-for="(activity, activityIndex) in message.activities" :key="activityIndex">
-          <details v-if="activity.kind === 'thinking'" open class="rounded-lg border bg-muted/20 px-3 py-2">
-            <summary class="cursor-pointer text-xs text-muted-foreground">{{ activity.running ? '思考中…' : '思考' }}</summary>
-            <p v-if="activity.content" class="mt-2 text-xs leading-5 whitespace-pre-wrap text-muted-foreground">{{ activity.content }}</p>
-          </details>
-          <details v-else open class="rounded-lg border px-3 py-2">
-            <summary class="cursor-pointer text-xs"><span class="font-medium">{{ activity.name }}</span><span class="ml-2 text-muted-foreground" :class="activity.status === 'failed' ? 'text-destructive' : ''">{{ toolStatus[activity.status] }}</span></summary>
-            <pre v-if="activity.args" class="mt-2 max-h-40 overflow-auto text-xs leading-5 whitespace-pre-wrap break-all text-muted-foreground">{{ activity.args }}</pre>
-            <pre v-if="activity.output" class="mt-2 max-h-56 overflow-auto border-t pt-2 text-xs leading-5 whitespace-pre-wrap break-all">{{ activity.output }}</pre>
-          </details>
-        </template>
+        <AssistantActivities :activities="message.activities" />
         <MarkdownContent v-if="message.role === 'assistant' && message.content" :content="message.content" :assets="w.assets" />
         <p v-else-if="message.content" class="whitespace-pre-wrap">{{ message.content }}</p>
       </div>

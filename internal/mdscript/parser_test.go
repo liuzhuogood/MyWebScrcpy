@@ -1,7 +1,6 @@
 package mdscript
 
 import (
-	"strings"
 	"testing"
 	"time"
 )
@@ -60,41 +59,5 @@ schedule: "0 8 * * *"
 	}
 	if !meta.IsFallbackVer {
 		t.Fatalf("未写版本应标记为 Fallback")
-	}
-}
-
-func TestCompilerCacheAndOutput(t *testing.T) {
-	compiler := NewCompiler()
-
-	// 1. 缓存复用测试
-	if compiler.ShouldRecompile("1.0.0", "1.0.0", "print('code')") {
-		t.Fatalf("版本一致且代码非空不应重新生成")
-	}
-	if !compiler.ShouldRecompile("1.1.0", "1.0.0", "print('code')") {
-		t.Fatalf("版本不一致应重新生成")
-	}
-	if !compiler.ShouldRecompile("1.0.0", "1.0.0", "") {
-		t.Fatalf("编译代码为空应重新生成")
-	}
-
-	// 2. 编译产物测试
-	meta := ParsedMeta{
-		ExtractedVersion: "1.2.0",
-		ScheduleCron:     "*/5 * * * *",
-		TimeoutSec:       60,
-	}
-	content := `- 第一步操作
-- 点击模板：
-  ![确认按钮](template://tmpl_ok?threshold=0.88)`
-
-	pyCode, err := compiler.Compile("测试脚本", meta, content)
-	if err != nil {
-		t.Fatalf("编译失败: %v", err)
-	}
-	if !strings.Contains(pyCode, "tmpl_ok") || !strings.Contains(pyCode, "0.88") {
-		t.Fatalf("生成的 Python 未包含模板匹配: %s", pyCode)
-	}
-	if !strings.Contains(pyCode, "第一步操作") {
-		t.Fatalf("生成的 Python 未包含普通步骤: %s", pyCode)
 	}
 }

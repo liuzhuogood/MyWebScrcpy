@@ -62,6 +62,7 @@ type job struct {
 	timeout  time.Duration
 	parallel bool
 	done     chan struct{}
+	parent   context.Context
 }
 type Manager struct {
 	adbPath               string
@@ -89,6 +90,15 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 }
 
 func (m *Manager) Submit(serial string, req Request) (*job, error) {
+	return m.SubmitContext(context.Background(), serial, req)
+}
+
+// SubmitContext cancels synchronous commands when their requesting task disconnects.
+// Asynchronous commands retain their independent lifetime.
+func (m *Manager) SubmitContext(parent context.Context, serial string, req Request) (*job, error) {
+	if req.Async {
+		parent = context.Background()
+	}
 	if serial == "" {
 		return nil, errors.New("missing serial")
 	}
@@ -109,7 +119,7 @@ func (m *Manager) Submit(serial string, req Request) (*job, error) {
 	if req.Parallel {
 		status = Running
 	}
-	j := &job{View: View{CommandID: id, Serial: serial, Status: status, QueuedAt: time.Now().UTC()}, args: append([]string(nil), req.Args...), timeout: timeout, parallel: req.Parallel, done: make(chan struct{})}
+	j := &job{View: View{CommandID: id, Serial: serial, Status: status, QueuedAt: time.Now().UTC()}, args: append([]string(nil), req.Args...), timeout: timeout, parallel: req.Parallel, done: make(chan struct{}), parent: parent}
 	m.jobs[id] = j
 	m.mu.Unlock()
 	go m.run(j)
@@ -153,7 +163,7 @@ func (j *job) Snapshot() View { j.mu.Lock(); defer j.mu.Unlock(); v := j.View; r
 
 func (m *Manager) run(j *job) {
 	defer close(j.done)
-	queueCtx, cancelQueue := context.WithTimeout(context.Background(), m.queueWait)
+	queueCtx, cancelQueue := context.WithTimeout(j.parent, m.queueWait)
 	defer cancelQueue()
 	err := m.gateFor(j.Serial).Run(queueCtx, j.parallel, func(_ context.Context) error {
 		now := time.Now().UTC()
@@ -161,7 +171,7 @@ func (m *Manager) run(j *job) {
 		j.Status = Running
 		j.StartedAt = &now
 		j.mu.Unlock()
-		ctx, cancel := context.WithTimeout(context.Background(), j.timeout)
+		ctx, cancel := context.WithTimeout(j.parent, j.timeout)
 		defer cancel()
 		out := newLimitedOutput(m.outputMax)
 		commandArgs := append(append([]string(nil), m.prefix...), "-s", j.Serial)

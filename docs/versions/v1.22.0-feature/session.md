@@ -21,3 +21,5 @@
 **用户**：「提交推送」；随后：「那先更新，本地的这个版本行暂存， 等更新完后，再换成新的版本号」。
 
 **Codex**：将本次设计精确 stash，快进更新 main 至 a239c1b。远端 v1.21.0-feature 已用于 Pi 技能生成 Python，故恢复本次文档到 v1.22.0-feature，不覆盖远端记录。更新后正式 VERSION 为 v1.20.1；此前段落中的版本基线为创建当时的历史状态。继续用户已授权的 scoped 提交推送。
+
+**2026-10-13 跨版衔接**：用户在 v1.21 实施会话要求重新采用 Python SDK 并核对本版设计，随后确认「先完成 SDK 基础能力并接入 v1.21」。基础包统一为 packages/python-sdk（mywebscrcpy-sdk 0.1.0 / mywebscrcpy），提供 HTTPX Client、Device.adb/page_info、结果与异常。完整 Vision 解码与模板匹配仍留本版，未实现；不重复连接封装，也不把本版标为完成。
