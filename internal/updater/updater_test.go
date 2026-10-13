@@ -53,6 +53,26 @@ func TestMatchAsset(t *testing.T) {
 	}
 }
 
+func TestMatchAssetPrefersCLIAndRejectsGUI(t *testing.T) {
+	for _, target := range []struct{ os, arch, cli, legacy string }{
+		{"linux", "amd64", "linux-amd64-cli", "linux-amd64"},
+		{"linux", "arm64", "linux-arm64-cli", "linux-arm64"},
+		{"darwin", "amd64", "macos-amd64-cli", "macos-amd64"},
+		{"darwin", "arm64", "macos-arm64-cli", "macos-arm64"},
+		{"windows", "amd64", "windows-cli-amd64.exe", "windows-amd64.exe"},
+	} {
+		gui := []ReleaseAsset{{Name: "mywebscrcpy-windows-gui-amd64.exe"}, {Name: "mywebscrcpy-v1.20.1-windows-x86_64-gui-setup.exe"}}
+		if MatchAsset(gui, target.os, target.arch) != nil {
+			t.Fatal("GUI asset selected for CLI")
+		}
+		assets := append(gui, ReleaseAsset{Name: "mywebscrcpy-" + target.legacy}, ReleaseAsset{Name: "mywebscrcpy-" + target.cli})
+		matched := MatchAsset(assets, target.os, target.arch)
+		if matched == nil || matched.Name != "mywebscrcpy-"+target.cli {
+			t.Fatalf("%s/%s: expected CLI, got %+v", target.os, target.arch, matched)
+		}
+	}
+}
+
 func TestDownloaderAndApplier(t *testing.T) {
 	content := "fake binary content v1.13.0"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare a verified, target-specific standalone Pi payload for go:embed."""
+"""Prepare a verified, target-specific standalone Pi payload for independent verification and distribution."""
 import argparse
 import hashlib
 import json
@@ -83,13 +83,17 @@ def main():
     parser.add_argument("--goos", default=os.environ.get("GOOS") or subprocess.check_output(["go", "env", "GOHOSTOS"], text=True).strip())
     parser.add_argument("--goarch", default=os.environ.get("GOARCH") or subprocess.check_output(["go", "env", "GOHOSTARCH"], text=True).strip())
     parser.add_argument("--cache", type=Path, default=ROOT / ".cache" / "pi")
+    parser.add_argument("--output", type=Path, default=ROOT / ".cache/pi-test/payload")
     args = parser.parse_args()
     lock = json.loads((ROOT / "scripts/pi-runtime.lock.json").read_text(encoding="utf-8"))
+    if lock != json.loads((ROOT / "internal/dependencies/catalog/pi.json").read_text(encoding="utf-8")):
+        parser.error("Pi 构建锁文件与运行时下载清单不一致")
     target = f"{args.goos}/{args.goarch}"
     if target not in lock["targets"]:
         parser.error(f"没有锁定的 Pi 独立包: {target}")
     args.cache.mkdir(parents=True, exist_ok=True)
-    payload = ROOT / "internal/pibundle/payload"
+    payload = args.output
+    payload.mkdir(parents=True, exist_ok=True)
     output = payload / "runtime.zip"
     temporary = payload / "runtime.zip.tmp"
     suffix = ".exe" if args.goos == "windows" else ""

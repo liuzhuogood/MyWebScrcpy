@@ -34,7 +34,6 @@ const platforms = {
 }
 if (!Object.hasOwn(platforms, target)) throw new Error(`未支持的桌面目标: ${target}`)
 const [goos, goarch] = platforms[target]
-run(process.platform === 'win32' ? 'python' : 'python3', ['scripts/prepare-pi.py', '--goos', goos, '--goarch', goarch])
 const executableSuffix = goos === 'windows' ? '.exe' : ''
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 if (!skipFrontend) run(pnpm, ['--dir', 'frontend', 'build'], { shell: process.platform === 'win32' })
@@ -59,6 +58,8 @@ if (noBundle) buildArgs.push('--no-bundle')
 if (process.env.DESKTOP_BUNDLES) buildArgs.push('--bundles', process.env.DESKTOP_BUNDLES)
 if (goos === 'darwin') addConfig('macos-signing', { bundle: { macOS: { signingIdentity: process.env.APPLE_SIGNING_IDENTITY || '-' } } })
 if (signed) addConfig('signed', { bundle: { createUpdaterArtifacts: true } })
+// Windows embeds the Go service in the GUI executable, including installers.
+if (goos === 'windows') addConfig('embedded-service', { bundle: { externalBin: [] } })
 if (verifyNative) {
   buildArgs.push('--features', 'native-verify')
   addConfig('verify', { identifier: 'com.mywebscrcpy.desktop.verification' })

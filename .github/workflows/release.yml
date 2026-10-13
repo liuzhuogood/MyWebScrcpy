@@ -23,9 +23,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Prepare native standalone Pi
-        run: python scripts/prepare-pi.py
-      - name: Test embedded Pi and search tools without host PATH
+      - name: Prepare independent Pi test fixture
+        run: python scripts/prepare-pi.py --output .cache/pi-test/payload
+      - name: Test external Pi and search tools without host PATH
+        env:
+          MYWEBSCRCPY_PI_TEST_PAYLOAD: ${{ github.workspace }}/.cache/pi-test
         run: go test -count=1 -v ./internal/pibundle ./internal/aiprovider
 
   windows-task-tests:
@@ -54,19 +56,19 @@ jobs:
         include:
           - goos: linux
             goarch: amd64
-            suffix: linux-amd64
+            suffix: linux-amd64-cli
           - goos: linux
             goarch: arm64
-            suffix: linux-arm64
+            suffix: linux-arm64-cli
           - goos: darwin
             goarch: amd64
-            suffix: macos-amd64
+            suffix: macos-amd64-cli
           - goos: darwin
             goarch: arm64
-            suffix: macos-arm64
+            suffix: macos-arm64-cli
           - goos: windows
             goarch: amd64
-            suffix: windows-amd64.exe
+            suffix: windows-cli-amd64.exe
 
     steps:
       - name: Checkout code
@@ -105,8 +107,12 @@ jobs:
           CGO_ENABLED: 0
         run: |
           output_name="mywebscrcpy-${{ matrix.suffix }}"
-          bash scripts/build.sh -ldflags="-s -w" -o "${output_name}"
+          bash scripts/build.sh -trimpath -ldflags="-s -w -X main.distributionMode=cli" -o "${output_name}"
           echo "BINARY_NAME=${output_name}" >> $GITHUB_ENV
+
+      - name: Verify native Linux CLI launch mode
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        run: node scripts/verification/cli-mode.mjs mywebscrcpy-${{ matrix.suffix }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -119,29 +125,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-15
-            target: darwin-aarch64
-            bundles: app,dmg
-          - os: macos-15-intel
-            target: darwin-x86_64
-            bundles: app,dmg
           - os: windows-latest
             target: windows-x86_64
             bundles: nsis
-          - os: ubuntu-24.04
-            target: linux-x86_64
-            bundles: appimage
     runs-on: ${{ matrix.os }}
     env:
       MYWEBSCRCPY_UPDATER_PUBLIC_KEY: ${{ vars.MYWEBSCRCPY_UPDATER_PUBLIC_KEY }}
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
       DESKTOP_BUNDLES: ${{ matrix.bundles }}
     steps:
       - uses: actions/checkout@v4
@@ -165,9 +156,6 @@ jobs:
           test -n "$TAURI_SIGNING_PRIVATE_KEY"
           node scripts/sync-version.mjs --check
           node --test scripts/sync-version.test.mjs
-      - name: Install Linux desktop libraries
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - run: pnpm --dir frontend install --frozen-lockfile
       - run: pnpm --dir desktop install --frozen-lockfile
       - uses: actions/setup-python@v5
@@ -179,22 +167,33 @@ jobs:
         run: node scripts/verification/update-signature.mjs
       - name: Go regression
         run: go test ./...
+      - name: Verify embedded service cache
+        run: cargo test --locked --manifest-path desktop/Cargo.toml embedded_service::tests
+      - name: Verify standalone Windows GUI service
+        shell: pwsh
+        run: |
+          $standalone = Join-Path $env:RUNNER_TEMP 'mywebscrcpy-standalone'
+          New-Item -ItemType Directory -Force $standalone | Out-Null
+          Copy-Item desktop/target/release/mywebscrcpy-gui.exe (Join-Path $standalone 'mywebscrcpy-windows-gui-amd64.exe')
+          node scripts/verification/standalone-gui.mjs (Join-Path $standalone 'mywebscrcpy-windows-gui-amd64.exe')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify desktop service lifecycle
         run: node scripts/verification/desktop-service.mjs
       - name: Verify release manifest contracts
         run: node scripts/verification/release-manifest.mjs
       - name: Generate platform update manifest
         run: node scripts/desktop-manifest.mjs desktop/target/release/bundle ${{ matrix.target }} desktop-manifest-${{ matrix.target }}.json ${{ github.ref_name }}
+      - name: Name standalone GUI executable
+        shell: pwsh
+        run: Copy-Item desktop/target/release/mywebscrcpy-gui.exe desktop/target/release/mywebscrcpy-windows-gui-amd64.exe
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.target }}
           path: |
-            desktop/target/release/bundle/**/*.tar.gz
             desktop/target/release/bundle/**/*.sig
-            desktop/target/release/bundle/**/*.dmg
             desktop/target/release/bundle/**/*.exe
-            desktop/target/release/bundle/**/*.AppImage
             desktop-manifest-${{ matrix.target }}.json
+            desktop/target/release/mywebscrcpy-windows-gui-amd64.exe
 
   release:
     needs: [build, windows-task-tests, desktop, pi-runtime-tests]
@@ -237,7 +236,10 @@ jobs:
       - name: Assemble desktop update manifest
         env:
           RELEASE_NOTES_FILE: ${{ steps.notes.outputs.notes_file }}
-        run: node scripts/merge-desktop-manifests.mjs artifacts
+        run: node scripts/merge-desktop-manifests.mjs artifacts windows-x86_64
+
+      - name: Select seven programs and the GUI update index
+        run: node scripts/release-assets.mjs artifacts desktop-latest.json release-assets
 
       - name: Create Release (with version.md)
         if: steps.notes.outputs.use_version_md == 'true'
@@ -245,17 +247,7 @@ jobs:
         with:
           body_path: docs/versions/${{ github.ref_name }}-${{ steps.notes.outputs.notes_suffix }}/version.md
           files: |
-            artifacts/linux-amd64/mywebscrcpy-linux-amd64
-            artifacts/linux-arm64/mywebscrcpy-linux-arm64
-            artifacts/macos-amd64/mywebscrcpy-macos-amd64
-            artifacts/macos-arm64/mywebscrcpy-macos-arm64
-            artifacts/windows-amd64.exe/mywebscrcpy-windows-amd64.exe
-            artifacts/desktop-*/**/*.tar.gz
-            artifacts/desktop-*/**/*.sig
-            artifacts/desktop-*/**/*.dmg
-            artifacts/desktop-*/**/*.exe
-            artifacts/desktop-*/**/*.AppImage
-            desktop-latest.json
+            release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -265,17 +257,7 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            artifacts/linux-amd64/mywebscrcpy-linux-amd64
-            artifacts/linux-arm64/mywebscrcpy-linux-arm64
-            artifacts/macos-amd64/mywebscrcpy-macos-amd64
-            artifacts/macos-arm64/mywebscrcpy-macos-arm64
-            artifacts/windows-amd64.exe/mywebscrcpy-windows-amd64.exe
-            artifacts/desktop-*/**/*.tar.gz
-            artifacts/desktop-*/**/*.sig
-            artifacts/desktop-*/**/*.dmg
-            artifacts/desktop-*/**/*.exe
-            artifacts/desktop-*/**/*.AppImage
-            desktop-latest.json
+            release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -289,7 +271,7 @@ jobs:
       - name: Download linux-amd64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: linux-amd64
+          name: linux-amd64-cli
           path: .
 
       - name: Set up Docker Buildx

@@ -44,9 +44,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Prepare native standalone Pi
-        run: python scripts/prepare-pi.py
+      - name: Prepare independent Pi test fixture
+        run: python scripts/prepare-pi.py --output .cache/pi-test/payload
       - name: Go regression
+        env:
+          MYWEBSCRCPY_PI_TEST_PAYLOAD: ${{ github.workspace }}/.cache/pi-test
         run: go test ./...
       - name: Test release version synchronization
         run: node --test scripts/sync-version.test.mjs

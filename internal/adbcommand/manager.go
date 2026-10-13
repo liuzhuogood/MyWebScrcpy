@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"mywebscrcpy/internal/dependencies"
 	"os"
 	"os/exec"
 	"strconv"
@@ -140,7 +141,7 @@ func (m *Manager) ExecuteDirect(ctx context.Context, serial string, args ...stri
 	}
 	commandArgs := append(append([]string(nil), m.prefix...), "-s", serial)
 	commandArgs = append(commandArgs, args...)
-	cmd := exec.CommandContext(ctx, m.adbPath, commandArgs...)
+	cmd := dependencies.CommandContext(ctx, m.adbPath, commandArgs...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(out)))
@@ -165,7 +166,7 @@ func (m *Manager) run(j *job) {
 		out := newLimitedOutput(m.outputMax)
 		commandArgs := append(append([]string(nil), m.prefix...), "-s", j.Serial)
 		commandArgs = append(commandArgs, j.args...)
-		cmd := exec.CommandContext(ctx, m.adbPath, commandArgs...)
+		cmd := dependencies.CommandContext(ctx, m.adbPath, commandArgs...)
 		cmd.Stdout = out
 		cmd.Stderr = out
 		err := cmd.Run()

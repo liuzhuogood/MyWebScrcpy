@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
-	"os/exec"
+	"mywebscrcpy/internal/dependencies"
 )
 
 // ServerConfig 是启动一个 scrcpy server 实例所需的参数。
@@ -43,7 +43,7 @@ type Server struct {
 	forwardSpec string // adb forward 的 remote spec
 	localPort   int    // adb forward 的本地端口
 	adbPath     string
-	cmd         *exec.Cmd // app_process 后台进程
+	cmd         *dependencies.Cmd // app_process 后台进程
 	exited      chan struct{}
 	exitErr     error
 }
@@ -70,7 +70,7 @@ func (s *Server) SCIDHex() string { return s.scidHex }
 
 // Push 将 server.jar 推送到设备。
 func (s *Server) Push(jarPath string) error {
-	cmd := exec.Command(s.adbPath, "-s", s.cfg.Serial, "push", jarPath, DeviceServerPath)
+	cmd := dependencies.Command(s.adbPath, "-s", s.cfg.Serial, "push", jarPath, DeviceServerPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("push server jar: %w: %s", err, out)
 	}
@@ -81,7 +81,7 @@ func (s *Server) Push(jarPath string) error {
 // Forward 建立 adb forward 隧道: 本地端口 -> 设备 localabstract socket。
 func (s *Server) Forward() error {
 	local := fmt.Sprintf("tcp:%d", s.localPort)
-	cmd := exec.Command(s.adbPath, "-s", s.cfg.Serial, "forward", local, s.forwardSpec)
+	cmd := dependencies.Command(s.adbPath, "-s", s.cfg.Serial, "forward", local, s.forwardSpec)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("adb forward: %w: %s", err, out)
 	}
@@ -90,7 +90,7 @@ func (s *Server) Forward() error {
 
 // RemoveForward 移除 forward 隧道。
 func (s *Server) RemoveForward() {
-	exec.Command(s.adbPath, "-s", s.cfg.Serial, "forward", "--remove",
+	dependencies.Command(s.adbPath, "-s", s.cfg.Serial, "forward", "--remove",
 		fmt.Sprintf("tcp:%d", s.localPort)).Run()
 }
 
@@ -124,7 +124,7 @@ func (s *Server) Start() error {
 		fmt.Sprintf("max_fps=%d", s.cfg.MaxFPS),
 	}
 
-	s.cmd = exec.Command(s.adbPath, args...)
+	s.cmd = dependencies.Command(s.adbPath, args...)
 	// 把 server 的 stdout/stderr 都收集起来，便于排查
 	lw := logWriter{prefix: "[scrcpy:" + s.cfg.Serial + "] "}
 	s.cmd.Stdout = lw

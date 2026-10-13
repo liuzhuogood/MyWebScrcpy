@@ -1,12 +1,10 @@
-// Package pibundle installs the embedded standalone Pi distribution next to
-// the application. It never downloads dependencies or searches the host PATH.
+// Package pibundle verifies standalone Pi archives and preserves project skills.
 package pibundle
 
 import (
 	"archive/zip"
 	"bytes"
 	"crypto/sha256"
-	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -21,15 +19,14 @@ import (
 	"time"
 )
 
-//go:embed payload/*
-var payload embed.FS
-
-var ErrUnprepared = errors.New("未内置 Pi 运行环境，请使用 scripts/build.sh 构建")
+var ErrUnprepared = errors.New("未准备独立 Pi 运行环境")
 
 type Paths struct {
 	Executable string
 	ToolsDir   string
 	SkillsDir  string
+	FD         string
+	RG         string
 }
 
 type fileRecord struct {
@@ -47,9 +44,11 @@ type manifest struct {
 
 // Prepare uses an absolute application directory, independent of launch cwd.
 // Skills are copied only when absent, preserving edits and additional skills.
-func Prepare(appDir string, skills fs.FS) (Paths, error) {
-	return prepare(appDir, skills, payload)
+func PrepareFrom(appDir string, skills, source fs.FS) (Paths, error) {
+	return prepare(appDir, skills, source)
 }
+
+func InstallSkills(dir string, skills fs.FS) error { return installSkills(dir, skills) }
 
 func prepare(appDir string, skills, source fs.FS) (Paths, error) {
 	data, err := fs.ReadFile(source, "payload/manifest.json")
@@ -92,7 +91,7 @@ func prepare(appDir string, skills, source fs.FS) (Paths, error) {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	paths := Paths{Executable: filepath.Join(runtimeDir, name), ToolsDir: filepath.Join(runtimeDir, "bin"), SkillsDir: skillsDir}
+	paths := Paths{Executable: filepath.Join(runtimeDir, name), ToolsDir: filepath.Join(runtimeDir, "bin"), SkillsDir: skillsDir, FD: filepath.Join(runtimeDir, "bin", "fd"+executableSuffix()), RG: filepath.Join(runtimeDir, "bin", "rg"+executableSuffix())}
 	for _, name := range []string{name, "bin/fd" + executableSuffix(), "bin/rg" + executableSuffix(), "package.json"} {
 		if _, exists := config.Files[name]; !exists {
 			return Paths{}, fmt.Errorf("内置 Pi 缺少必需文件: %s", name)

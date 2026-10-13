@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { ArrowLeft } from 'lucide-vue-next'
+import { ArrowLeft, Settings } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import DependencyPanel from '@/components/dependencies/DependencyPanel.vue'
+import SystemConfigDialog from '@/components/system/SystemConfigDialog.vue'
+const configOpen = ref(false)
 import type { DependencyPaths, DependencyStatus } from '@/types/dependencies'
 
 const status = ref<DependencyStatus>({ tools: [], paths: { adb: '', python: '' }, configurable: false })
@@ -49,7 +51,9 @@ onMounted(refresh)
     <header class="flex h-14 items-center gap-3 border-b px-4">
       <Button as-child variant="ghost" size="icon"><RouterLink to="/" aria-label="返回设备列表"><ArrowLeft class="size-4" /></RouterLink></Button>
       <span class="font-semibold">MyWebScrcpy</span>
+      <Button class="ml-auto" variant="ghost" size="sm" @click="configOpen = true"><Settings class="size-4" />系统配置</Button>
     </header>
+    <SystemConfigDialog v-model:open="configOpen" />
     <DependencyPanel :tools="status.tools" :paths="status.paths" :configurable="status.configurable && Boolean(token)" :loading="loading" :saving="saving" :error="error" :saved="saved" @refresh="refresh" @save="save" />
   </div>
 </template>

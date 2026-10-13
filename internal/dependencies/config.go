@@ -89,7 +89,19 @@ func Save(value Paths) error {
 	return nil
 }
 func RegisterSettings(mux *http.ServeMux, authorize func(http.HandlerFunc) http.HandlerFunc) {
+	registerManagedSettings(mux, authorize)
 	mux.HandleFunc("PUT /api/dependencies/paths", authorize(func(w http.ResponseWriter, r *http.Request) {
+		if active != nil {
+			guard, err := active.GuardMutation()
+			if err != nil {
+				http.Error(w, err.Error(), 409)
+				return
+			}
+			defer guard()
+		}
+
+		var previous, next Settings
+		managedChange := false
 		var value Paths
 		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8192))
 		decoder.DisallowUnknownFields()
@@ -97,9 +109,49 @@ func RegisterSettings(mux *http.ServeMux, authorize func(http.HandlerFunc) http.
 			http.Error(w, "依赖路径格式错误", http.StatusBadRequest)
 			return
 		}
+
+		if active != nil && value.ADB != Current().ADB {
+			selection := Selection{Source: "system", Path: value.ADB}
+			release, err := active.exclusive([]string{"adb"}, true)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
+			defer release()
+			checked := active.detect("adb", selection)
+			if !checked.Installed {
+				http.Error(w, checked.Error, http.StatusBadRequest)
+				return
+			}
+			previous = active.Settings()
+			next = previous
+			managedChange = true
+			next.ADB = selection
+			// Validate legacy Python before changing the new ADB configuration.
+			if value.Python != "" {
+				if _, err := checkExecutable(value.Python); err != nil {
+					http.Error(w, err.Error(), 400)
+					return
+				}
+			}
+			if err := writeJSON(filepath.Join(active.root, "config.json"), next); err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+		}
 		if err := Save(value); err != nil {
+			if managedChange {
+				if rollbackErr := writeJSON(filepath.Join(active.root, "config.json"), previous); rollbackErr != nil {
+					log.Printf("[Dependencies] 旧接口配置回滚失败: %v", rollbackErr)
+				}
+			}
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
+		}
+		if managedChange {
+			active.mu.Lock()
+			active.settings = next
+			active.mu.Unlock()
 		}
 		log.Print("[Dependencies] 已保存依赖路径；重启 App 后完整生效")
 		w.WriteHeader(http.StatusNoContent)

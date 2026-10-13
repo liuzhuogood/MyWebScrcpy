@@ -1,4 +1,8 @@
 fn main() {
+    let target = std::env::var("TARGET").unwrap();
+    if target.contains("windows") {
+        println!("cargo:rerun-if-changed=binaries/mywebscrcpy-{target}.exe");
+    }
     println!("cargo:rerun-if-env-changed=MYWEBSCRCPY_UPDATER_PUBLIC_KEY");
     println!("cargo:rerun-if-changed=updater.pub");
     let key=std::env::var("MYWEBSCRCPY_UPDATER_PUBLIC_KEY").unwrap_or_else(|_| std::fs::read_to_string("updater.pub").expect("missing updater public key"));

@@ -32,3 +32,7 @@ web/dist/
 internal/pibundle/payload/runtime.zip*
 internal/pibundle/payload/manifest.json
 .pi/runtime/
+
+# Downloaded and managed external dependencies
+/dependencies/
+.cache/pi-test/

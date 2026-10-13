@@ -1,6 +1,6 @@
 # MyWebScrcpy 桌面版
 
-Tauri 管理原生窗口、菜单、托盘和单实例，配套 Go 程序承载现有 Vue 与 HTTP/WebSocket。ADB、Python 不捆绑，scrcpy-server 保留内置配套版本。当前外部 Pi Agent 尚未接入。
+Tauri 管理原生窗口、菜单、托盘和单实例，配套 Go 程序承载现有 Vue 与 HTTP/WebSocket。Pi、ADB 与搜索工具不捆绑，scrcpy-server 保留内置配套版本。首页系统配置支持内置依赖按需安装与卸载，也可选择系统程序；Python 沿用已有配置。
 
 ## 构建
 
@@ -43,7 +43,7 @@ Linux 自动检测 Wayland/X11 socket，包括 SSH X11 转发；环境变量存�
 MYWEBSCRCPY_ADB=/absolute/path/adb MYWEBSCRCPY_PYTHON=/absolute/path/python3 ./mywebscrcpy
 ```
 
-macOS Finder 启动不会继承终端中临时设置的环境变量；可在桌面“依赖管理”中填写 ADB/Python 可执行文件的绝对路径，保存后重启 App。配置保存在桌面数据目录的 dependencies.json；显式环境变量优先于已保存路径。Python 脚本库按脚本自身要求在专用环境中安装，App 不执行未经确认的 Pi 安装命令。
+macOS Finder 启动不会继承终端临时环境变量。首页“系统配置 → 依赖”可按需安装 Pi/ADB，或配置系统 Pi、ADB 的绝对路径；fd/rg 自动识别 Pi 工具缓存和 PATH；保存后新操作生效，ADB 忙时拒绝切换。配置保存在桌面数据目录的 dependencies/config.json。既有桌面“依赖管理”入口及 Python 路径设置保留；MYWEBSCRCPY_ADB 在系统来源下仍优先，之后按明确路径、ANDROID_HOME、PATH 查找。Python 脚本库按脚本要求安装。
 
 桌面 App 使用完整安装包更新，不允许沿用服务端单文件替换升级。系统签名、公证和三平台真机视频/音频验证不因本机编译成功而完成。
 
@@ -56,3 +56,11 @@ macOS Finder 启动不会继承终端中临时设置的环境变量；可在桌�
 ## 更新发布
 
 完整更新包、运行方式识别、数据备份、回滚与 Actions 凭据见 [更新文档](../docs/updating.md)。签名更新构建使用 `node scripts/build-desktop.mjs --signed`，签名私钥从环境传入，公钥保存在 `updater.pub`。原生验证构建使用独立应用标识，可运行 `node scripts/verification/desktop-native.mjs`，验证完成后退出 App。
+
+## v1.20.1 Release 下载
+
+Linux/macOS 仅发布 CLI，Windows 发布 CLI、独立 GUI exe 和 GUI 安装包。CLI 文件默认只启动服务，`--gui` 请使用 GUI 分发。Windows GUI 内嵌 Go 服务，启动时释放到 `%LOCALAPPDATA%/com.mywebscrcpy.desktop/runtime/<SHA-256>/`，无需旁边的服务 exe；安装包也使用同一个内嵌服务。独立 exe 需要系统 WebView2，安装包会自动安装缺失的 WebView2。
+
+Release 保留 7 个程序与 `desktop-latest.json` 自动更新索引。Windows CLI 统一为 `mywebscrcpy-windows-cli-amd64.exe`，GUI 为 `mywebscrcpy-windows-gui-amd64.exe`，安装包为 `mywebscrcpy-v1.20.1-windows-x86_64-gui-setup.exe`。不再发布 macOS/Linux GUI 包；这些平台此前安装的 GUI 后续需选择 CLI 或自行构建桌面版。此前 CLI 版本若不能匹配新文件名，请手工下载一次新 CLI，之后使用新名称自动更新。
+
+Windows GUI 安装版使用索引自动更新；独立 GUI exe 使用完整安装包更新，避免安装器更新后仍重新打开旧便携文件。

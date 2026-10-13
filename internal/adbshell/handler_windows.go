@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"mywebscrcpy/internal/dependencies"
 	"net/http"
 	"os"
-	"os/exec"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -107,7 +107,7 @@ func Handler(adbPath string, online IsOnline) http.HandlerFunc {
 		}()
 
 		// 启动 adb shell 并建立管道
-		cmd := exec.CommandContext(ctx, adbPath, "-s", serial, "shell")
+		cmd := dependencies.CommandContext(ctx, adbPath, "-s", serial, "shell")
 		stdinPipe, err := cmd.StdinPipe()
 		if err != nil {
 			_ = safeWrite(websocket.TextMessage, []byte(fmt.Sprintf("\r\n\033[31m[adb-shell] stdin pipe 失败: %v\033[0m\r\n", err)))

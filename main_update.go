@@ -23,7 +23,7 @@ var updateResume = func() {}
 
 func updateMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, "/api/version/") || strings.HasPrefix(r.URL.Path, "/api/desktop/") {
+		if strings.HasPrefix(r.URL.Path, "/api/dependencies") || strings.HasPrefix(r.URL.Path, "/api/version/") || strings.HasPrefix(r.URL.Path, "/api/desktop/") {
 			next.ServeHTTP(w, r)
 			return
 		}

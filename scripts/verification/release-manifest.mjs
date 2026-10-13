@@ -16,6 +16,7 @@ try {
   const manifest=path.join(directory,'desktop-manifest-'+target+'.json')
   run('scripts/desktop-manifest.mjs',[directory,target,manifest,version])
   const value=JSON.parse(await readFile(manifest,'utf8'));const name=decodeURIComponent(new URL(value.platforms[target].url).pathname.split('/').at(-1))
+  if (target === 'windows-x86_64') assert.equal(name,`mywebscrcpy-${version}-windows-x86_64-gui-setup.exe`)
   assert((await stat(path.join(directory,name))).isFile())
  }
  run('scripts/merge-desktop-manifests.mjs',['artifacts'])
@@ -24,5 +25,17 @@ try {
  assert.notEqual(merged.platforms['darwin-aarch64'].url,merged.platforms['darwin-x86_64'].url)
  await rm(path.join(temp,'artifacts','desktop-linux-x86_64'),{recursive:true})
  run('scripts/merge-desktop-manifests.mjs',['artifacts'],1)
+ for(const target of ['darwin-aarch64','darwin-x86_64']) await rm(path.join(temp,'artifacts','desktop-'+target),{recursive:true})
+ run('scripts/merge-desktop-manifests.mjs',['artifacts','windows-x86_64'])
+ const windows=JSON.parse(await readFile(path.join(temp,'desktop-latest.json'),'utf8'))
+ assert.deepEqual(Object.keys(windows.platforms),['windows-x86_64'])
+ const programs=['mywebscrcpy-linux-amd64-cli','mywebscrcpy-linux-arm64-cli','mywebscrcpy-macos-amd64-cli','mywebscrcpy-macos-arm64-cli','mywebscrcpy-windows-cli-amd64.exe','mywebscrcpy-windows-gui-amd64.exe']
+ for(const name of programs) await writeFile(path.join(temp,'artifacts',name),'program')
+ await writeFile(path.join(temp,'artifacts','old-unwanted.exe'),'old asset')
+ run('scripts/release-assets.mjs',['artifacts','desktop-latest.json','release-assets'])
+ const {readdir}=await import('node:fs/promises')
+ assert.deepEqual((await readdir(path.join(temp,'release-assets'))).sort(),[...programs,`mywebscrcpy-${version}-windows-x86_64-gui-setup.exe`,'desktop-latest.json'].sort())
+ await rm(path.join(temp,'artifacts',programs[0]))
+ run('scripts/release-assets.mjs',['artifacts','desktop-latest.json','incomplete-release'],1)
  console.log('PASS: platform filenames, manifest merge, architecture separation and incomplete release rejection')
 }finally{await rm(temp,{recursive:true,force:true,maxRetries:10,retryDelay:200})}

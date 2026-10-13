@@ -1,0 +1,16 @@
+{
+  "platform": "darwin/arm64",
+  "command": "go build -trimpath -ldflags='-s -w'",
+  "files": {
+    "before": {
+      "bytes": 50185858,
+      "sha256": "75d1c7de304ceacb33d4646215ac62981328b2d36592c94db4e7e9957aeb8049"
+    },
+    "after": {
+      "bytes": 16505458,
+      "sha256": "920e26f50ebf055aaf3a3c90a3ab25d347574a396bce991421ea0abf57153f53"
+    }
+  },
+  "reduction_bytes": 33680400,
+  "reduction_percent": 67.11
+}

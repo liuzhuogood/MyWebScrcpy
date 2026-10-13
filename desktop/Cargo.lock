@@ -2198,15 +2198,17 @@ dependencies = [
 
 [[package]]
 name = "mywebscrcpy-gui"
-version = "1.20.0"
+version = "1.20.1"
 dependencies = [
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
+ "tempfile",
 ]
 
 [[package]]

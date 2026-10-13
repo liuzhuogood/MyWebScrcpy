@@ -200,7 +200,7 @@ func RunWorker(path string) error {
 	}
 	// The DB is closed at this point: backup main file plus WAL/SHM without guessing migration compatibility.
 	backups := map[string]string{}
-	for _, name := range []string{"data/mywebscrcpy.db", "data/mywebscrcpy.db-wal", "data/mywebscrcpy.db-shm", "dependencies.json"} {
+	for _, name := range runtimeFiles {
 		source := filepath.Join(plan.Directory, name)
 		if fileExists(source) {
 			backup := filepath.Join(filepath.Dir(path), filepath.Base(name)+".backup")
@@ -247,7 +247,7 @@ func RunWorker(path string) error {
 	_ = os.Remove(plan.Target)
 	rollbackErr := os.Rename(plan.Target+".old", plan.Target)
 	if rollbackErr == nil {
-		for _, name := range []string{"data/mywebscrcpy.db", "data/mywebscrcpy.db-wal", "data/mywebscrcpy.db-shm", "dependencies.json"} {
+		for _, name := range runtimeFiles {
 			source := filepath.Join(plan.Directory, name)
 			if removeErr := os.Remove(source); removeErr != nil && !os.IsNotExist(removeErr) {
 				rollbackErr = removeErr
