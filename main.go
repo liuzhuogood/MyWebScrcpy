@@ -22,6 +22,7 @@ import (
 	"mywebscrcpy/internal/dependencies"
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
+	"mywebscrcpy/internal/matchingservice"
 	"mywebscrcpy/internal/mdscript"
 	"mywebscrcpy/internal/pibundle"
 	"mywebscrcpy/internal/scheduler"
@@ -164,6 +165,7 @@ func main() {
 	}
 
 	var updateTasks *taskmanager.Manager
+	var matchingManager *matchingservice.Manager
 	dependencyResume := func() {}
 	updatePrepare = func() error {
 		if !updatePrepared.CompareAndSwap(false, true) {
@@ -187,6 +189,12 @@ func main() {
 		}
 		if !updateGate.TryLock() {
 			return fmt.Errorf("请关闭投屏连接并等待当前操作完成后再更新")
+		}
+		if matchingManager != nil {
+			if err := matchingManager.CheckIdle(); err != nil {
+				updateGate.Unlock()
+				return err
+			}
 		}
 		if err := hub.CheckUpdateIdle(); err != nil {
 			updateGate.Unlock()
@@ -220,6 +228,12 @@ func main() {
 		if !updateGate.TryLock() {
 			return nil, fmt.Errorf("请关闭投屏连接并等待当前操作完成")
 		}
+		if matchingManager != nil {
+			if err := matchingManager.CheckIdle(); err != nil {
+				updateGate.Unlock()
+				return nil, err
+			}
+		}
 		if err := hub.CheckDependencyIdle(); err != nil {
 			updateGate.Unlock()
 			return nil, err
@@ -252,6 +266,28 @@ func main() {
 	templateService := template.NewService(templateStorage)
 	defer templateService.Stop()
 	template.RegisterRoutes(mux, templateService)
+	matchingManager = matchingservice.New(matchingservice.Options{
+		Python: dependencies.PythonPath,
+		Devices: func() []string {
+			devices := []string{}
+			for _, serial := range hub.MatchingDevices() {
+				for _, asset := range templateStorage.ListTemplates(serial) {
+					if asset.Enabled {
+						devices = append(devices, serial)
+						break
+					}
+				}
+			}
+			return devices
+		},
+		TemplateReadable: func(id, serial string) bool {
+			asset, err := templateStorage.GetTemplate(id)
+			return err == nil && (asset.Serial == serial || asset.Serial == template.GlobalSerial)
+		},
+		API: mux, Vision: http.HandlerFunc(hub.ServeMatchingVisionWS),
+	})
+	matchingManager.RegisterRoutes(mux)
+	defer matchingManager.Close()
 
 	if database == nil {
 		registerUnavailableScriptRoutes(mux)

@@ -3643,6 +3643,98 @@
           }
         }
       }
+    },
+    "/api/matching-service/status": {
+      "get": {
+        "tags": [
+          "模板匹配服务"
+        ],
+        "summary": "获取全局匹配服务状态",
+        "responses": {
+          "200": {
+            "description": "服务状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchingServiceStatus"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "状态冲突或启动失败"
+          }
+        }
+      }
+    },
+    "/api/matching-service/check": {
+      "post": {
+        "tags": [
+          "模板匹配服务"
+        ],
+        "summary": "检测当前 Python 和识图依赖",
+        "responses": {
+          "200": {
+            "description": "服务状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchingServiceStatus"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "状态冲突或启动失败"
+          }
+        }
+      }
+    },
+    "/api/matching-service/start": {
+      "post": {
+        "tags": [
+          "模板匹配服务"
+        ],
+        "summary": "手动启动唯一匹配进程",
+        "responses": {
+          "200": {
+            "description": "服务状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchingServiceStatus"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "状态冲突或启动失败"
+          }
+        }
+      }
+    },
+    "/api/matching-service/stop": {
+      "post": {
+        "tags": [
+          "模板匹配服务"
+        ],
+        "summary": "停止并回收匹配进程",
+        "responses": {
+          "200": {
+            "description": "服务状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchingServiceStatus"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "状态冲突或启动失败"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6047,6 +6139,112 @@
               "null"
             ],
             "description": "本次设备执行的冻结证据，日志输入有界；重新生成沿用同一证据。"
+          }
+        }
+      },
+      "MatchingServiceStatus": {
+        "type": "object",
+        "required": [
+          "state",
+          "pid",
+          "error",
+          "environment",
+          "devices"
+        ],
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "stopped",
+              "checking",
+              "starting",
+              "running",
+              "stopping",
+              "failed"
+            ]
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string"
+          },
+          "environment": {
+            "type": "object",
+            "required": [
+              "path",
+              "version",
+              "ready",
+              "error",
+              "warning",
+              "dependencies"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "ready": {
+                "type": "boolean"
+              },
+              "error": {
+                "type": "string"
+              },
+              "warning": {
+                "type": "string"
+              },
+              "dependencies": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "available",
+                    "error"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "devices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "serial",
+                "state",
+                "error"
+              ],
+              "properties": {
+                "serial": {
+                  "type": "string"
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "waiting",
+                    "matching",
+                    "failed"
+                  ]
+                },
+                "error": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       }

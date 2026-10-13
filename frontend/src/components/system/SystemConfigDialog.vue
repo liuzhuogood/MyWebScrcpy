@@ -11,6 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { theme } from '@/composables/useTheme'
 import { useDependencies, type DependencyId, type ManagedTool, type Selection } from '@/composables/useDependencies'
 
+import MatchingServicePanel from './MatchingServicePanel.vue'
+const props = defineProps<{ initialTab?: 'theme' | 'dependencies' | 'matching' }>()
+
 const open = defineModel<boolean>('open', { default: false })
 const tab = ref('theme')
 const w = useDependencies()
@@ -20,7 +23,7 @@ const licenseOpen = ref(false)
 const licenseAccepted = ref(false)
 const themes = [{ id: 'auto' as const, name: '系统', icon: Monitor }, { id: 'light' as const, name: '明亮', icon: Sun }, { id: 'dark' as const, name: '黑暗', icon: Moon }]
 watch(open, async (value) => {
-  if (value) { await w.load(); if (open.value) w.startPolling() }
+  if (value) { if (props.initialTab) tab.value = props.initialTab; await w.load(); if (open.value) w.startPolling() }
   else w.stopPolling()
 })
 function change(id: DependencyId, key: keyof Selection, value: unknown) {
@@ -56,7 +59,7 @@ function label(tool: ManagedTool) {
     <DialogContent class="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl" :aria-describedby="undefined">
       <DialogHeader class="shrink-0 border-b px-5 py-4"><DialogTitle>系统配置</DialogTitle></DialogHeader>
       <Tabs v-model="tab" class="flex min-h-0 flex-1 flex-col gap-0">
-        <div class="shrink-0 px-5 pt-4"><TabsList class="grid w-full grid-cols-2"><TabsTrigger value="theme">主题</TabsTrigger><TabsTrigger value="dependencies">依赖</TabsTrigger></TabsList></div>
+        <div class="shrink-0 px-5 pt-4"><TabsList class="grid w-full grid-cols-3"><TabsTrigger value="theme">主题</TabsTrigger><TabsTrigger value="dependencies">依赖</TabsTrigger><TabsTrigger value="matching">匹配</TabsTrigger></TabsList></div>
         <div class="min-h-0 overflow-y-auto px-5 py-5">
           <TabsContent value="theme" class="m-0 min-h-56 space-y-4">
             <p class="text-sm font-medium">外观</p>
@@ -64,6 +67,7 @@ function label(tool: ManagedTool) {
               <Button v-for="item in themes" :key="item.id" variant="outline" class="h-24 flex-col gap-3" :class="theme === item.id ? 'border-primary bg-primary/5 text-primary' : ''" :aria-pressed="theme === item.id" @click="theme = item.id"><component :is="item.icon" class="size-6" />{{ item.name }}</Button>
             </div>
           </TabsContent>
+          <TabsContent value="matching" class="m-0"><MatchingServicePanel v-if="open" /></TabsContent>
           <TabsContent value="dependencies" class="m-0 space-y-3">
             <DialogDescription class="text-xs">内置依赖按需下载，保存在应用数据目录。</DialogDescription>
             <p v-if="loading" role="status" class="text-sm text-muted-foreground">正在检测依赖…</p>

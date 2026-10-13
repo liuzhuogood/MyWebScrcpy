@@ -51,6 +51,7 @@
 | [v1.20.0-feature](v1.20.0-feature/version.md) | 进行中 | Tauri 桌面窗口、原生菜单、托盘、GUI/服务模式与独立依赖管理；三平台验证分别记录。 |
 | [v1.20.1-feature](v1.20.1-feature/version.md) | 正式版本已同步；发布包另行验收 | 系统配置、主题、Pi/ADB 按需安装与卸载、系统路径自动检测、主程序依赖拆包；保留 v1.21.0 设计记录。 |
 | [v1.21.0-feature](v1.21.0-feature/version.md) | 第一阶段已实现；补充验收待完成 | Pi 技能生成 Python、可安装 SDK 基础能力、来源校验与有效产物执行；真机及其他平台原生链路未测。 |
+| [v1.23.0-feature](v1.23.0-feature/version.md) | 代码完成，待集成 | 系统设置全局手动匹配服务、Python 依赖检测、多设备 SDK 任务与模板面板提示。 |
 | [v1.22.0-feature](v1.22.0-feature/version.md) | 已实现，验收待完成 | SDK 0.2.0 封装模板资产、Vision 与进程内匹配；接入 Pi sdk-v2，软件测试及只读真机通过，点击、浏览器与原生跨平台验收待完成。 |
 
 ## Vue 前端迁移版本

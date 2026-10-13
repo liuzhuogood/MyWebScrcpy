@@ -18,6 +18,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
+import SystemConfigDialog from '@/components/system/SystemConfigDialog.vue'
+import { useMatchingService } from '@/composables/useMatchingService'
 import SidePanelHeader from '@/components/layout/SidePanelHeader.vue'
 import { exportUrl, templateImageDownloadUrl, templateImageUrl, type TemplateItem } from '@/api/templates'
 import { useTemplates } from './useTemplates'
@@ -25,6 +27,8 @@ import { useTemplates } from './useTemplates'
 const props = defineProps<{ serial: string }>()
 const emit = defineEmits<{ close: [] }>()
 
+const matching = useMatchingService()
+const settingsOpen = ref(false)
 const t = useTemplates(props.serial)
 const deleteTarget = ref<TemplateItem | null>(null)
 // 删除 id 单独存放：Action 点击会先关弹窗（清空 deleteTarget）再调 onDelete
@@ -153,6 +157,7 @@ void t.load()
     </SidePanelHeader>
 
     <div class="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-3">
+      <div v-if="matching.status.value && matching.status.value.state !== 'running'" class="flex flex-wrap items-center justify-between gap-1 rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground"><span>自动模板匹配未启动，启动后显示匹配框。</span><Button variant="link" size="sm" class="h-auto p-0 text-xs" @click="settingsOpen = true">前往系统设置</Button></div>
       <div class="flex flex-wrap items-center gap-1.5">
         <div class="flex gap-1" role="group" aria-label="模板范围筛选">
           <Button size="sm" :variant="t.scope.value === 'all' ? 'secondary' : 'ghost'" @click="t.scope.value = 'all'">全部</Button>
@@ -260,4 +265,5 @@ void t.load()
       </AlertDialogContent>
     </AlertDialog>
   </section>
+  <SystemConfigDialog v-model:open="settingsOpen" initial-tab="matching" />
 </template>
