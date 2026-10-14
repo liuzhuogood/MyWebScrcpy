@@ -112,8 +112,11 @@ func TestGenerationFreezeRetryAndProvenance(t *testing.T) {
 		t.Fatal("changed API document accepted")
 	}
 	g.APIDocument = apiBefore
-	if err := os.WriteFile(filepath.Join(g.SkillDir, "references/sdk-api.md"), []byte("# SDK API sdk-v2\nChanged"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(g.SkillDir, "references/sdk-api.md"), []byte("# SDK API sdk-v2\r\nChanged with CRLF"), 0600); err != nil {
 		t.Fatal(err)
+	}
+	if _, _, err := g.contextFiles(*saved); err != nil {
+		t.Fatalf("CRLF line endings should be accepted: %v", err)
 	}
 	if g.Check(*saved) == nil {
 		t.Fatal("modified skill artifact accepted")

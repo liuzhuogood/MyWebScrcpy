@@ -96,7 +96,8 @@ func (g *Generator) contextFiles(script db.MarkdownScriptRecord) (map[string]str
 		return nil, "", fmt.Errorf("缺少 markdown-to-python 技能")
 	}
 	api := files[filepath.Join("skill", "references", "sdk-api.md")]
-	if !strings.HasPrefix(api, "# SDK API "+pythoncheck.Version+"\n") {
+	firstLine, _, _ := strings.Cut(api, "\n")
+	if strings.TrimRight(firstLine, "\r") != "# SDK API "+pythoncheck.Version {
 		return nil, "", fmt.Errorf("生成技能与 SDK 生成约定版本不一致")
 	}
 	task, err := json.Marshal(struct {
