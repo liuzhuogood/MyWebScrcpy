@@ -1,14 +1,12 @@
 import { ref } from 'vue'
+import { appendOp } from './opLogStore'
+
+export { clearOps, loadOps, opClearing, opEntries, opError, opLoadFailed, opLoading } from './opLogStore'
+export type { OpEntry } from './opLogStore'
 
 // 操作日志：记录投屏操控，可切换“描述 / ADB 命令”视图。
 
 export type OpType = 'tap' | 'longpress' | 'swipe' | 'key' | 'text'
-
-export interface OpEntry {
-  time: string
-  desc: string
-  adb: string
-}
 
 export type OpPayload
   = | { x: number, y: number }
@@ -17,9 +15,6 @@ export type OpPayload
     | { label: string, keycode: string }
     | { text: string }
 
-const MAX_ENTRIES = 500
-
-export const opEntries = ref<OpEntry[]>([])
 export const opMode = ref<'desc' | 'adb'>('desc')
 
 function adbPrefix(serial: string): string {
@@ -27,7 +22,6 @@ function adbPrefix(serial: string): string {
 }
 
 export function recordOp(serial: string, type: OpType, data: OpPayload) {
-  const time = new Date().toTimeString().slice(0, 8)
   let desc = ''
   let adb = ''
   const prefix = adbPrefix(serial)
@@ -71,10 +65,5 @@ export function recordOp(serial: string, type: OpType, data: OpPayload) {
   else {
     return
   }
-  const next = [...opEntries.value, { time, desc, adb }]
-  opEntries.value = next.length > MAX_ENTRIES ? next.slice(-MAX_ENTRIES) : next
-}
-
-export function clearOps() {
-  opEntries.value = []
+  appendOp(serial, type, desc, adb)
 }

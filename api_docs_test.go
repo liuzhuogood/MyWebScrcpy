@@ -50,6 +50,7 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"/api/adb/commands",
 		"/api/adb/commands/{command_id}",
 		"/api/sendkey",
+		"/api/operation-logs",
 		// 文件管理
 		"/api/files",
 		"/api/files/download",

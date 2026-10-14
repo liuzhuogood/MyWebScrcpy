@@ -3735,6 +3735,238 @@
           }
         }
       }
+    },
+    "/api/operation-logs": {
+      "post": {
+        "tags": [
+          "操作日志"
+        ],
+        "summary": "批量保存手机操作日志",
+        "description": "前端后台异步调用。独立有界队列写入 SQLite，事务提交成功后返回 201；相同 ID 不重复写入。日志失败不影响手机控制。请求体最多 256 KiB。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 50,
+                    "items": {
+                      "$ref": "#/components/schemas/OperationLog"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "已提交到 SQLite，saved 为本批已处理条数（包括重复 ID）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "saved"
+                  ],
+                  "properties": {
+                    "saved": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "字段、时间、批量大小或请求体无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "队列已满、数据库不可用或保存失败；可使用原 ID 重试",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "操作日志"
+        ],
+        "summary": "获取最近 7 天的操作日志",
+        "description": "按服务端入库序号倒序返回，自动排除超过 7 天的记录。",
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "query",
+            "required": false,
+            "description": "设备序列号；省略时操作所有设备的日志",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "上一页 next_before 值；首次查询省略",
+            "schema": {
+              "type": "integer",
+              "format": "int64",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "操作日志列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationLogPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "分页参数无效",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "数据库不可用或读取失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "操作日志"
+        ],
+        "summary": "清空操作日志",
+        "description": "与写入共用队列，按服务端接受顺序执行；返回成功表示删除已提交。",
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "query",
+            "required": false,
+            "description": "设备序列号；省略时操作所有设备的日志",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "删除完成",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "deleted"
+                  ],
+                  "properties": {
+                    "deleted": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "队列已满、数据库不可用或删除失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "message"
+                  ],
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6245,6 +6477,76 @@
                 }
               }
             }
+          }
+        }
+      },
+      "OperationLog": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "serial",
+          "type",
+          "description",
+          "adb_command",
+          "occurred_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "客户端生成的唯一记录 ID，重试必须沿用同一 ID"
+          },
+          "serial": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "tap",
+              "longpress",
+              "swipe",
+              "key",
+              "text"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "操作描述，UTF-8 最多 8192 字节"
+          },
+          "adb_command": {
+            "type": "string",
+            "minLength": 1,
+            "description": "对应的 ADB 复现命令，UTF-8 最多 16384 字节；接口仅存储，不执行命令"
+          },
+          "occurred_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "操作时间，Unix 毫秒；最近 7 天内，允许最多 1 分钟未来时钟偏差"
+          }
+        }
+      },
+      "OperationLogPage": {
+        "type": "object",
+        "required": [
+          "items",
+          "next_before"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OperationLog"
+            }
+          },
+          "next_before": {
+            "type": "integer",
+            "format": "int64",
+            "description": "下一页的排他序号游标，0 表示没有下一页"
           }
         }
       }

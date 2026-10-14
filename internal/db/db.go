@@ -142,6 +142,9 @@ func (d *DB) migrate() error {
 	if err := d.migrateGenerations(); err != nil {
 		return err
 	}
+	if err := d.migrateOperationLogs(); err != nil {
+		return err
+	}
 	return d.migrateArtifacts()
 }
 

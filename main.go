@@ -25,6 +25,7 @@ import (
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/matchingservice"
 	"mywebscrcpy/internal/mdscript"
+	"mywebscrcpy/internal/operationlog"
 	"mywebscrcpy/internal/pibundle"
 	"mywebscrcpy/internal/scheduler"
 	"mywebscrcpy/internal/scripts"
@@ -139,6 +140,9 @@ func main() {
 	uiPage := uipage.New(adbPath)
 
 	mux := http.NewServeMux()
+	operationLogs := operationlog.New(database)
+	defer operationLogs.Close()
+	operationLogs.RegisterRoutes(mux)
 	dependencies.RegisterRoutes(mux, true)
 	if *readyFlag == "" {
 		dependencies.RegisterSettings(mux, func(next http.HandlerFunc) http.HandlerFunc { return next })
