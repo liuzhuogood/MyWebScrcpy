@@ -1,0 +1,31 @@
+# Auto detect text files and enforce LF line endings across all platforms
+* text=auto eol=lf
+
+# Source files
+*.go text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+*.vue text eol=lf
+*.mjs text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+*.toml text eol=lf
+*.rs text eol=lf
+
+# Windows-specific batch scripts
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.dmg binary
+*.exe binary
+*.tar.gz binary
+*.zip binary
