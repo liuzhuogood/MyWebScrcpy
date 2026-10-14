@@ -36,6 +36,7 @@ internal/pibundle/payload/manifest.json
 # Downloaded and managed external dependencies
 /dependencies/
 .cache/pi-test/
+.cache/services/
 
 # Isolated Python SDK verification environment
 .cache/sdk-test/

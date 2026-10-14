@@ -10,7 +10,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -85,8 +87,13 @@ func serveManaged(listener net.Listener, mux *http.ServeMux, secure bool) error 
 	if err := updater.PublishHealth(listener, secure, strings.TrimSpace(string(versionBytes))); err != nil {
 		return err
 	}
+	stopContext, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
 	go func() {
-		<-updateStop
+		select {
+		case <-updateStop:
+		case <-stopContext.Done():
+		}
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {

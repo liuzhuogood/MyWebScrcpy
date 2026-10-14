@@ -3,6 +3,8 @@ import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 
+const backendURL = process.env.MYWEBSCRCPY_BACKEND_URL ?? 'http://localhost:8080'
+
 // https://vite.dev/config/
 export default defineConfig({
   base: '/',
@@ -20,14 +22,14 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: backendURL,
         changeOrigin: true,
         ws: true,
       },
-      '/api-docs.html': { target: 'http://localhost:8080' },
+      '/api-docs.html': { target: backendURL },
       // 投屏 / 终端 / Vision 均走 WebSocket，必须显式代理 ws
       '/ws': {
-        target: 'ws://localhost:8080',
+        target: backendURL,
         changeOrigin: true,
         ws: true,
       },

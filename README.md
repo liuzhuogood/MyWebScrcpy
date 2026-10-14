@@ -128,7 +128,22 @@ sudo xattr -rd com.apple.quarantine "/Applications/MyWebScrcpy.app"
 
 ### 前端开发
 
-在 Go 后端运行后，执行：
+在仓库根目录也可统一管理前后端开发服务（macOS/Linux，需要 Go、Node.js 24 和 pnpm）：
+
+```bash
+./scripts/services.sh start       # 启动前后端
+./scripts/services.sh stop        # 停止前后端
+./scripts/services.sh restart     # 重启前后端
+./scripts/services.sh status      # 查看状态
+./scripts/services.sh logs        # 查看最近日志
+./scripts/services.sh start backend   # 仅启动后端；frontend 同理
+```
+
+默认访问 `http://127.0.0.1:5173/`，后端监听 `127.0.0.1:8080`。首次启动自动安装缺少的前端依赖；后端启动时编译当前 Go 代码，不弹出桌面窗口。进程记录、开发用后端程序及日志位于 `.cache/services/`，运行数据默认沿用项目目录。脚本可从任意目录调用，重复启动不会创建第二份进程，停止时只处理它启动的进程组。端口被其他服务占用时直接报错。
+
+使用 `MYWEBSCRCPY_FRONTEND_PORT` 和 `MYWEBSCRCPY_BACKEND_PORT` 修改端口，前端代理同步指向指定后端；使用 `MYWEBSCRCPY_SERVICE_DIR` 指定进程记录与日志目录，`MYWEBSCRCPY_SERVICE_DATA_DIR` 指定后端运行数据目录。管理同一组服务时须使用同一个 `MYWEBSCRCPY_SERVICE_DIR`。重启沿用已记录的端口和运行数据目录；先停止后重新启动时，需再次传入自定义配置。
+
+仍可分别手动启动。在 Go 后端运行后，执行：
 
 ```bash
 pnpm --dir frontend install --frozen-lockfile
