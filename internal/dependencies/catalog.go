@@ -25,6 +25,9 @@ func (m *Manager) spec(id string) (catalog, map[string]artifact, error) {
 	if id == "adb" {
 		name = "adb"
 	}
+	if id == "python" {
+		name = "python"
+	}
 	raw, err := catalogFS.ReadFile("catalog/" + name + ".json")
 	if err != nil {
 		return c, nil, err

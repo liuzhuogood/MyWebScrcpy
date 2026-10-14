@@ -41,9 +41,9 @@ with Client("http://HOST:PORT") as client:
 
 `Client(headers=...)` 接收显式请求头，默认验证 TLS，可传 CA 路径。不会读取未知凭据、自动启动主服务或修改 root logger。Client/Device 可重复关闭，关闭后的对象拒绝操作。
 
-应用任务会释放同一套 SDK 源文件，并提供连接环境变量；配置的 Python 环境仍需安装 `httpx`。导出的脚本可在其他目录通过安装本 SDK 独立运行，远程操作要求服务与设备可达。
+应用任务使用所选 Python 环境中安装的 SDK，并提供连接环境变量。系统配置的 Python 卡片提供「安装依赖」，通过该解释器的 pip 安装与主程序版本一致的 SDK 及第三方依赖。导出的脚本可在其他目录通过安装本 SDK 独立运行，远程操作要求服务与设备可达。
 
-接口依据 `web/openapi.json` 的 `/api/adb/commands` 和 `/api/ui/page-info`。安装版与应用内释放版共享源码，避免两套运行库。仅本机和受控接口已验证，真机及 Windows/Linux 原生链路仍待验收。
+接口依据 `web/openapi.json` 的 `/api/adb/commands` 和 `/api/ui/page-info`。应用内与外部脚本统一使用安装的 SDK。仅本机和受控接口已验证，真机及 Windows/Linux 原生链路仍待验收。
 
 SDK 版本与仓库根目录 `VERSION` 一致，Python 包版本去掉 `v` 前缀。修改 `VERSION` 后运行 `node scripts/sync-version.mjs`，同时更新主程序与 SDK 版本。
 

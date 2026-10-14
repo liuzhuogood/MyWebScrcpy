@@ -22,6 +22,7 @@ for (const newline of ['\n', '\r\n']) {
       'desktop/updater.pub': 'test-public-key\n',
       'packages/python-sdk/pyproject.toml': '[project]\nname = "mywebscrcpy-sdk"\nversion = "1.20.0"\n',
       'packages/python-sdk/src/mywebscrcpy/__init__.py': '__version__ = "1.20.0"\n',
+      'packages/python-sdk/version.go': 'package pythonsdk\nconst Version = "1.20.0"\n',
     }
     for (const [file, contents] of Object.entries(files)) {
       const full = path.join(root, file)
@@ -35,7 +36,7 @@ for (const newline of ['\n', '\r\n']) {
     const updated = run()
     assert.equal(updated.status, 0, updated.stderr)
     assert.equal(run('--check').status, 0, 'all package and desktop versions must be updated')
-    for (const file of ['frontend/package.json', 'desktop/package.json', 'desktop/Cargo.toml', 'desktop/Cargo.lock', 'desktop/tauri.conf.json', 'packages/python-sdk/pyproject.toml', 'packages/python-sdk/src/mywebscrcpy/__init__.py']) {
+    for (const file of ['frontend/package.json', 'desktop/package.json', 'desktop/Cargo.toml', 'desktop/Cargo.lock', 'desktop/tauri.conf.json', 'packages/python-sdk/pyproject.toml', 'packages/python-sdk/src/mywebscrcpy/__init__.py', 'packages/python-sdk/version.go']) {
       const contents = readFileSync(path.join(root, file), 'utf8')
       assert.ok(contents.includes('1.20.1'), file)
       if (newline === '\r\n') assert.ok(!/(?<!\r)\n/.test(contents), `${file} contains bare LF`)

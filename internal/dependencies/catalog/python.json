@@ -1,0 +1,10 @@
+{
+  "version": "3.12.15",
+  "targets": {
+    "darwin/arm64": {"python": {"url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-3.12.15%2B20261009-aarch64-apple-darwin-install_only_stripped.tar.gz", "sha256": "233f8e15255b3e1d1fd47ea5dd5230dfed803f371138e896e54d98c60ae19f6f", "size": 25030095}},
+    "darwin/amd64": {"python": {"url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-3.12.15%2B20261009-x86_64-apple-darwin-install_only_stripped.tar.gz", "sha256": "fb3187d95334813b88940db0f1ca57b84cedfd552739c3a5771c3ea0e49988c9", "size": 24751118}},
+    "linux/amd64": {"python": {"url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-3.12.15%2B20261009-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz", "sha256": "ffa8f85f1b56e88b687f08d743d817015524b86a9365fd921243132b80f1a36d", "size": 34304557}},
+    "linux/arm64": {"python": {"url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-3.12.15%2B20261009-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz", "sha256": "2e1ba0e7f22e01c534caebf7f09e7820322bc0d055271d3434af671e8400f96f", "size": 29220608}},
+    "windows/amd64": {"python": {"url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261009/cpython-3.12.15%2B20261009-x86_64-pc-windows-msvc-install_only_stripped.tar.gz", "sha256": "11ed9f8a6ac64fb1b5a55e40e305a6744a3f77a70863c8f8197a6e4349abc64a", "size": 22011208}}
+  }
+}

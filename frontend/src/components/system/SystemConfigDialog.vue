@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { theme } from '@/composables/useTheme'
 import { useDependencies, type DependencyId, type ManagedTool, type Selection } from '@/composables/useDependencies'
+import PythonModulesPanel from './PythonModulesPanel.vue'
 
 const open = defineModel<boolean>('open', { default: false })
 const tab = ref('theme')
@@ -28,7 +29,7 @@ function change(id: DependencyId, key: keyof Selection, value: unknown) {
   if (key === 'source' && value !== 'system' && value !== 'builtin') return
   Object.assign(w.selection(id), { [key]: value })
   delete checks.value[id]; message.value = ''
-  if (key === 'source' && value === 'system') void w.detect(id)
+  if (key === 'source') void w.detect(id)
 }
 function install(tool: ManagedTool) {
   if (tool.id === 'adb') { licenseAccepted.value = false; licenseOpen.value = true }
@@ -44,7 +45,7 @@ function result(tool: ManagedTool) {
   return JSON.stringify(w.selection(tool.id)) === JSON.stringify(tool.selection) ? tool.effective : undefined
 }
 function label(tool: ManagedTool) {
-  if (w.busy(tool)) return ({ downloading: '正在下载', verifying: '正在校验', publishing: '正在安装', removing: '正在卸载' } as Record<string, string>)[tool.task.stage]
+  if (w.runtimeBusy(tool)) return ({ downloading: '正在下载', verifying: '正在校验', publishing: '正在安装', removing: '正在卸载' } as Record<string, string>)[tool.task.stage]
   if (tool.installed) return '已安装'
   if (tool.residual) return '安装文件需要清理'
   return tool.task.stage === 'failed' ? '安装失败' : '未安装'
@@ -71,7 +72,7 @@ function label(tool: ManagedTool) {
               <div class="flex items-center justify-between gap-3 rounded-lg border p-4"><div><p class="text-sm font-medium">scrcpy-server.jar</p><p class="mt-1 text-xs text-muted-foreground">设备投屏 · 4.0</p></div><Badge variant="secondary">随应用内置</Badge></div>
               <div v-for="tool in status.managed" :key="tool.id" class="space-y-3 rounded-lg border p-4">
                 <div class="flex items-center justify-between gap-3">
-                  <div><label :for="`${tool.id}-source`" class="text-sm font-medium">{{ tool.name }}</label><p class="mt-1 text-xs text-muted-foreground">{{ tool.id === 'adb' ? '设备连接与控制' : 'AI 助手' }}</p></div>
+                  <div><label :for="`${tool.id}-source`" class="text-sm font-medium">{{ tool.name }}</label><p class="mt-1 text-xs text-muted-foreground">{{ tool.id === 'adb' ? '设备连接与控制' : tool.id === 'python' ? '自动化脚本' : 'AI 助手' }}</p></div>
                   <Select :model-value="w.selection(tool.id).source" :disabled="w.busy(tool) || Boolean(w.acting.value) || Boolean(checking) || saving" @update:model-value="value => change(tool.id, 'source', value)"><SelectTrigger :id="`${tool.id}-source`" class="w-28" :aria-label="`${tool.name} 来源`"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="builtin">内置</SelectItem><SelectItem value="system">系统</SelectItem></SelectContent></Select>
                 </div>
                 <template v-if="w.selection(tool.id).source === 'system'">
@@ -79,20 +80,21 @@ function label(tool: ManagedTool) {
                     <p class="min-w-0 break-all text-xs" :class="result(tool)?.installed ? 'text-muted-foreground' : 'text-destructive'">{{ result(tool)?.path || '填写路径或点击检测自动查找' }}</p>
                     <Button variant="ghost" size="sm" :disabled="pending || saving" :aria-label="`检测 ${tool.name}`" @click="w.detect(tool.id)"><RefreshCw class="size-3.5" :class="{ 'animate-spin': checking === tool.id }" />检测</Button>
                   </div>
-                  <div class="space-y-2"><label :for="`${tool.id}-path`" class="text-xs text-muted-foreground">自定义执行路径（留空自动查找）</label><Input :id="`${tool.id}-path`" :model-value="w.selection(tool.id).path" autocomplete="off" :disabled="Boolean(checking) || saving" @update:model-value="value => change(tool.id, 'path', value)" /></div>
-                  <p v-if="checks[tool.id]" role="status" class="text-xs" :class="checks[tool.id]?.installed ? 'text-muted-foreground' : 'text-destructive'">{{ checks[tool.id]?.installed ? `可用 · ${checks[tool.id]?.version}` : checks[tool.id]?.error }}</p>
+                  <div class="space-y-2"><label :for="`${tool.id}-path`" class="text-xs text-muted-foreground">自定义执行路径（留空自动查找）</label><Input :id="`${tool.id}-path`" :model-value="w.selection(tool.id).path" autocomplete="off" :disabled="pending || saving" @update:model-value="value => change(tool.id, 'path', value)" /></div>
+                  <p v-if="result(tool)?.installed" role="status" class="text-xs text-muted-foreground">可用 · {{ result(tool)?.version }}</p>
                   <p v-else-if="result(tool)?.error" class="text-xs text-destructive">{{ result(tool)?.error }}</p>
                 </template>
-                <div class="flex items-center justify-between gap-3" :class="w.selection(tool.id).source === 'system' ? 'border-t pt-2' : ''">
-                  <div class="flex flex-wrap items-center gap-2"><Badge variant="outline">{{ w.selection(tool.id).source === 'system' && tool.installed ? '内置副本已安装' : label(tool) }}</Badge><span class="text-xs text-muted-foreground">{{ tool.version }}</span></div>
-                  <Button v-if="w.busy(tool) && tool.task.stage === 'downloading'" variant="ghost" size="sm" @click="w.action(tool.id, `/api/dependencies/install/${tool.id}`, 'DELETE')">取消</Button>
-                  <Loader2 v-else-if="w.busy(tool)" class="size-4 animate-spin" />
+                <div v-if="w.selection(tool.id).source === 'builtin'" class="flex items-center justify-between gap-3">
+                  <div class="flex flex-wrap items-center gap-2"><Badge variant="outline">{{ label(tool) }}</Badge><span class="text-xs text-muted-foreground">{{ tool.version }}</span></div>
+                  <Button v-if="w.runtimeBusy(tool) && tool.task.stage === 'downloading'" variant="ghost" size="sm" @click="w.action(tool.id, `/api/dependencies/install/${tool.id}`, 'DELETE')">取消</Button>
+                  <Loader2 v-else-if="w.runtimeBusy(tool)" class="size-4 animate-spin" />
                   <Button v-else-if="tool.installed || tool.residual" variant="ghost" size="sm" class="text-destructive hover:text-destructive" :aria-label="`卸载内置 ${tool.name}`" :disabled="pending || saving" @click="uninstallTarget = tool"><Trash2 class="size-3.5" />卸载</Button>
                   <Button v-else-if="tool.supported" variant="outline" size="sm" :disabled="pending || saving" @click="install(tool)"><Download class="size-3.5" />{{ tool.task.stage === 'failed' ? '重试' : '安装' }}</Button>
                   <span v-else class="text-xs text-muted-foreground">请使用系统依赖</span>
                 </div>
-                <div v-if="w.busy(tool)" class="space-y-2"><div class="flex justify-between text-xs text-muted-foreground"><span v-if="tool.task.received > 0">{{ (tool.task.received / 1024 / 1024).toFixed(1) }} MiB</span><span v-if="tool.task.total > 0">{{ Math.min(100, Math.floor(tool.task.received / tool.task.total * 100)) }}%</span></div><div role="progressbar" :aria-label="`${tool.name} 安装进度`" :aria-valuenow="tool.task.total > 0 ? Math.floor(tool.task.received / tool.task.total * 100) : undefined" aria-valuemin="0" aria-valuemax="100" class="h-1.5 overflow-hidden rounded-full bg-muted"><div class="h-full bg-primary" :class="{ 'w-1/3 animate-pulse': tool.task.total <= 0 }" :style="tool.task.total > 0 ? { width: `${Math.min(100, tool.task.received / tool.task.total * 100)}%` } : undefined" /></div></div>
-                <p v-if="tool.task.error" role="alert" class="text-xs text-destructive">{{ tool.task.error }}</p>
+                <div v-if="w.selection(tool.id).source === 'builtin' && w.runtimeBusy(tool)" class="space-y-2"><div class="flex justify-between text-xs text-muted-foreground"><span v-if="tool.task.received > 0">{{ (tool.task.received / 1024 / 1024).toFixed(1) }} MiB</span><span v-if="tool.task.total > 0">{{ Math.min(100, Math.floor(tool.task.received / tool.task.total * 100)) }}%</span></div><div role="progressbar" :aria-label="`${tool.name} 安装进度`" :aria-valuenow="tool.task.total > 0 ? Math.floor(tool.task.received / tool.task.total * 100) : undefined" aria-valuemin="0" aria-valuemax="100" class="h-1.5 overflow-hidden rounded-full bg-muted"><div class="h-full bg-primary" :class="{ 'w-1/3 animate-pulse': tool.task.total <= 0 }" :style="tool.task.total > 0 ? { width: `${Math.min(100, tool.task.received / tool.task.total * 100)}%` } : undefined" /></div></div>
+                <p v-if="w.selection(tool.id).source === 'builtin' && tool.task.error" role="alert" class="text-xs text-destructive">{{ tool.task.error }}</p>
+                <PythonModulesPanel v-if="tool.id === 'python'" :runtime="result(tool)" :task="tool.modules_task" :disabled="Boolean(pending) || saving" @install="w.action('python', '/api/dependencies/python/modules', 'POST', { selection: w.selection('python') })" @cancel="w.action('python', '/api/dependencies/python/modules', 'DELETE')" />
               </div>
             </template>
           </TabsContent>

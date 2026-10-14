@@ -48,6 +48,8 @@ func (m *Manager) detect(id string, s Selection) Tool {
 	var searchErr error
 	if id == "adb" {
 		path, err = m.resolveADB(s)
+	} else if id == "python" {
+		path, err = m.resolvePython(s)
 	} else if id == "pi-agent" {
 		var pErr error
 		p, pErr := m.resolvePi(s)
@@ -68,6 +70,9 @@ func (m *Manager) detect(id string, s Selection) Tool {
 		return tool
 	}
 	tool.Path = path
+	if id == "python" {
+		return inspectPython(context.Background(), tool, path)
+	}
 	arg := "--version"
 	if id == "adb" {
 		arg = "version"
@@ -122,7 +127,7 @@ func (m *Manager) Tools() []ManagedTool {
 	for _, item := range []struct {
 		id, name string
 		s        Selection
-	}{{"pi-agent", "pi-agent", settings.Pi}, {"adb", "ADB", settings.ADB}} {
+	}{{"pi-agent", "pi-agent", settings.Pi}, {"adb", "ADB", settings.ADB}, {"python", "Python", settings.Python}} {
 		tool := ManagedTool{ID: item.id, Name: item.name, Selection: item.s, Supported: m.supported(item.id), Effective: Tool{ID: item.id, Name: item.name}}
 		release, leaseErr := m.acquire(item.id)
 		if leaseErr == nil {
@@ -146,6 +151,10 @@ func (m *Manager) Tools() []ManagedTool {
 		}
 		m.mu.RLock()
 		tool.Task = m.tasks[item.id]
+		if item.id == "python" {
+			task := m.tasks[pythonModulesJob]
+			tool.ModulesTask = &task
+		}
 		m.mu.RUnlock()
 		if tool.Task.Stage == "" {
 			tool.Task.Stage = "idle"

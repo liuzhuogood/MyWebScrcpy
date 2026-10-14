@@ -30,6 +30,7 @@ func registerManagedSettings(mux *http.ServeMux, authorize func(http.HandlerFunc
 		return
 	}
 	m := active
+	registerPythonModules(mux, m, authorize)
 	mux.HandleFunc("PUT /api/dependencies/config", authorize(func(w http.ResponseWriter, r *http.Request) {
 		var s Settings
 		if e := decode(w, r, &s); e != nil {
@@ -54,6 +55,8 @@ func registerManagedSettings(mux *http.ServeMux, authorize func(http.HandlerFunc
 		s := m.Settings()
 		if body.ID == "adb" {
 			s.ADB = body.Selection
+		} else if body.ID == "python" {
+			s.Python = body.Selection
 		} else {
 			s.Pi = body.Selection
 		}

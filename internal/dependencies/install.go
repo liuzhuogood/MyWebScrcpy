@@ -142,6 +142,9 @@ func (m *Manager) install(ctx context.Context, id string) error {
 	if id == "adb" {
 		names = []string{"adb"}
 	}
+	if id == "python" {
+		names = []string{"python"}
+	}
 	for _, name := range names {
 		spec, ok := artifacts[name]
 		if !ok {
@@ -182,7 +185,7 @@ func (m *Manager) install(ctx context.Context, id string) error {
 	}
 	// Probe the staged binaries before publishing; never register a corrupt package.
 	for name, args := range map[string][]string{exeName("adb"): {"version"}} {
-		if id == "pi-agent" {
+		if id != "adb" {
 			break
 		}
 		out, e := probe(ctx, filepath.Join(payload, name), args...)
@@ -195,6 +198,12 @@ func (m *Manager) install(ctx context.Context, id string) error {
 			if _, e := probe(ctx, filepath.Join(payload, name), "--version"); e != nil {
 				return e
 			}
+		}
+	}
+	if id == "python" {
+		tool := inspectPython(ctx, Tool{}, filepath.Join(payload, filepath.FromSlash(pythonRelativePath())))
+		if !tool.Installed || tool.Python == nil || !tool.Python.PipAvailable {
+			return fmt.Errorf("下载的 Python 无法运行或缺少 pip")
 		}
 	}
 	m.setTask(id, InstallTask{Stage: "publishing"})

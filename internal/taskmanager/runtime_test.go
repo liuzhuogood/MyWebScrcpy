@@ -37,6 +37,7 @@ func TestStandaloneHTTPTaskBridgeAndFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	code := string(codeBytes)
+	code = "from pathlib import Path\nassert not (Path(__file__).parent / 'mywebscrcpy').exists(), 'SDK source was released beside script'\n" + code
 	task, err := m.StartTask(0, "运行库", "device-A", 10, code)
 	if err != nil {
 		t.Fatal(err)

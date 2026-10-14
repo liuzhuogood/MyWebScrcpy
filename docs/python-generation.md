@@ -1,9 +1,9 @@
 # Markdown 生成 Python
 
-先在依赖配置中准备 Pi、搜索程序及 Python，并配置模型。配置的 Python 环境需要 HTTPX：
+先在系统配置的「依赖」中准备 Pi、搜索程序及 Python，并配置模型。Python 可使用系统解释器或下载内置解释器，点击 Python 卡片的「安装依赖」安装与主程序版本一致的 SDK 及 HTTPX。也可在选定环境中手动安装：
 
 ```bash
-/path/to/python -m pip install 'httpx>=0.28,<1'
+/path/to/python -m pip install 'mywebscrcpy-sdk==1.20.1'
 ```
 
 在任务工作台保存 Markdown 和目标设备，再点击「生成 Python」。Pi 根据 markdown-to-python 技能与冻结 API/SDK 资料生成代码；活动区显示思考、工具和结果，支持停止。信息不足时按提示补全文档再生成。
@@ -17,11 +17,11 @@
 安装 SDK 后，把生成代码复制成 Python 文件：
 
 ```bash
-python -m pip install ./packages/python-sdk
+python -m pip install mywebscrcpy-sdk
 python script.py DEVICE_SERIAL --base-url http://HOST:PORT
 ```
 
-可使用 SDK wheel 安装，无需项目源码目录或应用任务入口。远程服务与设备仍须可达。地址也可由 MYWEBSCRCPY_API_URL 提供；可选连接令牌从 --token 或 MYWEBSCRCPY_API_TOKEN 提供，不写入源码。应用内任务自动注入连接信息并释放同一 SDK，第三方依赖由所配置的 Python 提供。
+可使用 SDK wheel 安装，无需项目源码目录或应用任务入口。远程服务与设备仍须可达。地址也可由 MYWEBSCRCPY_API_URL 提供；可选连接令牌从 --token 或 MYWEBSCRCPY_API_TOKEN 提供，不写入源码。应用内任务自动注入连接信息，直接使用所选 Python 环境中安装的 SDK，不再释放 SDK 源码。
 
 SDK 使用说明见 [Python SDK](../packages/python-sdk/README.md)，基础动作例子见 [device_query.py](../packages/python-sdk/examples/device_query.py)。
 

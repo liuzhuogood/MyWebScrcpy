@@ -1,8 +1,8 @@
 # SDK API sdk-v1
 
-使用项目统一的可安装 mywebscrcpy SDK，不导入 mywebscrcpy_runtime。当前 SDK 基础版本为 0.1.0，接口实现见 packages/python-sdk；API 字段与单位对照冻结 api/openapi.json。完整 Vision 与匹配接口仍属于 v1.22 后续工作，不将设计 API 当成已实现能力。
+使用 pip 安装的 mywebscrcpy-sdk，版本与主程序一致，不导入 mywebscrcpy_runtime；API 字段与单位对照冻结 api/openapi.json。完整 Vision 与匹配接口仍属于 v1.22 后续工作，不将设计 API 当成已实现能力。
 
-参考 assets/example.py：唯一 main() 解析 serial 位置参数；--base-url 默认读取 MYWEBSCRCPY_API_URL，--token 默认读取 MYWEBSCRCPY_API_TOKEN（可为空）。外部先安装本地包或 wheel，再运行 `python script.py SERIAL --base-url http://HOST:PORT`。Client(headers=...) 接收显式鉴权头，不读取未知凭据。通过 with Client(...) as client / with client.device(...) as device 管理关闭。
+参考 assets/example.py：唯一 main() 解析 serial 位置参数；--base-url 默认读取 MYWEBSCRCPY_API_URL，--token 默认读取 MYWEBSCRCPY_API_TOKEN（可为空）。先在所选 Python 环境安装与主程序版本一致的 mywebscrcpy-sdk，再运行 `python script.py SERIAL --base-url http://HOST:PORT`。Client(headers=...) 接收显式鉴权头，不读取未知凭据。通过 with Client(...) as client / with client.device(...) as device 管理关闭。
 
 | 方法与类型 | 约定 |
 | --- | --- |

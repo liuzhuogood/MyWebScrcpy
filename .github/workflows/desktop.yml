@@ -49,7 +49,9 @@ jobs:
       - name: Go regression
         env:
           MYWEBSCRCPY_PI_TEST_PAYLOAD: ${{ github.workspace }}/.cache/pi-test
-        run: go test ./...
+        run: |
+          python -m pip install ./packages/python-sdk
+          go test ./...
       - name: Test release version synchronization
         run: node --test scripts/sync-version.test.mjs
       - name: Build desktop and installers

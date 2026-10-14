@@ -20,6 +20,9 @@ import (
 
 func platform() string { return runtime.GOOS + "/" + runtime.GOARCH }
 func extractArchive(ctx context.Context, archive, sourceURL, dest, id, component string, files map[string]installedFile) error {
+	if id == "python" {
+		return extractPythonArchive(ctx, archive, dest, files)
+	}
 	var expanded int64
 	write := func(name string, size int64, reader io.Reader) error {
 		if err := ctx.Err(); err != nil {

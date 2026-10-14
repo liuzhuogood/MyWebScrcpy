@@ -122,7 +122,7 @@ func (g *Generator) contextFiles(script db.MarkdownScriptRecord) (map[string]str
 	frozen, err := json.Marshal(struct {
 		Files   map[string]string
 		Runtime string
-	}{files, pythoncheck.Hash() + pythonsdk.Hash()})
+	}{files, pythoncheck.Hash() + pythonsdk.Version})
 	if err != nil {
 		return nil, "", err
 	}
@@ -229,10 +229,11 @@ func (g *Generator) Generate(ctx context.Context, snapshot db.MarkdownScriptReco
 	if err != nil {
 		return err
 	}
-	pythonPath, err := dependencies.PythonPath()
+	pythonPath, releasePython, err := dependencies.AcquirePython()
 	if err != nil {
 		return fmt.Errorf("校验需要 Python：%w", err)
 	}
+	defer releasePython()
 	cfg, err := g.Provider.GetConfig()
 	if err != nil {
 		return err

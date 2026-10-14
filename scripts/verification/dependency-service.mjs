@@ -29,9 +29,9 @@ try {
   assert.equal((await request('/')).status, 200)
   assert.equal((await request('/api/devices')).status, 503)
   const initial = await (await request('/api/dependencies')).json()
-  assert.deepEqual(initial.managed.map(tool => tool.id), ['pi-agent', 'adb'])
+  assert.deepEqual(initial.managed.map(tool => tool.id), ['pi-agent', 'adb', 'python'])
   assert(initial.managed.every(tool => !tool.installed))
-  for (const [endpoint, method] of [['/api/dependencies/config', 'PUT'], ['/api/dependencies/install', 'POST'], ['/api/dependencies/installed/pi-agent', 'DELETE'], ['/api/dependencies/detect', 'POST']]) {
+  for (const [endpoint, method] of [['/api/dependencies/config', 'PUT'], ['/api/dependencies/install', 'POST'], ['/api/dependencies/installed/pi-agent', 'DELETE'], ['/api/dependencies/detect', 'POST'], ['/api/dependencies/python/modules', 'POST']]) {
     assert.equal((await request(endpoint, { method, headers: { 'Content-Type': 'application/json' }, body: method === 'DELETE' ? undefined : '{}' })).status, 401)
   }
   assert.equal((await request('/api/dependencies/install', { method: 'POST', headers: auth, body: JSON.stringify({ id: 'adb', accept_license: false }) })).status, 409)

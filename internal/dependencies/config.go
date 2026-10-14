@@ -110,28 +110,40 @@ func RegisterSettings(mux *http.ServeMux, authorize func(http.HandlerFunc) http.
 			return
 		}
 
-		if active != nil && value.ADB != Current().ADB {
-			selection := Selection{Source: "system", Path: value.ADB}
-			release, err := active.exclusive([]string{"adb"}, true)
+		if active != nil && value != Current() {
+			adbChanged, pythonChanged := value.ADB != Current().ADB, value.Python != Current().Python
+			ids := []string{}
+			if adbChanged {
+				ids = append(ids, "adb")
+			}
+			if pythonChanged {
+				ids = append(ids, "python")
+			}
+			release, err := active.exclusive(ids, adbChanged)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusConflict)
 				return
 			}
 			defer release()
-			checked := active.detect("adb", selection)
-			if !checked.Installed {
-				http.Error(w, checked.Error, http.StatusBadRequest)
-				return
-			}
 			previous = active.Settings()
 			next = previous
 			managedChange = true
-			next.ADB = selection
-			// Validate legacy Python before changing the new ADB configuration.
-			if value.Python != "" {
-				if _, err := checkExecutable(value.Python); err != nil {
-					http.Error(w, err.Error(), 400)
-					return
+			if adbChanged {
+				next.ADB = Selection{Source: "system", Path: value.ADB}
+			}
+			if pythonChanged {
+				next.Python = Selection{Source: "system", Path: value.Python}
+			}
+			for _, item := range []struct {
+				id        string
+				changed   bool
+				selection Selection
+			}{{"adb", adbChanged, next.ADB}, {"python", pythonChanged, next.Python}} {
+				if item.changed {
+					if checked := active.detect(item.id, item.selection); !checked.Installed {
+						http.Error(w, checked.Error, 400)
+						return
+					}
 				}
 			}
 			if err := writeJSON(filepath.Join(active.root, "config.json"), next); err != nil {

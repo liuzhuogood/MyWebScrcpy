@@ -22,9 +22,15 @@ type Tool struct {
 	Error       string            `json:"error"`
 	DownloadURL string            `json:"download_url"`
 	SearchPaths map[string]string `json:"search_paths,omitempty"`
+	Python      *PythonModules    `json:"python,omitempty"`
 }
 
-func PythonPath() (string, error) { return configuredPath("MYWEBSCRCPY_PYTHON", "python3") }
+func PythonPath() (string, error) {
+	if active != nil {
+		return active.resolvePython(active.Settings().Python)
+	}
+	return configuredPath("MYWEBSCRCPY_PYTHON", "python3")
+}
 func ADBPath() (string, error) {
 	if active != nil {
 		return active.resolveADB(active.Settings().ADB)

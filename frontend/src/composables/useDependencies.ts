@@ -1,9 +1,10 @@
 import { computed, onUnmounted, ref } from 'vue'
 import type { DependencyInfo, DependencyStatus } from '@/types/dependencies'
 
-export type DependencyId = 'pi-agent' | 'adb'
+export type DependencyId = 'pi-agent' | 'adb' | 'python'
 export interface Selection { source: 'builtin' | 'system'; path: string; fd: string; rg: string }
-export interface Config { schema: 1; adb: Selection; pi: Selection }
+export interface Config { schema: 1; adb: Selection; pi: Selection; python: Selection }
+export interface InstallTask { stage: string; received: number; total: number; error: string }
 export interface ManagedTool {
   id: DependencyId
   name: string
@@ -13,13 +14,14 @@ export interface ManagedTool {
   version: string
   supported: boolean
   effective: DependencyInfo
-  task: { stage: string; received: number; total: number; error: string }
+  task: InstallTask
+  modules_task?: InstallTask
 }
 export interface ManagedStatus extends DependencyStatus { managed: ManagedTool[]; config: Config }
 const emptySelection = (): Selection => ({ source: 'system', path: '', fd: '', rg: '' })
 export function useDependencies() {
   const status = ref<ManagedStatus>()
-  const draft = ref<Config>({ schema: 1, adb: emptySelection(), pi: { ...emptySelection(), source: 'builtin' } })
+  const draft = ref<Config>({ schema: 1, adb: emptySelection(), pi: { ...emptySelection(), source: 'builtin' }, python: emptySelection() })
   const error = ref('')
   const message = ref('')
   const loading = ref(false)
@@ -45,14 +47,26 @@ export function useDependencies() {
       refreshing = work
       const result = await work
       if (refreshing === work) refreshing = undefined
+      const previousPython = status.value?.managed.find(tool => tool.id === 'python')
+      const python = result.managed.find(tool => tool.id === 'python')
+      // pip holds the runtime lock. Keep its last verified display until the
+      // installation finishes, without probing an environment being modified.
+      if (python?.modules_task?.stage === 'installing' && previousPython?.effective.installed && JSON.stringify(python.selection) === JSON.stringify(previousPython.selection)) {
+        python.effective = previousPython.effective
+      }
       status.value = result
       if (reset) { draft.value = structuredClone(result.config); checks.value = {}; error.value = ''; message.value = '' }
+      else {
+        const modulesFinished = python?.modules_task && ['ready', 'failed', 'cancelled'].includes(python.modules_task.stage) && python.modules_task.stage !== previousPython?.modules_task?.stage
+        if ((python?.task.stage === 'ready' && previousPython?.task.stage !== 'ready') || modulesFinished) await detect('python')
+      }
     }
     catch (cause) { refreshing = undefined; error.value = cause instanceof Error ? cause.message : '依赖检测失败' }
   }
   async function load() { loading.value = true; await refresh(true); loading.value = false }
-  function selection(id: DependencyId) { return id === 'adb' ? draft.value.adb : draft.value.pi }
-  function busy(tool: ManagedTool) { return ['downloading', 'verifying', 'publishing', 'removing'].includes(tool.task.stage) }
+  function selection(id: DependencyId) { return id === 'adb' ? draft.value.adb : id === 'python' ? draft.value.python : draft.value.pi }
+  function runtimeBusy(tool: ManagedTool) { return ['downloading', 'verifying', 'publishing', 'removing'].includes(tool.task.stage) }
+  function busy(tool: ManagedTool) { return runtimeBusy(tool) || tool.modules_task?.stage === 'installing' }
   const pending = computed(() => status.value?.managed.some(busy) || Boolean(acting.value) || Boolean(checking.value))
   async function action(id: DependencyId, url: string, method: string, body?: unknown) {
     acting.value = id; error.value = ''; message.value = ''
@@ -79,5 +93,5 @@ export function useDependencies() {
   }
   function stopPolling() { stopped = true; if (timer) clearTimeout(timer) }
   onUnmounted(stopPolling)
-  return { status, draft, error, message, loading, saving, acting, checking, checks, pending, selection, busy, refresh, load, action, detect, save, startPolling, stopPolling }
+  return { status, draft, error, message, loading, saving, acting, checking, checks, pending, selection, busy, runtimeBusy, refresh, load, action, detect, save, startPolling, stopPolling }
 }

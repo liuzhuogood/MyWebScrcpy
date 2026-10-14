@@ -8,7 +8,6 @@ import (
 	"mywebscrcpy/internal/db"
 	"mywebscrcpy/internal/dependencies"
 	"mywebscrcpy/internal/taskartifact"
-	pythonsdk "mywebscrcpy/packages/python-sdk"
 	"net/http"
 	"os"
 	"os/exec"
@@ -108,10 +107,6 @@ func (m *Manager) StartDispatchedTask(scriptID int64, name, serial string, timeo
 	if e != nil {
 		return fail(e)
 	}
-	if e = pythonsdk.Install(directory); e != nil {
-		os.RemoveAll(directory)
-		return fail(e)
-	}
 	tmp, e := os.Create(filepath.Join(directory, "script.py"))
 	if e != nil {
 		os.RemoveAll(directory)
@@ -132,12 +127,18 @@ func (m *Manager) StartDispatchedTask(scriptID int64, name, serial string, timeo
 		return fail(e)
 	}
 	runCtx, runCancel := context.WithTimeout(lifecycle, time.Duration(timeout)*time.Second)
-	pythonPath, e := dependencies.PythonPath()
+	pythonPath, releasePython, e := dependencies.AcquirePython()
 	if e != nil {
 		runCancel()
 		os.RemoveAll(directory)
 		return fail(fmt.Errorf("Python 依赖不可用: %w", e))
 	}
+	leaseHandedOff := false
+	defer func() {
+		if !leaseHandedOff {
+			releasePython()
+		}
+	}()
 	cmd := exec.CommandContext(runCtx, pythonPath, "-u", path, serial)
 	cmd.Env = make([]string, 0, len(os.Environ())+5)
 	for _, value := range os.Environ() {
@@ -147,7 +148,7 @@ func (m *Manager) StartDispatchedTask(scriptID int64, name, serial string, timeo
 		}
 		cmd.Env = append(cmd.Env, value)
 	}
-	cmd.Env = append(cmd.Env, "PYTHONPATH="+directory, "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1", "MYWEBSCRCPY_API_URL="+m.apiURL, "MYWEBSCRCPY_API_TOKEN="+token)
+	cmd.Env = append(cmd.Env, "PYTHONIOENCODING=utf-8", "PYTHONUNBUFFERED=1", "MYWEBSCRCPY_API_URL="+m.apiURL, "MYWEBSCRCPY_API_TOKEN="+token)
 	cmd.Stdout = w.Writer("stdout")
 	cmd.Stderr = w.Writer("stderr")
 	configureTaskProcess(cmd)
@@ -179,7 +180,9 @@ func (m *Manager) StartDispatchedTask(scriptID int64, name, serial string, timeo
 	m.Artifacts.Started(id)
 	w.Event(fmt.Sprintf("Python 已启动，PID %d", cmd.Process.Pid))
 	rec, e := m.database.GetTaskByID(id)
+	leaseHandedOff = true
 	go func() {
+		defer releasePython()
 		defer runCancel()
 		defer os.RemoveAll(directory)
 		waitErr := cmd.Wait()

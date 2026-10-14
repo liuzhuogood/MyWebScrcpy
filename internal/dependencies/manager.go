@@ -29,6 +29,7 @@ type Settings struct {
 	Schema int       `json:"schema"`
 	ADB    Selection `json:"adb"`
 	Pi     Selection `json:"pi"`
+	Python Selection `json:"python"`
 }
 type installedFile struct {
 	SHA256 string      `json:"sha256"`
@@ -48,15 +49,16 @@ type InstallTask struct {
 	Error    string `json:"error"`
 }
 type ManagedTool struct {
-	ID        string      `json:"id"`
-	Name      string      `json:"name"`
-	Selection Selection   `json:"selection"`
-	Installed bool        `json:"installed"`
-	Residual  bool        `json:"residual"`
-	Version   string      `json:"version"`
-	Supported bool        `json:"supported"`
-	Effective Tool        `json:"effective"`
-	Task      InstallTask `json:"task"`
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Selection   Selection    `json:"selection"`
+	Installed   bool         `json:"installed"`
+	Residual    bool         `json:"residual"`
+	Version     string       `json:"version"`
+	Supported   bool         `json:"supported"`
+	Effective   Tool         `json:"effective"`
+	Task        InstallTask  `json:"task"`
+	ModulesTask *InstallTask `json:"modules_task,omitempty"`
 }
 type Manager struct {
 	operations sync.RWMutex
@@ -103,8 +105,10 @@ func NewManager(dataDir, skillsDir string) (*Manager, error) {
 	if resolved != root {
 		return nil, fmt.Errorf("依赖目录不能包含符号链接")
 	}
-	m := &Manager{root: root, skills: skillsDir, tasks: map[string]InstallTask{}, cancels: map[string]func(){}, uses: map[string]*sync.RWMutex{"adb": {}, "pi-agent": {}}, client: defaultDownloader()}
-	m.settings = Settings{Schema: 1, ADB: Selection{Source: "system", Path: Current().ADB}, Pi: Selection{Source: "builtin"}}
+	m := &Manager{root: root, skills: skillsDir, tasks: map[string]InstallTask{}, cancels: map[string]func(){}, uses: map[string]*sync.RWMutex{"adb": {}, "pi-agent": {}, "python": {}}, client: defaultDownloader()}
+	// Existing schema-1 configurations predate the Python selector. Preserve
+	// their confirmed system Python path when decoding the additive field.
+	m.settings = Settings{Schema: 1, ADB: Selection{Source: "system", Path: Current().ADB}, Pi: Selection{Source: "builtin"}, Python: Selection{Source: "system", Path: Current().Python}}
 	raw, err := os.ReadFile(filepath.Join(root, "config.json"))
 	if err == nil {
 		if err := strictJSON(raw, &m.settings); err != nil {
@@ -133,7 +137,7 @@ func validateShape(s Settings) error {
 	if s.Schema != 1 {
 		return fmt.Errorf("不支持依赖配置版本 %d", s.Schema)
 	}
-	for _, v := range []Selection{s.ADB, s.Pi} {
+	for _, v := range []Selection{s.ADB, s.Pi, s.Python} {
 		if v.Source != "builtin" && v.Source != "system" {
 			return fmt.Errorf("依赖来源必须为内置或系统")
 		}
@@ -146,6 +150,9 @@ func validateShape(s Settings) error {
 	if s.ADB.FD != "" || s.ADB.RG != "" {
 		return fmt.Errorf("ADB 不接受搜索工具配置")
 	}
+	if s.Python.FD != "" || s.Python.RG != "" {
+		return fmt.Errorf("Python 不接受搜索工具配置")
+	}
 	return nil
 }
 func (m *Manager) Settings() Settings { m.mu.RLock(); defer m.mu.RUnlock(); return m.settings }
@@ -155,7 +162,7 @@ func exeName(name string) string {
 	}
 	return name
 }
-func knownID(id string) bool { return id == "adb" || id == "pi-agent" }
+func knownID(id string) bool { return id == "adb" || id == "pi-agent" || id == "python" }
 func (m *Manager) ownedDir(id string) (string, error) {
 	if !knownID(id) {
 		return "", fmt.Errorf("未知依赖")
@@ -218,6 +225,9 @@ func verifyInstallation(dir, id string, hashes bool) (installation, error) {
 	required := []string{exeName("adb")}
 	if id == "pi-agent" {
 		required = []string{exeName("pi"), "bin/" + exeName("fd"), "bin/" + exeName("rg"), "package.json"}
+	}
+	if id == "python" {
+		required = []string{pythonRelativePath()}
 	}
 	for _, name := range required {
 		if _, ok := rec.Files[name]; !ok {
@@ -368,7 +378,9 @@ func (m *Manager) acquire(id string) (func(), error) {
 	if err := safeDirectory(m.root); err != nil {
 		return nil, err
 	}
-	m.uses[id].RLock()
+	if !m.uses[id].TryRLock() {
+		return nil, fmt.Errorf("依赖正在修改，请稍后重试")
+	}
 	lock := flock.New(filepath.Join(m.root, ".lock-"+id))
 	ok, e := lock.TryRLock()
 	if e != nil || !ok {
@@ -443,16 +455,23 @@ func (m *Manager) Apply(s Settings) error {
 	if busy {
 		return fmt.Errorf("请等待依赖安装完成")
 	}
-	release, err := m.exclusive([]string{"adb", "pi-agent"}, s.ADB != m.Settings().ADB)
+	release, err := m.exclusive([]string{"adb", "pi-agent", "python"}, s.ADB != m.Settings().ADB)
 	if err != nil {
 		return err
 	}
 	defer release()
-	if tool := m.detect("adb", s.ADB); !tool.Installed {
-		return fmt.Errorf("ADB: %s", tool.Error)
-	}
-	if tool := m.detect("pi-agent", s.Pi); !tool.Installed {
-		return fmt.Errorf("pi-agent: %s", tool.Error)
+	previous := m.Settings()
+	// Validate changed selections. Unavailable optional tools must not prevent
+	// saving a usable Python environment or another independent dependency.
+	for _, item := range []struct {
+		id        string
+		next, old Selection
+	}{{"adb", s.ADB, previous.ADB}, {"pi-agent", s.Pi, previous.Pi}, {"python", s.Python, previous.Python}} {
+		if item.next != item.old {
+			if tool := m.detect(item.id, item.next); !tool.Installed {
+				return fmt.Errorf("%s: %s", item.id, tool.Error)
+			}
+		}
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
