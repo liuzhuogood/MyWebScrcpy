@@ -1,12 +1,31 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { isTauri } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import DevicePlayer from '@/components/player/DevicePlayer.vue'
 
 const route = useRoute()
 const serial = computed(() => typeof route.query.serial === 'string' ? route.query.serial : '')
+const embedded = computed(() => route.query.embedded === '1' || route.query.embedded === 'true')
+
+async function handleClose() {
+  if (isTauri()) {
+    try {
+      await getCurrentWindow().close()
+    }
+    catch (e) {
+      console.warn('关闭窗口失败', e)
+    }
+  }
+}
 </script>
 
 <template>
-  <DevicePlayer :key="serial" :serial="serial" />
+  <DevicePlayer
+    :key="serial"
+    :serial="serial"
+    :embedded="embedded"
+    @close="handleClose"
+  />
 </template>

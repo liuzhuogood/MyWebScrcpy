@@ -80,6 +80,7 @@ for name,data in [('config',config),('packet',packet),('image',cv2.imencode('.pn
 		}
 		peer.WriteJSON(map[string]any{"type": "hello.ack", "device_id": serial, "session_id": sessionID, "max_fps": 0})
 		done := make(chan struct{})
+		heartbeats := make(chan struct{}, 1)
 		go func() {
 			defer close(done)
 			for {
@@ -96,6 +97,12 @@ for name,data in [('config',config),('packet',packet),('image',cv2.imencode('.pn
 				}
 				if v.Type == "action.request" {
 					actions.Add(1)
+				}
+				if v.Type == "heartbeat" {
+					select {
+					case heartbeats <- struct{}{}:
+					default:
+					}
 				}
 				if v.Type == "detection.result" && len(v.Objects) > 0 {
 					mu.Lock()
@@ -128,6 +135,10 @@ for name,data in [('config',config),('packet',packet),('image',cv2.imencode('.pn
 				return
 			case <-r.Context().Done():
 				return
+			case <-heartbeats:
+				if peer.WriteJSON(map[string]any{"type": "heartbeat", "device_id": serial, "session_id": sessionID, "timestamp": time.Now().UnixMilli()}) != nil {
+					return
+				}
 			case <-ticker.C:
 				if serial == "phone-b" && static.Load() {
 					continue
@@ -174,9 +185,17 @@ for name,data in [('config',config),('packet',packet),('image',cv2.imencode('.pn
 		return len(d) == 1 && d[0].Serial == "phone-b" && connections.Load() == 1
 	})
 	static.Store(true)
+	mu.Lock()
+	beforeStatic := published["phone-b"]
+	mu.Unlock()
+	// Continue matching beyond the old three-second frame timeout.
+	time.Sleep(3500 * time.Millisecond)
 	await(func() bool {
 		d := m.Status().Devices
-		return len(d) == 1 && d[0].State == "waiting" && connections.Load() == 1
+		mu.Lock()
+		count := published["phone-b"]
+		mu.Unlock()
+		return len(d) == 1 && d[0].State == "matching" && connections.Load() == 1 && count > beforeStatic+10
 	})
 	if m.Status().PID != pid {
 		t.Fatal("static screen restarted process")

@@ -74,6 +74,7 @@ import FilesView from '@/views/FilesView.vue'
 import PlayerSettingsPanel from '@/components/player/PlayerSettingsPanel.vue'
 import TemplatePanel from '@/template/TemplatePanel.vue'
 import { useTemplateMatches } from '@/template/useTemplateMatches'
+import { useDesktopConfig } from '@/composables/useDesktopConfig'
 import type { RecordingEntry } from '@/api/recordings'
 
 const props = withDefaults(defineProps<{ serial: string, embedded?: boolean }>(), { embedded: false })
@@ -82,6 +83,14 @@ const emit = defineEmits<{
   layout: [layout: { width: number, height: number, side: 'capture' | 'tools' | null }]
 }>()
 const serial = computed(() => props.serial)
+const desktopConfig = useDesktopConfig()
+const isGui = computed(() => {
+  return desktopConfig.isDesktop.value || Boolean(
+    (window as any).__MYWEBSCRCPY_DESKTOP_TOKEN__ ||
+    (window as any).__TAURI_INTERNALS__ ||
+    (window as any).__TAURI__
+  )
+})
 const captureHostId = `capture-actions-${useId()}`
 
 const p = usePlayer(serial.value, {
@@ -90,6 +99,7 @@ const p = usePlayer(serial.value, {
   },
   onTouch: event => touchVisualizerRef.value?.handle(event),
 })
+const showPip = computed(() => !isGui.value && p.pipSupported.value)
 const ins = provideInspector(serial.value, () => p.canvasRef.value)
 const inspectorVisible = ref(false)
 const templateOpen = ref(false)
@@ -110,6 +120,7 @@ const touchVisualizerRef = ref<InstanceType<typeof TouchVisualizer> | null>(null
 const deleteRecordingTarget = ref<RecordingEntry | null>(null)
 const { width: stageWidth } = useElementSize(p.stageRef)
 const compactToolbar = computed(() => stageWidth.value < 1280)
+const isVeryNarrow = computed(() => stageWidth.value < 270)
 const sidePanel = computed(() => captureOpen.value ? 'capture' : filesOpen.value || shellOpen.value || inspectorVisible.value || replayOpen.value || templateOpen.value || settingsOpen.value ? 'tools' : null)
 
 watch([p.videoSize, sidePanel], ([size, side]) => {
@@ -273,18 +284,62 @@ defineExpose({ handleEscape })
 
   <div v-else :ref="p.stageRef" class="flex min-h-0 min-w-0 flex-col bg-background" :class="embedded ? 'h-full' : 'h-dvh'">
     <!-- 工具栏 -->
-    <header class="flex h-14 shrink-0 items-center gap-1 border-b px-3" :class="{ 'toolbar-compact': compactToolbar }">
-      <Button v-if="embedded" variant="ghost" size="icon" aria-label="关闭手机弹窗" @click="emit('close')">
-        <X class="h-5 w-5" />
+    <header class="flex h-14 shrink-0 items-center gap-1 border-b px-3" :class="{ 'toolbar-compact': compactToolbar, 'cursor-move select-none': embedded }">
+      <Button v-if="embedded" variant="ghost" size="icon" aria-label="关闭小窗" class="cursor-pointer" @click="emit('close')">
+        <X class="h-4 w-4" />
       </Button>
       <Button v-else variant="ghost" size="icon" aria-label="返回设备列表" as-child>
         <RouterLink to="/"><ArrowLeft class="h-5 w-5" /></RouterLink>
       </Button>
-      <span class="ml-1 min-w-0 max-w-48 flex-1 truncate font-mono text-sm font-medium" :title="serial">{{ serial }}</span>
-      <Badge :variant="p.live.value ? 'default' : 'secondary'">{{ p.statusText.value }}</Badge>
-      <Badge v-if="p.showFps.value" class="toolbar-secondary" variant="outline">{{ p.fps.value }} fps</Badge>
+      <span class="ml-1 min-w-0 max-w-44 flex-1 truncate font-mono text-sm font-medium" :class="{ 'cursor-move select-none': embedded }" :title="serial">{{ serial }}</span>
+      <Badge v-if="!embedded" :variant="p.live.value ? 'default' : 'secondary'">{{ p.statusText.value }}</Badge>
+      <Badge v-if="!embedded && p.showFps.value" class="toolbar-secondary" variant="outline">{{ p.fps.value }} fps</Badge>
 
-      <div class="ml-auto flex shrink-0 items-center gap-1">
+      <!-- 小窗模式专属精简工具栏：默认只显示 返回、主页、切换 + 更多；过窄时全部收入更多 -->
+      <div v-if="embedded" class="ml-auto flex shrink-0 items-center gap-0.5">
+        <template v-if="!isVeryNarrow">
+          <Button variant="ghost" size="icon" title="返回" aria-label="返回" @click="p.pressBack()">
+            <Undo2 class="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" title="主页" aria-label="主页" @click="p.pressHome()">
+            <Home class="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" title="切换任务" aria-label="切换任务" @click="p.pressRecents()">
+            <GalleryHorizontal class="h-4 w-4" />
+          </Button>
+        </template>
+        <DropdownMenu :modal="false">
+          <DropdownMenuTrigger as-child>
+            <Button variant="ghost" size="icon" title="更多" aria-label="更多">
+              <Ellipsis class="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" class="z-[9999]">
+            <template v-if="isVeryNarrow">
+              <DropdownMenuItem @select="p.pressBack()"><Undo2 class="h-4 w-4" />返回</DropdownMenuItem>
+              <DropdownMenuItem @select="p.pressHome()"><Home class="h-4 w-4" />主页</DropdownMenuItem>
+              <DropdownMenuItem @select="p.pressRecents()"><GalleryHorizontal class="h-4 w-4" />切换任务</DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </template>
+            <DropdownMenuItem :disabled="p.powerBusy.value" @select="p.pressPower()">
+              <Power class="h-4 w-4" />电源键
+            </DropdownMenuItem>
+            <DropdownMenuItem @select="p.rotate()">
+              <RotateCw class="h-4 w-4" />横竖屏
+            </DropdownMenuItem>
+            <DropdownMenuItem @select="p.toggleFullscreen()">
+              <Minimize v-if="p.fullscreen.value" class="h-4 w-4" />
+              <Maximize v-else class="h-4 w-4" />{{ p.fullscreen.value ? '退出全屏' : '全屏' }}
+            </DropdownMenuItem>
+            <DropdownMenuItem v-if="showPip" :disabled="!p.pipSupported.value" @select="p.togglePip()">
+              <PictureInPicture2 class="h-4 w-4" />{{ p.pipActive.value ? '退出画中画' : '画中画' }}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      <!-- 完整页面模式工具栏 -->
+      <div v-else class="ml-auto flex shrink-0 items-center gap-1">
         <Button class="toolbar-secondary" variant="ghost" size="icon" title="返回" aria-label="返回" @click="p.pressBack()">
           <Undo2 class="h-5 w-5" />
         </Button>
@@ -491,10 +546,10 @@ defineExpose({ handleEscape })
     </Dialog>
     <!-- 舞台 + 侧栏 -->
     <SplitLayout :class="{ 'capture-layout': captureOpen }" :open="sidePanel !== null">
-      <template #main><div class="flex h-full min-h-0 flex-col gap-3 overflow-auto bg-muted/40 p-0">
-      <main class="relative flex min-h-80 min-w-0 flex-1 items-center justify-center">
+      <template #main><div class="flex h-full min-h-0 flex-col overflow-hidden p-0" :class="embedded ? 'bg-black' : 'bg-muted/40 gap-3 overflow-auto'">
+      <main class="relative flex min-w-0 flex-1 items-center justify-center" :class="embedded ? 'min-h-0 bg-black' : 'min-h-80'">
         <div class="relative">
-          <canvas :ref="p.canvasRef" tabindex="0" class="block touch-none rounded-sm bg-black select-none" aria-label="设备投屏画面" @pointerdown="embedded && p.canvasRef.value?.focus({ preventScroll: true })" />
+          <canvas :ref="p.canvasRef" tabindex="0" class="block touch-none bg-black select-none" :class="{ 'rounded-sm': !embedded }" aria-label="设备投屏画面" @pointerdown="embedded && p.canvasRef.value?.focus({ preventScroll: true })" />
           <canvas
             :ref="ins.overlayRef"
             class="pointer-events-none absolute inset-0 h-full w-full"

@@ -6,6 +6,7 @@ import { ScrcpyDecoder } from './decoder'
 import { PictureInPicture } from './pip'
 import { useClipboardSync } from './useClipboardSync'
 import { useScreenPower } from './useScreenPower'
+import { usePlayerSettings } from '@/composables/usePlayerSettings'
 import {
   ACTION_DOWN,
   ACTION_MOVE,
@@ -66,6 +67,7 @@ export interface TouchVisualEvent { kind: 'down' | 'move' | 'up' | 'tap' | 'swip
 
 /** 投屏连接：WS 生命周期 + 解码 + 输入 + 工具栏动作，视图只做渲染 */
 export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: OpPayload) => void, onTouch?: (event: TouchVisualEvent) => void } = {}) {
+  const playerSettings = usePlayerSettings()
   const op = (type: OpType, data: OpPayload) => opts.onOp?.(type, data)
   const canvasRef = ref<HTMLCanvasElement | null>(null)
   const stageRef = ref<HTMLElement | null>(null)
@@ -148,7 +150,14 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   // ---------- WS ----------
   function wsUrl(): string {
     const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${proto}//${location.host}/ws?serial=${encodeURIComponent(serial)}`
+    const params = new URLSearchParams({ serial })
+    if (playerSettings.bitrate.value) {
+      params.set('bitrate', String(playerSettings.bitrate.value))
+    }
+    if (playerSettings.maxFps.value) {
+      params.set('max_fps', String(playerSettings.maxFps.value))
+    }
+    return `${proto}//${location.host}/ws?${params.toString()}`
   }
 
   function closeWebSocket() {
@@ -883,6 +892,9 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
           ? (audio?.muted ? '点击播放设备声音' : '点击静音设备声音')
           : (reason || '设备声音不可用')
       audioMuted.value = audio?.muted ?? true
+      if (status === 'ready' && playerSettings.autoAudio.value && audioMuted.value) {
+        audio?.toggle().catch(() => {})
+      }
     }
 
     pip = new PictureInPicture(canvas)

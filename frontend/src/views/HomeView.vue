@@ -13,6 +13,7 @@ import {
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import DeviceCard from '@/components/device/DeviceCard.vue'
+import FloatingPlayer from '@/components/player/FloatingPlayer.vue'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -30,6 +31,26 @@ import { useDeviceStore } from '@/stores/devices'
 
 const store = useDeviceStore()
 const isDevelopment = import.meta.env.DEV
+const floatingWindows = ref<string[]>([])
+const focusedSerial = ref<string | null>(null)
+
+function openFloating(serial: string) {
+  if (!floatingWindows.value.includes(serial)) {
+    floatingWindows.value.push(serial)
+  }
+  focusedSerial.value = serial
+}
+
+function closeFloating(serial: string) {
+  floatingWindows.value = floatingWindows.value.filter(s => s !== serial)
+  if (focusedSerial.value === serial) {
+    focusedSerial.value = floatingWindows.value[floatingWindows.value.length - 1] || null
+  }
+}
+
+function focusFloating(serial: string) {
+  focusedSerial.value = serial
+}
 
 const countText = computed(() => {
   if (store.mockEnabled)
@@ -170,7 +191,12 @@ onUnmounted(() => store.stopPolling())
 
       <!-- 设备墙 -->
       <div v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <DeviceCard v-for="d in store.filtered" :key="d.serial" :device="d" />
+        <DeviceCard
+          v-for="d in store.filtered"
+          :key="d.serial"
+          :device="d"
+          @open-floating="openFloating"
+        />
       </div>
     </main>
 
@@ -240,5 +266,16 @@ onUnmounted(() => store.stopPolling())
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <!-- 独立悬浮小窗（支持同时打开多个独立小窗，无遮罩，可拖拽缩放） -->
+    <FloatingPlayer
+      v-for="(s, idx) in floatingWindows"
+      :key="s"
+      :serial="s"
+      :z-index="focusedSerial === s ? 60 : 50 + idx"
+      :offset-index="idx"
+      @close="closeFloating(s)"
+      @focus="focusFloating(s)"
+    />
   </div>
 </template>

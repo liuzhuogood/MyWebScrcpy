@@ -139,6 +139,19 @@ func (m *Manager) Tools() []ManagedTool {
 		tool.Installed = err == nil
 		if err == nil {
 			tool.Version = rec.Version
+			if item.id == "python" {
+				if p, pErr := m.resolvePython(Selection{Source: "builtin"}); pErr == nil {
+					tool.BuiltinPath = p
+				}
+			} else if item.id == "adb" {
+				if p, pErr := m.resolveADB(Selection{Source: "builtin"}); pErr == nil {
+					tool.BuiltinPath = p
+				}
+			} else if item.id == "pi-agent" {
+				if p, pErr := m.resolvePi(Selection{Source: "builtin"}); pErr == nil && p.Executable != "" {
+					tool.BuiltinPath = p.Executable
+				}
+			}
 		}
 		if _, e := os.Lstat(filepath.Join(m.root, item.id)); e == nil {
 			tool.Residual = !tool.Installed

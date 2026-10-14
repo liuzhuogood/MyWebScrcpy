@@ -1,5 +1,6 @@
 """Explicitly closeable matching iterator, owned by the device lifetime."""
 import logging
+import math
 import time
 
 from .contracts import Deadline
@@ -41,11 +42,15 @@ class Watch:
             if time.monotonic() >= self._refresh_at:
                 self._templates = self.device._cache.refresh(deadline)
                 self._refresh_at = time.monotonic() + 10
-            frame = self.device._frame(deadline)
+            session = self.device._session(deadline, video=True)
+            frame = session.current_frame(deadline)
             matches = [match for template, image in self._templates for match in self._matcher.match_frame(frame, template, image)]
             deadline.remaining()
             if self.publish:
-                self.device._vision.publish(frame, matches)
+                # Overlay lifetime belongs to this detection batch. Source frame
+                # time stays unchanged, so tap_match still rejects old images.
+                if not session.publish_current(frame, matches, expires_ms=max(600, math.ceil(self.interval * 2000))):
+                    matches = []  # A new image/rotation arrived during matching.
             self._last = time.monotonic()
             return matches
         except Exception:
@@ -60,6 +65,7 @@ class Watch:
             if self.device._watch is self:
                 self.device._watch = None
         if self.publish and self.device._vision is not None:
+            self.device._vision._continuous_publish = False
             try:
                 self.device._vision.clear()
             except SDKError as error:

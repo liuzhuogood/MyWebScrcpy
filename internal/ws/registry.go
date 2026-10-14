@@ -35,6 +35,8 @@ type managedSession struct {
 	closeTimer      *time.Timer
 	lastConfig      []byte
 	lastKey         []byte
+	visionSnapshot  [][]byte // Complete key/delta chain for late Vision subscribers.
+	visionBytes     int
 	lastAudioConfig []byte
 	audioAvailable  bool
 	audioReason     string
@@ -54,8 +56,9 @@ const sharedClipboardQueueSize = 16
 // packets. Consumers may need a replayed config/key to initialize a decoder,
 // but must not mistake it for a frame captured after they subscribed.
 type sharedVideoFrame struct {
-	data     []byte
-	replayed bool
+	data             []byte
+	replayed         bool
+	snapshotComplete bool
 }
 
 // sharedAudioPacket is independent of video delivery so a slow audio consumer
@@ -420,6 +423,7 @@ func cacheAndBroadcast(ms *managedSession, f *scrcpy.Frame, buf []byte) {
 		ms.lastConfig = nil
 		ms.lastKey = nil
 	}
+	cacheVisionSnapshot(ms, f, buf)
 	if f.Kind == scrcpy.FrameConfig {
 		ms.lastConfig = append([]byte(nil), buf...)
 	}

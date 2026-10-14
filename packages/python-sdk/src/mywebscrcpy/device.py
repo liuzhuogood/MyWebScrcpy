@@ -167,6 +167,8 @@ class Device:
         if not isinstance(match, Match) or type(max_age_ms) not in {int, float} or not math.isfinite(max_age_ms) or not 0 < max_age_ms <= 600:
             raise ValueError('match 和 max_age_ms 不合法')
         session = self._vision
+        if match.replayed:
+            raise SDKError('回放画面匹配结果不能用于点击')
         if session is None or match.device_id != self.serial or match.session_id != session.session_id or match.generation != session.generation or match.connection_id != session.connection_id or match.frame_id <= 0:
             raise SDKError('匹配结果属于其他设备、旧会话或重置前画面')
         age = (time.monotonic() - match.received_at) * 1000

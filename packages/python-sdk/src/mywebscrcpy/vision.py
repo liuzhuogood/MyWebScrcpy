@@ -24,6 +24,9 @@ class Vision:
         self._closed = False
         self._error = None
         self._latest = None
+        self._current = None
+        self._continuous_publish = False
+        self._heartbeat_sent_at = None
         self._sequence = 0
         self.generation = 0
         self.connection_id = uuid.uuid4().hex
@@ -33,7 +36,7 @@ class Vision:
         self._config = None
         self._metadata = None
         self._last_frame_id = 0
-        url = ('wss' + client._base_url[5:] if client._base_url.startswith('https:') else 'ws' + client._base_url[4:]) + '/api/vision/stream?' + urlencode({'serial': serial})
+        url = ('wss' + client._base_url[5:] if client._base_url.startswith('https:') else 'ws' + client._base_url[4:]) + '/api/vision/stream?' + urlencode({'serial': serial, 'current_frame': 'true'})
         sslopt = {}
         if client._verify is False:
             sslopt = {'cert_reqs': ssl.CERT_NONE, 'check_hostname': False}
@@ -102,14 +105,19 @@ class Vision:
                     self._message(json.loads(message))
                 elif isinstance(message, bytes):
                     self._binary(message)
-                if time.monotonic() - heartbeat >= 5:
-                    self._send('heartbeat'); heartbeat = time.monotonic()
+                now = time.monotonic()
+                if self._heartbeat_sent_at is not None and now - self._heartbeat_sent_at >= 5:
+                    raise ConnectionError('Vision 心跳响应超时')
+                if now - heartbeat >= 5 and self._heartbeat_sent_at is None:
+                    self._heartbeat_sent_at = now
+                    self._send('heartbeat'); heartbeat = now
         except Exception as error:
             if not self._closed:
                 known = error if isinstance(error, SDKError) else ProtocolError(f'Vision 收包失败：{type(error).__name__}')
                 logger.warning('Vision receiver stopped: serial=%s type=%s', self.serial, type(known).__name__)
                 with self._condition:
                     self._error = known
+                    self._latest = self._current = None
                     self._condition.notify_all()
         finally:
             self._socket.close()
@@ -127,6 +135,9 @@ class Vision:
             if field(value, 'codec', str) != 'h264' or type(value.get('replayed')) is not bool or meta['frame_id'] <= self._last_frame_id or meta['kind'] not in {0, 1, 2, 3} or min(meta['width'], meta['height']) <= 0:
                 raise ProtocolError('视频元数据不合法')
             meta['replayed'] = field(value, 'replayed', bool)
+            # An optional explicit marker proves replay has reached the current
+            # image. A lone cached key frame is only decoder bootstrap.
+            meta['snapshot_complete'] = field(value, 'snapshot_complete', bool, False)
             meta['received_at'] = time.monotonic()
             self._last_frame_id = meta['frame_id']
             self._metadata = meta
@@ -142,6 +153,7 @@ class Vision:
         elif kind == 'heartbeat':
             if field(value, 'timestamp', int) <= 0:
                 raise ProtocolError('心跳时间戳不合法')
+            self._heartbeat_sent_at = None
         else:
             raise ProtocolError('未知 Vision 消息：' + kind)
 
@@ -155,8 +167,10 @@ class Vision:
                 raise ProtocolError('旋转包尺寸不一致')
             with self._condition:
                 self.generation += 1
-                self._latest = None
+                self._latest = self._current = None
                 self._condition.notify_all()
+            if self._continuous_publish:
+                self.clear()
             self._config = payload[9:] if kind == 0 else None
             if self._decoder is not None:
                 self._decoder.reset()
@@ -173,16 +187,18 @@ class Vision:
             self._decoder.configure(payload[9:])
             return
         for source, image in self._decoder.decode(kind, payload[9:], meta):
-            if source['replayed']:
+            if source['replayed'] and not source['snapshot_complete']:
                 continue  # Cached key frames initialize decoding, never satisfy fresh frame requests.
             height, width = image.shape[:2]
             if (width, height) != (source['width'], source['height']):
                 raise ProtocolError('解码尺寸与来源元数据不一致')
             image.setflags(write=False)
-            frame = Frame(source['frame_id'], self.session_id, self.serial, width, height, source['timestamp'], source['received_at'], image, self.generation, self.connection_id)
+            frame = Frame(source['frame_id'], self.session_id, self.serial, width, height, source['timestamp'], source['received_at'], image, self.generation, self.connection_id, source['replayed'])
             with self._condition:
-                self._latest = frame
-                self._sequence += 1
+                self._current = frame
+                if not frame.replayed:
+                    self._latest = frame
+                    self._sequence += 1
                 self._condition.notify_all()
 
     def frame(self, deadline):
@@ -198,6 +214,19 @@ class Vision:
                 self._check()
             deadline.remaining(FrameTimeout)
             return self._latest
+
+    def current_frame(self, deadline):
+        """Read-only matching can reuse the same image until a reset or disconnect."""
+        from .dependencies import vision_dependencies
+        vision_dependencies()
+        with self._condition:
+            self._check()
+            self._video = True
+            while self._current is None:
+                self._condition.wait(deadline.remaining(FrameTimeout))
+                self._check()
+            deadline.remaining(FrameTimeout)
+            return self._current
 
     def action(self, action, deadline, **fields):
         request_id = uuid.uuid4().hex
@@ -223,12 +252,32 @@ class Vision:
                 self._pending.pop(request_id, None)
 
     def publish(self, frame, matches):
+        if frame.replayed:
+            raise SDKError('回放画面不能作为新帧发布')
         if frame.device_id != self.serial or frame.session_id != self.session_id or frame.generation != self.generation or frame.connection_id != self.connection_id:
             raise SDKError('不能发布旧会话或重置前的匹配结果')
         age = (time.monotonic() - frame.received_at) * 1000
         if age >= 600:
             raise SDKError('匹配结果超过 600ms')
         self._send('detection.result', frame_id=frame.frame_id, timestamp=round(time.time() * 1000), expires_ms=max(1, int(600 - age)), objects=[m.to_object() for m in matches])
+
+    def publish_current(self, frame, matches, *, expires_ms):
+        with self._condition:
+            self._check()
+            current = self._current
+            if current is None or frame.generation != current.generation or frame.connection_id != current.connection_id:
+                return False
+            lifetime = expires_ms
+            if current is not frame:
+                # A moving stream may advance while matching. Keep the existing
+                # fresh-frame allowance, but never renew a superseded old image.
+                remaining = int(600 - (time.monotonic() - frame.received_at) * 1000)
+                if remaining <= 0:
+                    return False
+                lifetime = min(lifetime, remaining)
+            self._continuous_publish = True
+            self._send('detection.result', frame_id=frame.frame_id, timestamp=round(time.time() * 1000), expires_ms=lifetime, objects=[m.to_object() for m in matches])
+            return True
 
     def clear(self):
         self._send('detection.result', timestamp=round(time.time() * 1000), expires_ms=600, objects=[])
@@ -238,6 +287,7 @@ class Vision:
             if self._closed:
                 return
             self._closed = True
+            self._latest = self._current = None
             self._condition.notify_all()
         self._socket.close(timeout=1)
         if threading.current_thread() is not self._thread:

@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -141,7 +142,28 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.environment = env
 	m.mu.Unlock()
 	if !env.Ready {
-		return m.failStart(errors.New("Python 或识图依赖不可用，请先检测环境"))
+		var reasons []string
+		if env.Error != "" {
+			reasons = append(reasons, env.Error)
+		}
+		var missing []string
+		for _, dep := range env.Dependencies {
+			if !dep.Available {
+				if dep.Error != "" && !strings.HasPrefix(dep.Error, "ModuleNotFoundError") {
+					missing = append(missing, fmt.Sprintf("%s (%s)", dep.Name, dep.Error))
+				} else {
+					missing = append(missing, dep.Name)
+				}
+			}
+		}
+		if len(missing) > 0 {
+			reasons = append(reasons, fmt.Sprintf("缺少依赖: %s", strings.Join(missing, "、")))
+		}
+		msg := "Python 或识图依赖不可用"
+		if len(reasons) > 0 {
+			msg = strings.Join(reasons, "；")
+		}
+		return m.failStart(errors.New(msg))
 	}
 	directory, err := os.MkdirTemp("", "mywebscrcpy-matching-*")
 	if err != nil {

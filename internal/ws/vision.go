@@ -138,7 +138,13 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
-	frames, cancelFrames := h.subscribeShared(ms)
+	var frames <-chan sharedVideoFrame
+	var cancelFrames func()
+	if r.URL.Query().Get("current_frame") == "true" {
+		frames, cancelFrames = h.subscribeVisionSnapshot(ms)
+	} else {
+		frames, cancelFrames = h.subscribeShared(ms)
+	}
 	defer cancelFrames()
 	var frameID uint64
 	var lastSent time.Time
@@ -174,11 +180,11 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 		limit := maxFPS
 		optionsMu.RUnlock()
 		now := time.Now()
-		if !shouldEmitVisionFrame(kind, limit, lastSent, now) {
+		if !frame.replayed && !shouldEmitVisionFrame(kind, limit, lastSent, now) {
 			continue
 		}
 		lastSent = now
-		if e := writeJSON(map[string]interface{}{"type": "frame", "device_id": serial, "session_id": meta.SessionID, "frame_id": frameID, "pts": pts, "timestamp": time.Now().UnixMilli(), "width": width, "height": height, "kind": kind, "codec": meta.Codec, "replayed": frame.replayed}); e != nil {
+		if e := writeJSON(map[string]interface{}{"type": "frame", "device_id": serial, "session_id": meta.SessionID, "frame_id": frameID, "pts": pts, "timestamp": time.Now().UnixMilli(), "width": width, "height": height, "kind": kind, "codec": meta.Codec, "replayed": frame.replayed, "snapshot_complete": frame.snapshotComplete}); e != nil {
 			h.recordEvent(debuglog.Event{Type: "vision.write_error", DeviceID: serial, SessionID: meta.SessionID, Message: e.Error(), Fields: map[string]interface{}{"stage": "frame_metadata"}})
 			return
 		}

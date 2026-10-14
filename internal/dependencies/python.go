@@ -178,7 +178,13 @@ func (m *Manager) InstallPythonModules(s Selection) error {
 		defer release()
 		defer cancel()
 		log.Printf("[Dependencies] Python 模块安装开始 source=%s version=%s", s.Source, pythonsdk.Version)
-		cmd := exec.CommandContext(ctx, tool.Path, "-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--index-url", "https://pypi.org/simple", "mywebscrcpy-sdk[vision]=="+pythonsdk.Version)
+		localSDK := filepath.Join(filepath.Dir(m.root), "packages", "python-sdk")
+		var cmd *exec.Cmd
+		if stat, statErr := os.Stat(filepath.Join(localSDK, "pyproject.toml")); statErr == nil && !stat.IsDir() {
+			cmd = exec.CommandContext(ctx, tool.Path, "-m", "pip", "install", "--disable-pip-version-check", "--no-input", localSDK)
+		} else {
+			cmd = exec.CommandContext(ctx, tool.Path, "-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--index-url", "https://pypi.org/simple", "mywebscrcpy-sdk[vision]=="+pythonsdk.Version)
+		}
 		cmd.Dir = os.TempDir()
 		cmd.Env = PythonEnvironment()
 		cmd.WaitDelay = 2 * time.Second

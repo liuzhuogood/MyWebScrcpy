@@ -12,6 +12,7 @@ export interface ManagedTool {
   installed: boolean
   residual: boolean
   version: string
+  builtin_path?: string
   supported: boolean
   effective: DependencyInfo
   task: InstallTask

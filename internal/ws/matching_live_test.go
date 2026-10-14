@@ -78,12 +78,19 @@ with Client(url) as client:
    peer=websocket.create_connection(url.replace('http:','ws:')+'/api/vision/results?serial=10.0.0.30:5555',timeout=80,http_no_proxy=['*'])
    print(json.dumps(dict(type='prepared',width=frame.width,height=frame.height,texture=float(np.max(np.std(crop.astype(np.float64),axis=(0,1)))))),flush=True)
    deadline=time.monotonic()+80
+   matched_at=None
+   batches=0
+   source_ids=set()
    while time.monotonic()<deadline:
     value=json.loads(peer.recv())
     if value['type']=='detection.result' and value['objects']:
      confidence=max(o['confidence'] for o in value['objects'])
-     print(json.dumps(dict(type='matched',confidence=confidence,objects=len(value['objects']))),flush=True)
-     break
+     if matched_at is None:matched_at=time.monotonic()
+     batches+=1
+     source_ids.add(value['frame_id'])
+     if time.monotonic()-matched_at>=6:
+      print(json.dumps(dict(type='matched',confidence=confidence,objects=len(value['objects']),batches=batches,source_frames=len(source_ids),elapsed=time.monotonic()-matched_at)),flush=True)
+      break
    else: raise RuntimeError('matching result timeout')
    sys.stdin.buffer.read()
   finally:

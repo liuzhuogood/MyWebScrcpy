@@ -10,16 +10,17 @@ import { theme } from '@/composables/useTheme'
 import { useDesktopConfig } from '@/composables/useDesktopConfig'
 import DependencyPanel from '@/components/dependencies/DependencyPanel.vue'
 import MatchingServicePanel from './MatchingServicePanel.vue'
+import PlayerSettingsContent from './PlayerSettingsContent.vue'
 
-const props = defineProps<{ initialTab?: 'theme' | 'service' | 'dependencies' | 'matching' }>()
+const props = defineProps<{ initialTab?: 'general' | 'player' | 'theme' | 'service' | 'dependencies' | 'matching' }>()
 
 const open = defineModel<boolean>('open', { default: false })
-const tab = ref('theme')
+const tab = ref('general')
 const desktopConfig = useDesktopConfig()
 const themes = [{ id: 'auto' as const, name: '系统', icon: Monitor }, { id: 'light' as const, name: '明亮', icon: Sun }, { id: 'dark' as const, name: '黑暗', icon: Moon }]
 watch(open, (value) => {
   if (value) {
-    if (props.initialTab) tab.value = props.initialTab
+    if (props.initialTab) tab.value = props.initialTab === 'theme' ? 'general' : props.initialTab
     void desktopConfig.load()
   }
 })
@@ -28,16 +29,25 @@ watch(open, (value) => {
 <template>
   <Dialog v-model:open="open">
     <DialogContent class="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl" :aria-describedby="undefined">
-      <DialogHeader class="shrink-0 border-b px-5 py-4"><DialogTitle>系统配置</DialogTitle></DialogHeader>
+      <DialogHeader class="shrink-0 border-b px-5 py-4"><DialogTitle>系统设置</DialogTitle></DialogHeader>
       <Tabs v-model="tab" class="flex min-h-0 flex-1 flex-col gap-0">
-        <div class="shrink-0 px-5 pt-4"><TabsList class="grid w-full grid-cols-4"><TabsTrigger value="theme">主题</TabsTrigger><TabsTrigger value="service">服务</TabsTrigger><TabsTrigger value="dependencies">依赖</TabsTrigger><TabsTrigger value="matching">模板匹配</TabsTrigger></TabsList></div>
+        <div class="shrink-0 px-5 pt-4">
+          <TabsList class="grid w-full grid-cols-5">
+            <TabsTrigger value="general">通用设置</TabsTrigger>
+            <TabsTrigger value="player">投屏设置</TabsTrigger>
+            <TabsTrigger value="service">服务</TabsTrigger>
+            <TabsTrigger value="dependencies">依赖</TabsTrigger>
+            <TabsTrigger value="matching">模板匹配</TabsTrigger>
+          </TabsList>
+        </div>
         <div v-if="tab !== 'dependencies'" class="min-h-0 overflow-y-auto px-5 py-5">
-          <TabsContent value="theme" class="m-0 min-h-56 space-y-4">
+          <TabsContent value="general" class="m-0 min-h-56 space-y-4">
             <p class="text-sm font-medium">外观</p>
             <div class="grid grid-cols-3 gap-3" role="group" aria-label="主题">
               <Button v-for="item in themes" :key="item.id" variant="outline" class="h-24 flex-col gap-3" :class="theme === item.id ? 'border-primary bg-primary/5 text-primary' : ''" :aria-pressed="theme === item.id" @click="theme = item.id"><component :is="item.icon" class="size-6" />{{ item.name }}</Button>
             </div>
           </TabsContent>
+          <TabsContent value="player" class="m-0"><PlayerSettingsContent /></TabsContent>
           <TabsContent value="matching" class="m-0"><MatchingServicePanel v-if="open" /></TabsContent>
           <TabsContent value="service" class="m-0 space-y-4">
             <div class="space-y-3 rounded-lg border p-4">

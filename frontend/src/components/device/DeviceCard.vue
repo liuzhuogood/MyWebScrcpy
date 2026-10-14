@@ -1,18 +1,33 @@
 <script setup lang="ts">
-import { Loader2, Pencil, RefreshCw, Smartphone, Trash2, Usb, Wifi } from 'lucide-vue-next'
+import { AppWindow, Loader2, Pencil, RefreshCw, Smartphone, Trash2, Usb, Wifi } from 'lucide-vue-next'
 import { computed, nextTick, ref } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import { useRouter } from 'vue-router'
+import { invoke, isTauri } from '@tauri-apps/api/core'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import type { Device } from '@/api/devices'
 import { useDeviceStore } from '@/stores/devices'
+import { usePlayerSettings } from '@/composables/usePlayerSettings'
+import { useDesktopConfig } from '@/composables/useDesktopConfig'
 
 const props = defineProps<{ device: Device }>()
+const emit = defineEmits<{ openFloating: [serial: string] }>()
 const store = useDeviceStore()
 const router = useRouter()
+const playerSettings = usePlayerSettings()
+const desktopConfig = useDesktopConfig()
+
+const isGui = computed(() => {
+  return desktopConfig.isDesktop.value || Boolean(
+    isTauri() ||
+    (window as any).__MYWEBSCRCPY_DESKTOP_TOKEN__ ||
+    (window as any).__TAURI_INTERNALS__ ||
+    (window as any).__TAURI__
+  )
+})
 
 const isEditing = computed(() => store.editingSerial === props.device.serial)
 const draft = ref('')
@@ -79,6 +94,29 @@ function open() {
   if (isEditing.value || !isOnline.value)
     return
   router.push({ name: 'player', query: { serial: props.device.serial } })
+}
+
+async function openFloatingWindow(e?: Event) {
+  e?.stopPropagation()
+  if (isEditing.value || !isOnline.value)
+    return
+  if (isGui.value && isTauri()) {
+    try {
+      const targetW = playerSettings.floatingSize.value === 'compact' ? 320 : playerSettings.floatingSize.value === 'large' ? 440 : 380
+      const targetH = playerSettings.floatingSize.value === 'compact' ? 680 : playerSettings.floatingSize.value === 'large' ? 880 : 780
+      await invoke('open_device_window', {
+        serial: props.device.serial,
+        title: store.displayName(props.device),
+        width: targetW,
+        height: targetH,
+      })
+      return
+    }
+    catch (e) {
+      console.warn('打开桌面小窗失败，降级为网页小窗', e)
+    }
+  }
+  emit('openFloating', props.device.serial)
 }
 </script>
 
@@ -169,6 +207,18 @@ function open() {
       </div>
 
       <div v-if="!isEditing" class="flex items-center gap-0.5">
+        <Button
+          v-if="isOnline"
+          variant="ghost"
+          size="icon"
+          class="h-8 w-8 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 text-muted-foreground hover:text-foreground"
+          title="打开小窗"
+          aria-label="打开小窗"
+          @click.stop="openFloatingWindow"
+        >
+          <AppWindow class="h-4 w-4" />
+        </Button>
+
         <Button
           variant="ghost"
           size="icon"

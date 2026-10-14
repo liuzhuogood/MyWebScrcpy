@@ -77,7 +77,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_opener::init())
  .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![links::open_browser_link, updater::desktop_check_update, updater::desktop_upgrade])
+        .invoke_handler(tauri::generate_handler![links::open_browser_link, links::open_device_window, updater::desktop_check_update, updater::desktop_upgrade])
         .setup(move |app| {
             let data = app.path().app_data_dir()?;
  updater::prepare_startup(&data).map_err(std::io::Error::other)?;
@@ -86,9 +86,11 @@ fn main() {
             app.add_capability(
                 tauri::ipc::CapabilityBuilder::new("browser-links")
                     .window("main")
+                    .window("player-*")
                     .local(false)
                     .remote(format!("{url}/*"))
                     .permission("allow-open-browser-link")
+                    .permission("allow-open-device-window")
  .permission("allow-desktop-check-update")
  .permission("allow-desktop-upgrade"),
             )?;
@@ -129,8 +131,10 @@ fn main() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                let state = window.state::<State>();
-                if state.tray_available.load(Ordering::Relaxed) && window.hide().is_ok() { api.prevent_close(); }
+                if window.label() == "main" {
+                    let state = window.state::<State>();
+                    if state.tray_available.load(Ordering::Relaxed) && window.hide().is_ok() { api.prevent_close(); }
+                }
             }
         });
     let app = match builder.build(tauri::generate_context!()) {

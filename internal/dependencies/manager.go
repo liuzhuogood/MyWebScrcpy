@@ -55,6 +55,7 @@ type ManagedTool struct {
 	Installed   bool         `json:"installed"`
 	Residual    bool         `json:"residual"`
 	Version     string       `json:"version"`
+	BuiltinPath string       `json:"builtin_path,omitempty"`
 	Supported   bool         `json:"supported"`
 	Effective   Tool         `json:"effective"`
 	Task        InstallTask  `json:"task"`

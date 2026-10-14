@@ -86,7 +86,7 @@ onMounted(() => {
           <a href="/api-docs.html" target="_blank" rel="noopener">API 文档</a>
         </Button>
       </div>
-      <Button variant="ghost" size="sm" class="ml-auto shrink-0 xl:ml-0" aria-label="系统配置" @click="configOpen = true"><Settings class="size-4" /><span class="hidden sm:inline">系统配置</span></Button>
+      <Button variant="ghost" size="sm" class="ml-auto shrink-0 xl:ml-0" aria-label="系统设置" @click="configOpen = true"><Settings class="size-4" /><span class="hidden sm:inline">系统设置</span></Button>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
           <Button class="xl:hidden" variant="ghost" size="icon" title="更多" aria-label="更多">

@@ -69,6 +69,13 @@ type Hub struct {
 	commands        *adbcommand.Manager
 	frameConsumerMu sync.RWMutex
 	frameConsumer   VideoFrameConsumer
+	deviceConfigsMu sync.Mutex
+	deviceConfigs   map[string]deviceStreamConfig
+}
+
+type deviceStreamConfig struct {
+	bitRate int
+	maxFPS  int
 }
 
 // VideoFrame is an encoded frame exactly as it arrived from the active scrcpy
@@ -120,9 +127,10 @@ func NewHub(adbPath, jarPath string) *Hub {
 		sessions:   make(map[string]*managedSession),
 		inflight:   make(map[string]*inflightSession),
 		deviceEnvs: make(map[string]deviceEnv),
-		idleTTL:    defaultSessionIdleTTL,
-		gates:      make(map[string]*devicegate.Gate),
-		events:     debuglog.New(512),
+		idleTTL:       defaultSessionIdleTTL,
+		gates:         make(map[string]*devicegate.Gate),
+		events:        debuglog.New(512),
+		deviceConfigs: make(map[string]deviceStreamConfig),
 	}
 	h.recordings = newRecordingManager(h)
 	h.replays = newReplayManager(h)
@@ -207,6 +215,21 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	c.SetReadLimit(1 << 20)
 
 	log.Printf("[ws] 客户端连接 serial=%s", serial)
+
+	bitrate, _ := strconv.Atoi(r.URL.Query().Get("bitrate"))
+	maxFps, _ := strconv.Atoi(r.URL.Query().Get("max_fps"))
+	if bitrate > 0 || maxFps > 0 {
+		h.deviceConfigsMu.Lock()
+		cfg := h.deviceConfigs[serial]
+		if bitrate > 0 {
+			cfg.bitRate = bitrate
+		}
+		if maxFps > 0 {
+			cfg.maxFPS = maxFps
+		}
+		h.deviceConfigs[serial] = cfg
+		h.deviceConfigsMu.Unlock()
+	}
 
 	ms, meta, cancel, err := h.acquireSession(serial)
 	if err != nil {
@@ -295,6 +318,16 @@ func (h *Hub) startSessionOnce(serial string, forcePush bool) (*session, *handsh
 	sdk, needPush := h.resolveDeviceEnv(serial, forcePush)
 
 	cfg := scrcpy.DefaultConfig(serial)
+	h.deviceConfigsMu.Lock()
+	if pref, ok := h.deviceConfigs[serial]; ok {
+		if pref.bitRate > 0 {
+			cfg.BitRate = pref.bitRate
+		}
+		if pref.maxFPS > 0 {
+			cfg.MaxFPS = pref.maxFPS
+		}
+	}
+	h.deviceConfigsMu.Unlock()
 	audioReason := ""
 	// Android 11 (API 30) is the first supported release for scrcpy's direct
 	// device-output audio capture. Keep older devices on the established

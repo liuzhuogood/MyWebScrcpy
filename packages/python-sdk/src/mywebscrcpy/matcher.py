@@ -58,4 +58,4 @@ class Matcher:
         started = time.monotonic()
         matches = self.match_image(frame.image, image, template_id=template.id, name=template.name, threshold=template.threshold, grayscale=template.grayscale, scales=template.scales, method=template.method)
         logger.debug('Matched frame: template=%s frame=%s count=%s elapsed_ms=%.1f', template.id, frame.frame_id, len(matches), (time.monotonic() - started) * 1000)
-        return [replace(match, frame_id=frame.frame_id, session_id=frame.session_id, device_id=frame.device_id, received_at=frame.received_at, generation=frame.generation, connection_id=frame.connection_id) for match in matches]
+        return [replace(match, frame_id=frame.frame_id, session_id=frame.session_id, device_id=frame.device_id, received_at=frame.received_at, generation=frame.generation, connection_id=frame.connection_id, replayed=frame.replayed) for match in matches]

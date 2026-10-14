@@ -61,6 +61,7 @@ class Frame:
     image: Any
     generation: int
     connection_id: str = ""
+    replayed: bool = False
 
 
 @dataclass(frozen=True)
@@ -78,6 +79,7 @@ class Match:
     received_at: float
     generation: int
     connection_id: str = ""
+    replayed: bool = False
 
     @property
     def center(self):

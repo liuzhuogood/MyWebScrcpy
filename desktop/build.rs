@@ -16,6 +16,7 @@ fn main() {
             "open_browser_link",
             "desktop_check_update",
             "desktop_upgrade",
+            "open_device_window",
         ]),
     ))
     .expect("desktop build configuration failed")

@@ -39,9 +39,12 @@ def template_wire():
 
 
 class Fixture:
-    def __init__(self, *, static=False, malformed=False, fail_action=False, no_reply=False, reverse=False, replayed=False):
+    def __init__(self, *, static=False, malformed=False, fail_action=False, no_reply=False, reverse=False, replayed=False, snapshot=False, heartbeat=True):
         self.pattern, self.image, self.config, self.packet = assets()
         self.static, self.malformed, self.replayed = static, malformed, replayed
+        self.snapshot = snapshot
+        self.heartbeat = heartbeat
+        self.enabled = True
         self.fail_action, self.no_reply, self.reverse = fail_action, no_reply, reverse
         self.sent, self.actions, self.messages = [], [], []
         self.stop = threading.Event()
@@ -61,9 +64,11 @@ class Fixture:
                 nonlocal frame_id
                 frame_id += 1
                 pts = frame_id * 100000
-                ws.send(json.dumps(dict(type='frame', device_id='phone', session_id='session', frame_id=frame_id, pts=pts, timestamp=round(time.time()*1000), width=96, height=64, kind=kind, codec='h264', replayed=self.replayed)))
+                ws.send(json.dumps(dict(type='frame', device_id='phone', session_id='session', frame_id=frame_id, pts=pts, timestamp=round(time.time()*1000), width=96, height=64, kind=kind, codec='h264', replayed=self.replayed, snapshot_complete=self.snapshot and kind == 1)))
                 ws.send(bytes([kind]) + (pts + int(self.malformed)).to_bytes(8, 'big') + payload)
             packet(0, self.config)
+            if self.snapshot:
+                packet(1, self.packet)
             last = 0
             pending = []
             while not self.stop.is_set():
@@ -78,6 +83,8 @@ class Fixture:
                 except TimeoutError:
                     continue
                 self.messages.append(message)
+                if message['type'] == 'heartbeat' and self.heartbeat:
+                    ws.send(json.dumps(dict(type='heartbeat', device_id='phone', session_id='session', timestamp=round(time.time()*1000))))
                 if message['type'] == 'action.request':
                     self.actions.append(message)
                     pending.append(message)
@@ -99,7 +106,8 @@ class Fixture:
             if request.url.path.endswith('/image'):
                 return httpx.Response(200, content=png.tobytes(), headers={'content-type': 'image/png'})
             if request.url.path == '/api/templates':
-                return httpx.Response(200, json={'templates': [template_wire()], 'total': 1})
+                templates = [template_wire()] if self.enabled else []
+                return httpx.Response(200, json={'templates': templates, 'total': len(templates)})
             return httpx.Response(200, json=template_wire())
         client._http = httpx.Client(base_url=client._base_url, transport=httpx.MockTransport(handle))
         return client
@@ -199,6 +207,96 @@ class VisionTests(unittest.TestCase):
             self.assertTrue(any(m['objects'] for m in fixture.sent))
             self.assertEqual(fixture.sent[-1]['objects'],[])
             self.assertEqual(set(fixture.sent[0]['objects'][0]),{'label','confidence','x','y','w','h'})
+
+    def test_watch_rechecks_static_image_without_renewing_click_freshness(self):
+        fixture = self.fixture()
+        with fixture.client() as client, client.device('phone') as device:
+            with device.watch_templates(publish=True, max_fps=5, timeout=.5) as watch:
+                self.assertTrue(next(watch))
+                fixture.static = True
+                time.sleep(.1)  # Let the last already queued frame finish decoding.
+                initial = next(watch)[0]
+                started_ms = round(time.time() * 1000)
+                batches = [next(watch) for _ in range(18)]  # Beyond the worker's old 3s timeout.
+                self.assertTrue(all(batch for batch in batches))
+                self.assertTrue(all(batch[0].frame_id == initial.frame_id for batch in batches))
+                self.assertTrue(all(batch[0].received_at == initial.received_at for batch in batches))
+                with self.assertRaises(SDKError): device.tap_match(batches[-1][0])
+                self.assertFalse(fixture.actions)
+                time.sleep(.05)
+                self.assertGreater(fixture.sent[-1]['timestamp'], started_ms + 3000)
+                self.assertEqual(fixture.sent[-1]['expires_ms'], 600)
+                fixture.enabled = False
+                watch._refresh_at = 0
+                self.assertEqual(next(watch), [])
+                time.sleep(.05)
+                self.assertEqual(fixture.sent[-1]['objects'], [])
+
+    def test_watch_uses_new_image_and_retains_normal_click_freshness(self):
+        fixture = self.fixture()
+        with fixture.client() as client, client.device('phone') as device:
+            with device.watch_templates(publish=True, timeout=1) as watch:
+                first = next(watch)[0]
+                second = next(watch)[0]
+                self.assertGreater(second.frame_id, first.frame_id)
+                self.assertTrue(device.tap_match(second).executed)
+                # Replace the source with an actual newly encoded blank image.
+                codec = av.CodecContext.create('libx264', 'w')
+                codec.width, codec.height, codec.pix_fmt = 96, 64, 'yuv444p'
+                codec.time_base = Fraction(1, 10)
+                codec.flags |= av.codec.context.Flags.global_header
+                codec.options = {'preset': 'ultrafast', 'tune': 'zerolatency', 'crf': '0', 'keyint': '1'}
+                blank = av.VideoFrame.from_ndarray(np.zeros_like(fixture.image), format='bgr24')
+                blank.pts = 0
+                fixture.packet = bytes((codec.encode(blank) + codec.encode(None))[0])
+                limit = time.monotonic() + 1
+                while next(watch):
+                    self.assertLess(time.monotonic(), limit)
+                time.sleep(.05)
+                self.assertEqual(fixture.sent[-1]['objects'], [])
+
+    def test_watch_static_bootstrap_is_read_only_and_reset_discards_cache(self):
+        fixture = self.fixture(static=True, replayed=True, snapshot=True)
+        with fixture.client() as client, client.device('phone') as device:
+            with device.watch_templates(publish=True, timeout=.3) as watch:
+                target = next(watch)[0]
+                self.assertTrue(target.replayed)
+                with self.assertRaises(SDKError): device.tap_match(target)
+                with self.assertRaises(FrameTimeout): device.frame(timeout=.1)
+                fixture.reset.set()
+                limit = time.monotonic() + 1
+                while device._vision.generation == target.generation and time.monotonic() < limit:
+                    time.sleep(.01)
+                self.assertIsNone(device._vision._current)
+                with self.assertRaises(FrameTimeout): next(watch)
+                time.sleep(.05)
+                self.assertEqual(fixture.sent[-1]['objects'], [])
+                self.assertFalse(fixture.actions)
+
+    def test_watch_disconnect_stops_static_cache_reuse(self):
+        fixture = self.fixture(static=True, replayed=True, snapshot=True)
+        with fixture.client() as client, client.device('phone') as device:
+            with device.watch_templates(publish=True, timeout=.5) as watch:
+                self.assertTrue(next(watch))
+                fixture.stop.set()
+                fixture.server.shutdown()
+                limit = time.monotonic() + 1
+                while device._vision._error is None and time.monotonic() < limit:
+                    time.sleep(.01)
+                with self.assertRaises(SDKConnectionError): next(watch)
+                self.assertIsNone(device._vision._current)
+
+    def test_watch_missing_heartbeat_response_stops_cache_reuse(self):
+        fixture = self.fixture(static=True, replayed=True, snapshot=True, heartbeat=False)
+        with fixture.client() as client, client.device('phone') as device:
+            with device.watch_templates(publish=True, max_fps=5, timeout=.5) as watch:
+                self.assertTrue(next(watch))
+                started = time.monotonic()
+                with self.assertRaises(SDKConnectionError):
+                    while time.monotonic() - started < 12:
+                        self.assertTrue(next(watch))
+                self.assertIsNone(device._vision._current)
+                self.assertFalse(fixture.actions)
 
     def test_reset_invalidates_match_and_slow_consumer_gets_newest_frame(self):
         fixture = self.fixture()

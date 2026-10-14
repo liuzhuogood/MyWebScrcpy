@@ -19,6 +19,7 @@ Thumbs.db
 # Temp
 *.tmp
 *.log
+*-endpoint.json
 recordings/
 data/
 .zcode/

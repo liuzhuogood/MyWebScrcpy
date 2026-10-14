@@ -8,10 +8,9 @@
 
 ```bash
 python -m pip install ./packages/python-sdk
-python -m pip install './packages/python-sdk[vision]'
 ```
 
-基础依赖包含 HTTPX 和 websocket-client，支持模板资产、设备列表、ADB、页面尺寸和专用动作。基础 import 不加载 PyAV、OpenCV、NumPy；取帧和匹配需要 `[vision]`。缺依赖抛 `MissingDependency` 并提示安装命令。
+核心依赖包含 HTTPX、websocket-client、PyAV、OpenCV (opencv-python-headless) 与 NumPy，开箱即用支持模板资产、设备列表、ADB、页面尺寸、视频取帧与模板匹配。基础 import 保持懒加载，仅在实际取帧与匹配时加载 PyAV、OpenCV 与 NumPy。仍保留 `[vision]` 兼容标识。
 
 构建并安装 wheel：
 
@@ -54,9 +53,13 @@ with Client('http://HOST:PORT') as client:
 | `device.tap(point)` / `swipe(start, end, duration_ms=300)` | 归一化坐标 0..1；滑动时长为毫秒 |
 | `device.key(keycode, meta_state=0)` / `text(text)` | uint32 按键；文本最多 300 UTF-8 字节，具体字符输入能力需设备验证 |
 | `Matcher.match_image(image, template, ...)` | 内存 BGR 图像离线匹配，无网络，返回归一化框与分数 |
-| `device.watch_templates(publish=True, max_fps=5, timeout=10)` | 使用上下文；每批新帧，有总期限；每设备一个 watch |
+| `device.watch_templates(publish=True, max_fps=5, timeout=10)` | 使用上下文；按指定频率重新匹配当前画面，每批有总期限；每设备一个 watch |
 
 `watch_templates(publish=True)` 将结果回传网页播放器，空结果与关闭都会清框；异常中断时服务端 TTL 兜住残留显示。每 10 秒刷新模板；刷新失败中断 watch，不以旧缓存继续。完整编码包持续解码，只保存最新画面，不因慢匹配堆积历史帧。每个 Device 一个收包线程，动作结果按 request_id 分发。
+
+静止画面没有新视频帧时，watch 继续匹配最后一张有效画面并刷新绿框；新帧到来立即替换缓存，旋转、编码器重置、断流和关闭使缓存失效。绿框的 TTL 按本轮检测刷新，图像的 `frame_id`、`received_at` 不变，`tap_match` 仍拒绝超过 600ms 的图像。`frame`、`match`、`wait_for` 继续等待新帧。
+
+Vision 订阅携带 `current_frame=true`，服务器回放有大小上限的完整关键帧与增量帧链，并在末包标记 `snapshot_complete=true`，用于静止时启动 watch。未标记完整性的回放只用于初始化解码器；缓存超限则等待新关键帧。回放匹配结果标记 `replayed=True`，不能用于点击。连接每 5 秒发送心跳，5 秒内没有响应会结束检测；停止发布后，绿框按 TTL 清除。
 
 ## 异常与资源
 
