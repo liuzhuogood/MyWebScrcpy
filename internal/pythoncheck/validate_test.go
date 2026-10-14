@@ -21,11 +21,18 @@ func TestSDKContractValidator(t *testing.T) {
 	if err := Validate(context.Background(), python, code); err != nil {
 		t.Fatal(err)
 	}
-	for _, replacement := range []string{"device.wait_for(['shell'], timeout=10)", "device.adb(['shell'], serial='other')", "__import__('os').system('echo bad')", "device.adb(['shell'], unexpected=1)"} {
+	for _, replacement := range []string{"device.unknown(['shell'], timeout=10)", "device.adb(['shell'], serial='other')", "__import__('os').system('echo bad')", "device.adb(['shell'], unexpected=1)"} {
 		invalid := strings.Replace(code, `device.adb(["shell", "getprop", "ro.product.model"], timeout=10)`, replacement, 1)
 		if Validate(context.Background(), python, invalid) == nil {
 			t.Fatalf("accepted %s", replacement)
 		}
+	}
+	vision, err := os.ReadFile("../../.pi/skills/markdown-to-python/assets/vision-example.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = Validate(context.Background(), python, string(vision)); err != nil {
+		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

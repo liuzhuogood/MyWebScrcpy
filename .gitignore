@@ -48,3 +48,10 @@ packages/python-sdk/**/__pycache__/
 # Keep SDK sources despite the executable basename ignore rule.
 !packages/python-sdk/src/mywebscrcpy/
 !packages/python-sdk/src/mywebscrcpy/*.py
+
+# SDK v1.22 isolated tests and evidence
+.cache/sdk-v122/
+.cache/sdk-base-v122/
+.cache/verification/
+
+.cache/sdk-wheel-v122/

@@ -104,8 +104,8 @@ class BasicContractTests(unittest.TestCase):
             self.assertIn("Portable Phone", result.stdout)
             self.assertEqual(requests[0][1]["timeout_ms"], 10000)
             self.assertIn("serial=portable-phone", requests[0][0])
-            self.assertNotIn("cv2", sys.modules)
-            self.assertNotIn("av", sys.modules)
+            clean = subprocess.run([sys.executable, "-c", "import sys,mywebscrcpy; assert not ({'cv2','av','numpy'} & sys.modules.keys())"], capture_output=True, text=True)
+            self.assertEqual(clean.returncode, 0, clean.stderr)
         finally:
             server.shutdown()
             server.server_close()

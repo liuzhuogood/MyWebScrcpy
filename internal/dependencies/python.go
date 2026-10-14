@@ -86,7 +86,7 @@ func inspectPython(ctx context.Context, tool Tool, path string) Tool {
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, path, "-B", "-c", pythonProbe)
-	cmd.Dir, cmd.Env, cmd.WaitDelay = os.TempDir(), pythonEnvironment(), time.Second
+	cmd.Dir, cmd.Env, cmd.WaitDelay = os.TempDir(), PythonEnvironment(), time.Second
 	var output boundedOutput
 	cmd.Stdout, cmd.Stderr = &output, &output
 	err := cmd.Run()
@@ -109,9 +109,9 @@ func inspectPython(ctx context.Context, tool Tool, path string) Tool {
 	return tool
 }
 
-// Match task execution: installed user packages remain visible, while inherited
+// PythonEnvironment matches task execution: installed user packages remain visible, while inherited
 // PYTHONPATH cannot shadow the SDK or pip with an unrelated source directory.
-func pythonEnvironment() []string {
+func PythonEnvironment() []string {
 	env := make([]string, 0, len(os.Environ())+2)
 	for _, entry := range os.Environ() {
 		name, _, _ := strings.Cut(entry, "=")
@@ -178,9 +178,9 @@ func (m *Manager) InstallPythonModules(s Selection) error {
 		defer release()
 		defer cancel()
 		log.Printf("[Dependencies] Python 模块安装开始 source=%s version=%s", s.Source, pythonsdk.Version)
-		cmd := exec.CommandContext(ctx, tool.Path, "-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--index-url", "https://pypi.org/simple", "mywebscrcpy-sdk=="+pythonsdk.Version)
+		cmd := exec.CommandContext(ctx, tool.Path, "-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--index-url", "https://pypi.org/simple", "mywebscrcpy-sdk[vision]=="+pythonsdk.Version)
 		cmd.Dir = os.TempDir()
-		cmd.Env = pythonEnvironment()
+		cmd.Env = PythonEnvironment()
 		cmd.WaitDelay = 2 * time.Second
 		var output boundedOutput
 		cmd.Stdout, cmd.Stderr = &output, &output

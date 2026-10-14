@@ -112,7 +112,7 @@ func TestGenerationFreezeRetryAndProvenance(t *testing.T) {
 		t.Fatal("changed API document accepted")
 	}
 	g.APIDocument = apiBefore
-	if err := os.WriteFile(filepath.Join(g.SkillDir, "references/sdk-api.md"), []byte("# SDK API sdk-v1\nChanged"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(g.SkillDir, "references/sdk-api.md"), []byte("# SDK API sdk-v2\nChanged"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	if g.Check(*saved) == nil {
@@ -212,5 +212,60 @@ func TestGenerationProtocol(t *testing.T) {
 		if _, err := parseGeneration(reply); err == nil {
 			t.Fatalf("accepted %s", reply)
 		}
+	}
+}
+
+func TestVisionGenerationFreezesTemplatesAndRejectsUnknownIDs(t *testing.T) {
+	d, g, script, model := generationFixture(t)
+	script.Content += "\n![目标](template://target)\n等待并点击目标"
+	changed := false
+	g.TemplateSnapshot = func(id string) (json.RawMessage, error) {
+		if id != "target" {
+			t.Fatal(id)
+		}
+		imageHash := "original"
+		if changed {
+			imageHash = "changed"
+		}
+		return json.Marshal(map[string]any{"template": map[string]any{"id": id, "serial": "global", "enabled": true, "method": "TM_CCOEFF_NORMED"}, "image_sha256": imageHash})
+	}
+	codeBytes, err := os.ReadFile("../../.pi/skills/markdown-to-python/assets/vision-example.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := strings.ReplaceAll(string(codeBytes), "CONFIRMED_TEMPLATE_ID", "target")
+	// Save the current source snapshot before generation's transactional comparison.
+	if err = d.UpdateMarkdownScript(script.ID, script.Name, script.TargetDevices, script.Content, script.ExtractedVersion, script.ScheduleCron, script.IsEnabled, script.TimeoutSec); err != nil {
+		t.Fatal(err)
+	}
+	script, err = d.GetMarkdownScript(script.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model.respond = func(ctx context.Context, input aiprovider.GenerationInput, attempt int) (string, error) {
+		if !strings.Contains(input.Files["templates.json"], "image_sha256") || !strings.Contains(input.Files["capabilities.json"], "device.wait_for") {
+			t.Fatal("missing actual vision context")
+		}
+		if attempt == 1 {
+			return ready(strings.ReplaceAll(code, "\"target\"", "\"guessed-id\"")), nil
+		}
+		if input.Files["previous.json"] == "" {
+			t.Fatal("unknown ID was not repaired")
+		}
+		return ready(code), nil
+	}
+	if err = g.Generate(context.Background(), *script, ignoreGeneration); err != nil {
+		t.Fatal(err)
+	}
+	saved, _ := d.GetMarkdownScript(script.ID)
+	if g.Check(*saved) != nil {
+		t.Fatal("valid vision generation rejected")
+	}
+	changed = true
+	if g.Check(*saved) == nil {
+		t.Fatal("modified template image did not stale artifact")
+	}
+	if model.calls != 2 {
+		t.Fatal(model.calls)
 	}
 }

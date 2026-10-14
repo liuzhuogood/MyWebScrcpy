@@ -92,7 +92,7 @@ func TestPythonSelectionAndModuleInstallation(t *testing.T) {
 	if err := json.Unmarshal(raw, &args); err != nil {
 		t.Fatal(err)
 	}
-	expected := []string{"-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--index-url", "https://pypi.org/simple", "mywebscrcpy-sdk==" + pythonsdk.Version}
+	expected := []string{"-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--index-url", "https://pypi.org/simple", "mywebscrcpy-sdk[vision]==" + pythonsdk.Version}
 	if !reflect.DeepEqual(args, expected) {
 		t.Fatalf("unexpected pip command: %v", args)
 	}
@@ -239,7 +239,7 @@ func TestRealManagedPythonFromArchive(t *testing.T) {
 	userBase := t.TempDir()
 	t.Setenv("PYTHONUSERBASE", userBase)
 	cmd := exec.Command(tool.Path, "-c", "import site; print(site.getusersitepackages())")
-	cmd.Env = pythonEnvironment()
+	cmd.Env = PythonEnvironment()
 	output, err := cmd.Output()
 	if err != nil {
 		t.Fatal(err)

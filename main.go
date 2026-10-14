@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"image/png"
 	"io/fs"
 	"log"
 	"net/http"
@@ -19,6 +23,7 @@ import (
 	"mywebscrcpy/internal/desktop"
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
+	"mywebscrcpy/internal/matchingservice"
 	"mywebscrcpy/internal/mdscript"
 	"mywebscrcpy/internal/pibundle"
 	"mywebscrcpy/internal/scheduler"
@@ -164,6 +169,7 @@ func main() {
 	}
 
 	var updateTasks *taskmanager.Manager
+	var matchingManager *matchingservice.Manager
 	dependencyResume := func() {}
 	updatePrepare = func() error {
 		if !updatePrepared.CompareAndSwap(false, true) {
@@ -187,6 +193,12 @@ func main() {
 		}
 		if !updateGate.TryLock() {
 			return fmt.Errorf("请关闭投屏连接并等待当前操作完成后再更新")
+		}
+		if matchingManager != nil {
+			if err := matchingManager.CheckIdle(); err != nil {
+				updateGate.Unlock()
+				return err
+			}
 		}
 		if err := hub.CheckUpdateIdle(); err != nil {
 			updateGate.Unlock()
@@ -220,6 +232,12 @@ func main() {
 		if !updateGate.TryLock() {
 			return nil, fmt.Errorf("请关闭投屏连接并等待当前操作完成")
 		}
+		if matchingManager != nil {
+			if err := matchingManager.CheckIdle(); err != nil {
+				updateGate.Unlock()
+				return nil, err
+			}
+		}
 		if err := hub.CheckDependencyIdle(); err != nil {
 			updateGate.Unlock()
 			return nil, err
@@ -252,6 +270,28 @@ func main() {
 	templateService := template.NewService(templateStorage)
 	defer templateService.Stop()
 	template.RegisterRoutes(mux, templateService)
+	matchingManager = matchingservice.New(matchingservice.Options{
+		Python: dependencies.AcquirePython,
+		Devices: func() []string {
+			devices := []string{}
+			for _, serial := range hub.MatchingDevices() {
+				for _, asset := range templateStorage.ListTemplates(serial) {
+					if asset.Enabled {
+						devices = append(devices, serial)
+						break
+					}
+				}
+			}
+			return devices
+		},
+		TemplateReadable: func(id, serial string) bool {
+			asset, err := templateStorage.GetTemplate(id)
+			return err == nil && (asset.Serial == serial || asset.Serial == template.GlobalSerial)
+		},
+		API: mux, Vision: http.HandlerFunc(hub.ServeMatchingVisionWS),
+	})
+	matchingManager.RegisterRoutes(mux)
+	defer matchingManager.Close()
 
 	if database == nil {
 		registerUnavailableScriptRoutes(mux)
@@ -303,6 +343,29 @@ func main() {
 		aiSvc := aiprovider.NewService(database, pibundle.Paths{})
 		aiSvc.RuntimeResolver = dependencyManager.AcquirePi
 		generator := mdscript.NewGenerator(database, aiSvc, filepath.Join(skillsDir, "markdown-to-python"), openAPISpec)
+		generator.TemplateSnapshot = func(id string) (json.RawMessage, error) {
+			tmpl, err := templateStorage.GetTemplate(id)
+			if err != nil {
+				return nil, err
+			}
+			img, err := templateStorage.GetTemplateImage(id)
+			if err != nil {
+				return nil, err
+			}
+			var buffer bytes.Buffer
+			if err := png.Encode(&buffer, img); err != nil {
+				return nil, err
+			}
+			hash := sha256.Sum256(buffer.Bytes())
+			return json.Marshal(struct {
+				Template  *template.Template `json:"template"`
+				ImageHash string             `json:"image_sha256"`
+			}{tmpl, hex.EncodeToString(hash[:])})
+		}
+		taskMgr.TemplateReadable = func(id, serial string) bool {
+			tmpl, err := templateStorage.GetTemplate(id)
+			return err == nil && (tmpl.Serial == template.GlobalSerial || tmpl.Serial == serial)
+		}
 		executor.ArtifactCheck = generator.Check
 		mdHandler.Generator = generator
 		taskMgr.Artifacts.ConfigureReports(aiSvc.SummarizeTask)

@@ -59,7 +59,7 @@ jobs:
           python -m twine check --strict packages/python-sdk/dist/*
       - name: Test installed wheel
         run: |
-          python -m pip install packages/python-sdk/dist/*.whl
+          python -m pip install "$(find packages/python-sdk/dist -name '*.whl')[vision,test]"
           python -m unittest discover -s packages/python-sdk/tests -v
           python - <<'PY'
           from importlib.metadata import version
@@ -71,7 +71,7 @@ jobs:
       - name: Test source distribution in a clean environment
         run: |
           python -m venv "$RUNNER_TEMP/sdk-sdist"
-          "$RUNNER_TEMP/sdk-sdist/bin/python" -m pip install packages/python-sdk/dist/*.tar.gz
+          "$RUNNER_TEMP/sdk-sdist/bin/python" -m pip install "$(find packages/python-sdk/dist -name '*.tar.gz')[vision,test]"
           "$RUNNER_TEMP/sdk-sdist/bin/python" -m unittest discover -s packages/python-sdk/tests -v
       - name: Check published version
         id: pypi

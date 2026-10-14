@@ -27,6 +27,7 @@ type managedSession struct {
 	replay          bool // true when serving an MP4 replay instead of live scrcpy
 	mu              sync.Mutex
 	refs            int
+	matchingRefs    int
 	subs            map[chan sharedVideoFrame]struct{}
 	audioSubs       map[chan sharedAudioPacket]struct{}
 	clipboardSubs   map[chan string]struct{}

@@ -1,14 +1,16 @@
 # Markdown 生成 Python
 
-先在系统配置的「依赖」中准备 Pi、搜索程序及 Python，并配置模型。Python 可使用系统解释器或下载内置解释器，点击 Python 卡片的「安装依赖」安装与主程序版本一致的 SDK 及 HTTPX。也可在选定环境中手动安装：
+先在系统配置的「依赖」中准备 Pi、搜索程序及 Python，并配置模型。Python 可使用系统解释器或下载内置解释器，点击 Python 卡片的「安装依赖」安装与主程序版本一致的 SDK 及基础和识图依赖。也可在选定环境中手动安装：
 
 ```bash
-/path/to/python -m pip install 'mywebscrcpy-sdk==1.20.1'
+/path/to/python -m pip install 'mywebscrcpy-sdk[vision]==1.20.1'
 ```
+
+本次新增 Vision 能力需先从仓库源码安装：`/path/to/python -m pip install './packages/python-sdk[vision]'`。PyPI 上已发布的同版本基础包不包含这些新增能力，正式发布时需更新 VERSION。
 
 在任务工作台保存 Markdown 和目标设备，再点击「生成 Python」。Pi 根据 markdown-to-python 技能与冻结 API/SDK 资料生成代码；活动区显示思考、工具和结果，支持停止。信息不足时按提示补全文档再生成。
 
-当前支持明确的基础 ADB 动作、页面尺寸、等待与有限判断/循环。点击坐标、包名、Activity 等必须明确；Vision、模板匹配、OCR 和中文输入尚未提供。SDK 的专用 tap/swipe/key/text 接口也尚未提供，基础动作使用 device.adb 的明确参数。
+当前 sdk-v2 支持基础 ADB、页面尺寸、Vision 取帧、模板主图片匹配、等待目标、有限持续匹配，以及 tap/swipe/key/text。模板 ID 来自文档引用并冻结实际元数据与图片哈希；禁用、他设备或未知算法模板不可作为目标。OCR、多参考图聚合与未验证中文输入不生成调用。点击坐标、包名、Activity 等必须明确。
 
 只有通过校验并保存后才能运行。编辑文档或相关上下文会让旧代码过期，旧源码保留以便查看；手动与定时执行均需先重新生成。生成失败或停止不会清除最后成功产物，不自动回退旧生成器。
 
@@ -31,6 +33,8 @@ SDK 使用说明见 [Python SDK](../packages/python-sdk/README.md)，基础动�
 
 单次生成最多五分钟、两次校验修正；同任务重复生成拒绝，不同任务独立。请求取消会回收 Pi。资料字段和方法按明确契约读取，不从模型文本中猜代码块或字段别名。
 
-脚本记录的 needs_generation 表示产物缺失、无来源或上下文/代码哈希不符。来源记录含 source_hash、code_hash、provider、model、contract_version、generated_at。模型字段用于追溯；来源指纹包含实际 SDK、校验器、API 文档和技能。
+脚本记录的 needs_generation 表示产物缺失、无来源或上下文/代码哈希不符。来源记录含 source_hash、code_hash、provider、model、contract_version、generated_at。模型字段用于追溯；来源指纹包含实际 SDK、校验器、API 文档、技能及文档引用的模板元数据和图片哈希；模板更新后需要重新生成。生成脚本只读已确认的模板 ID，应用内桥接限定当前任务设备，任务结束或取消会关闭其 Vision 连接。
 
 校验不执行生成源码，不构成进程沙箱，也不能替代真机验收。第一阶段的受控模型、受控设备接口和本机软件验证见 [版本记录](versions/v1.21.0-feature/session.md)。
+
+本版软件测试与只读真机验收边界见 [v1.22 会话记录](versions/v1.22.0-feature/session.md)。

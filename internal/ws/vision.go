@@ -15,8 +15,14 @@ import (
 	"mywebscrcpy/internal/vision"
 )
 
-// ServeVisionWS exposes a bidirectional vision stream. Video messages reuse the
-// existing scrcpy frame envelope; Python returns JSON detection/action messages.
+type matchingReadOnlyKey struct{}
+
+// ServeMatchingVisionWS permits frames/results, never device actions.
+func (h *Hub) ServeMatchingVisionWS(w http.ResponseWriter, r *http.Request) {
+	h.ServeVisionWS(w, r.WithContext(context.WithValue(r.Context(), matchingReadOnlyKey{}, true)))
+}
+
+// ServeVisionWS exposes frames and detection/action messages for external SDK clients.
 func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 	serial := r.URL.Query().Get("serial")
 	if serial == "" {
@@ -48,7 +54,15 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 		return c.WriteMessage(websocket.BinaryMessage, b)
 	}
 	c.SetReadLimit(1 << 20)
-	ms, meta, cancelSession, err := h.acquireSession(serial)
+	readOnly, _ := r.Context().Value(matchingReadOnlyKey{}).(bool)
+	var ms *managedSession
+	var meta *handshakeMeta
+	var cancelSession func()
+	if readOnly {
+		ms, meta, cancelSession, err = h.acquireMatchingSession(serial)
+	} else {
+		ms, meta, cancelSession, err = h.acquireSession(serial)
+	}
 	if err != nil {
 		_ = writeJSON(map[string]interface{}{"type": "error", "message": err.Error()})
 		return
@@ -58,9 +72,11 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 	// handshake meta in both live and replay modes.
 	width, height := meta.Width, meta.Height
 	_ = writeJSON(map[string]interface{}{"type": "hello", "protocol_version": "1", "device_id": serial, "session_id": meta.SessionID, "format": "scrcpy-frame", "codec": meta.Codec, "width": meta.Width, "height": meta.Height})
+	actionCtx, cancelActions := context.WithCancel(r.Context())
+	defer cancelActions()
 	done := make(chan struct{})
 	var stopOnce sync.Once
-	stop := func() { stopOnce.Do(func() { close(done) }) }
+	stop := func() { stopOnce.Do(func() { close(done); cancelActions() }) }
 	defer stop()
 	go func() {
 		defer stop()
@@ -112,7 +128,11 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 				}
 				h.publishResult(serial, msg)
 			} else if msg.Type == "action.request" {
-				result := <-ms.actions.Submit(context.Background(), action.Request{RequestID: msg.RequestID, DeviceID: serial, Source: "vision", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, Text: msg.Text, Keycode: msg.Keycode, MetaState: msg.MetaState, FrameID: msg.FrameID, ExpiresMS: msg.ExpiresMS, Humanize: msg.Humanize, Mode: msg.Mode, DurationMS: msg.DurationMS})
+				if readOnly {
+					_ = writeJSON(map[string]interface{}{"type": "action.result", "request_id": msg.RequestID, "device_id": serial, "session_id": meta.SessionID, "accepted": false, "executed": false, "error_code": "read_only"})
+					continue
+				}
+				result := <-ms.actions.Submit(actionCtx, action.Request{RequestID: msg.RequestID, DeviceID: serial, Source: "vision", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, Text: msg.Text, Keycode: msg.Keycode, MetaState: msg.MetaState, FrameID: msg.FrameID, ExpiresMS: msg.ExpiresMS, Humanize: msg.Humanize, Mode: msg.Mode, DurationMS: msg.DurationMS})
 				h.recordEvent(debuglog.Event{Type: "action.result", DeviceID: serial, SessionID: meta.SessionID, RequestID: result.RequestID, Fields: map[string]interface{}{"accepted": result.Accepted, "executed": result.Executed, "error_code": result.ErrorCode}})
 				_ = writeJSON(map[string]interface{}{"type": "action.result", "request_id": result.RequestID, "device_id": serial, "session_id": meta.SessionID, "accepted": result.Accepted, "executed": result.Executed, "error_code": result.ErrorCode})
 			}
@@ -124,13 +144,23 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 	var lastSent time.Time
 	for {
 		select {
+		case <-actionCtx.Done():
+			return
 		case <-done:
 			return
 		default:
 		}
-		frame, ok := <-frames
-		if !ok {
+		var frame sharedVideoFrame
+		var ok bool
+		select {
+		case <-actionCtx.Done():
 			return
+		case <-done:
+			return
+		case frame, ok = <-frames:
+			if !ok {
+				return
+			}
 		}
 		data := frame.data
 		frameID++

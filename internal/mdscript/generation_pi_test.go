@@ -73,7 +73,7 @@ func TestRealPiSkillGenerationAndPythonExecution(t *testing.T) {
 			}
 			read("reference", "skill/references/sdk-api.md")
 		case 3:
-			if !hasResult("# SDK API sdk-v1") {
+			if !hasResult("# SDK API sdk-v2") {
 				t.Error("Pi did not read frozen SDK contract")
 			}
 			read("api", "api/openapi.json")
