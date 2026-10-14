@@ -17,6 +17,8 @@ fn main() {
             "desktop_check_update",
             "desktop_upgrade",
             "open_device_window",
+            "set_window_always_on_top",
+            "is_window_always_on_top",
         ]),
     ))
     .expect("desktop build configuration failed")

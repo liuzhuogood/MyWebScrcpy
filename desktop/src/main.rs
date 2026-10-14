@@ -77,7 +77,14 @@ fn main() {
         }))
         .plugin(tauri_plugin_opener::init())
  .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![links::open_browser_link, links::open_device_window, updater::desktop_check_update, updater::desktop_upgrade])
+        .invoke_handler(tauri::generate_handler![
+            links::open_browser_link,
+            links::open_device_window,
+            links::set_window_always_on_top,
+            links::is_window_always_on_top,
+            updater::desktop_check_update,
+            updater::desktop_upgrade
+        ])
         .setup(move |app| {
             let data = app.path().app_data_dir()?;
  updater::prepare_startup(&data).map_err(std::io::Error::other)?;
@@ -91,6 +98,8 @@ fn main() {
                     .remote(format!("{url}/*"))
                     .permission("allow-open-browser-link")
                     .permission("allow-open-device-window")
+                    .permission("allow-set-window-always-on-top")
+                    .permission("allow-is-window-always-on-top")
  .permission("allow-desktop-check-update")
  .permission("allow-desktop-upgrade"),
             )?;

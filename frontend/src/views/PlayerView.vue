@@ -22,10 +22,12 @@ async function handleClose() {
 </script>
 
 <template>
-  <DevicePlayer
-    :key="serial"
-    :serial="serial"
-    :embedded="embedded"
-    @close="handleClose"
-  />
+  <div class="h-full w-full overflow-hidden">
+    <DevicePlayer
+      :key="serial"
+      :serial="serial"
+      :embedded="embedded"
+      @close="handleClose"
+    />
+  </div>
 </template>

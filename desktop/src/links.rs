@@ -43,7 +43,7 @@ pub fn open_device_window(
 
     let win_title = title.unwrap_or_else(|| format!("投屏 - {}", serial));
     let w = width.unwrap_or(380.0);
-    let h = height.unwrap_or(780.0);
+    let h = height.unwrap_or(836.0);
 
     let token_script = if let Ok(guard) = state.backend.lock() {
         if let Some(b) = guard.as_ref() {
@@ -65,6 +65,16 @@ pub fn open_device_window(
 
     builder.build().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn set_window_always_on_top(window: tauri::WebviewWindow, always_on_top: bool) -> Result<(), String> {
+    window.set_always_on_top(always_on_top).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn is_window_always_on_top(window: tauri::WebviewWindow) -> Result<bool, String> {
+    window.is_always_on_top().map_err(|e| e.to_string())
 }
 
 pub const CLICK_SCRIPT: &str = include_str!("links.js");

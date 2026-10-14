@@ -27,8 +27,12 @@ import {
   Volume2,
   VolumeX,
   X,
+  ChevronDown,
+  Pin,
+  PinOff,
 } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
+import { invoke, isTauri } from '@tauri-apps/api/core'
 import { useElementSize } from '@vueuse/core'
 import { RouterLink } from 'vue-router'
 import {
@@ -123,6 +127,38 @@ const compactToolbar = computed(() => stageWidth.value < 1280)
 const isVeryNarrow = computed(() => stageWidth.value < 270)
 const sidePanel = computed(() => captureOpen.value ? 'capture' : filesOpen.value || shellOpen.value || inspectorVisible.value || replayOpen.value || templateOpen.value || settingsOpen.value ? 'tools' : null)
 
+const toolbarVisible = ref(true)
+const isAlwaysOnTop = ref(false)
+
+async function initAlwaysOnTop() {
+  if (isGui.value && isTauri()) {
+    try {
+      isAlwaysOnTop.value = await invoke<boolean>('is_window_always_on_top')
+    }
+    catch (e) {
+      console.warn('获取置顶状态失败', e)
+    }
+  }
+}
+
+async function toggleAlwaysOnTop() {
+  if (isGui.value && isTauri()) {
+    try {
+      const next = !isAlwaysOnTop.value
+      await invoke('set_window_always_on_top', { alwaysOnTop: next })
+      isAlwaysOnTop.value = next
+    }
+    catch (e) {
+      console.warn('切换置顶状态失败', e)
+    }
+  }
+}
+
+watch(toolbarVisible, async () => {
+  await nextTick()
+  window.dispatchEvent(new Event('resize'))
+})
+
 watch([p.videoSize, sidePanel], ([size, side]) => {
   emit('layout', { width: size.w, height: size.h, side })
 }, { immediate: true })
@@ -131,6 +167,9 @@ onMounted(() => {
   if (serial.value) {
     tm.start()
     void rec.loadHistory()
+  }
+  if (props.embedded && isGui.value) {
+    void initAlwaysOnTop()
   }
 })
 
@@ -282,10 +321,34 @@ defineExpose({ handleEscape })
     </Empty>
   </div>
 
-  <div v-else :ref="p.stageRef" class="flex min-h-0 min-w-0 flex-col bg-background" :class="embedded ? 'h-full' : 'h-dvh'">
+  <div v-else :ref="p.stageRef" class="relative flex min-h-0 min-w-0 flex-col bg-background" :class="embedded ? 'h-full overflow-hidden' : 'h-dvh'">
+    <!-- 工具栏隐藏时的顶部唤出把手 -->
+    <div
+      v-if="!toolbarVisible"
+      class="group absolute top-0 inset-x-0 z-50 flex h-6 items-start justify-center"
+    >
+      <button
+        type="button"
+        class="flex h-4 items-center justify-center rounded-b bg-muted/80 px-4 text-muted-foreground shadow-sm backdrop-blur transition-all hover:h-5 hover:bg-muted hover:text-foreground cursor-pointer opacity-40 hover:opacity-100"
+        aria-label="展开工具条"
+        title="展开工具条"
+        @click="toolbarVisible = true"
+      >
+        <ChevronDown class="h-3 w-3" />
+      </button>
+    </div>
+
     <!-- 工具栏 -->
-    <header class="flex h-14 shrink-0 items-center gap-1 border-b px-3" :class="{ 'toolbar-compact': compactToolbar, 'cursor-move select-none': embedded }">
-      <Button v-if="embedded" variant="ghost" size="icon" aria-label="关闭小窗" class="cursor-pointer" @click="emit('close')">
+    <header v-if="toolbarVisible" class="flex h-14 shrink-0 items-center gap-1 border-b px-3" :class="{ 'toolbar-compact': compactToolbar, 'cursor-move select-none': embedded }">
+      <Button
+        v-if="embedded"
+        variant="ghost"
+        size="icon"
+        :aria-label="isGui ? '隐藏工具条' : '关闭小窗'"
+        :title="isGui ? '隐藏工具条' : '关闭小窗'"
+        class="cursor-pointer"
+        @click="isGui ? (toolbarVisible = false) : emit('close')"
+      >
         <X class="h-4 w-4" />
       </Button>
       <Button v-else variant="ghost" size="icon" aria-label="返回设备列表" as-child>
@@ -295,8 +358,20 @@ defineExpose({ handleEscape })
       <Badge v-if="!embedded" :variant="p.live.value ? 'default' : 'secondary'">{{ p.statusText.value }}</Badge>
       <Badge v-if="!embedded && p.showFps.value" class="toolbar-secondary" variant="outline">{{ p.fps.value }} fps</Badge>
 
-      <!-- 小窗模式专属精简工具栏：默认只显示 返回、主页、切换 + 更多；过窄时全部收入更多 -->
+      <!-- 小窗模式专属精简工具栏：默认只显示 置顶(GUI)、返回、主页、切换 + 更多；过窄时全部收入更多 -->
       <div v-if="embedded" class="ml-auto flex shrink-0 items-center gap-0.5">
+        <Button
+          v-if="isGui"
+          variant="ghost"
+          size="icon"
+          :title="isAlwaysOnTop ? '取消置顶' : '保持窗口置顶'"
+          :aria-label="isAlwaysOnTop ? '取消置顶' : '保持窗口置顶'"
+          :class="{ 'text-primary bg-primary/10': isAlwaysOnTop }"
+          @click="toggleAlwaysOnTop()"
+        >
+          <PinOff v-if="isAlwaysOnTop" class="h-4 w-4" />
+          <Pin v-else class="h-4 w-4" />
+        </Button>
         <template v-if="!isVeryNarrow">
           <Button variant="ghost" size="icon" title="返回" aria-label="返回" @click="p.pressBack()">
             <Undo2 class="h-4 w-4" />
@@ -316,6 +391,11 @@ defineExpose({ handleEscape })
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" class="z-[9999]">
             <template v-if="isVeryNarrow">
+              <DropdownMenuItem v-if="isGui" @select="toggleAlwaysOnTop()">
+                <PinOff v-if="isAlwaysOnTop" class="h-4 w-4" />
+                <Pin v-else class="h-4 w-4" />
+                {{ isAlwaysOnTop ? '取消置顶' : '保持窗口置顶' }}
+              </DropdownMenuItem>
               <DropdownMenuItem @select="p.pressBack()"><Undo2 class="h-4 w-4" />返回</DropdownMenuItem>
               <DropdownMenuItem @select="p.pressHome()"><Home class="h-4 w-4" />主页</DropdownMenuItem>
               <DropdownMenuItem @select="p.pressRecents()"><GalleryHorizontal class="h-4 w-4" />切换任务</DropdownMenuItem>

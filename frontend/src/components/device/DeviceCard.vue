@@ -102,8 +102,10 @@ async function openFloatingWindow(e?: Event) {
     return
   if (isGui.value && isTauri()) {
     try {
+      const HEADER_HEIGHT = 56
       const targetW = playerSettings.floatingSize.value === 'compact' ? 320 : playerSettings.floatingSize.value === 'large' ? 440 : 380
-      const targetH = playerSettings.floatingSize.value === 'compact' ? 680 : playerSettings.floatingSize.value === 'large' ? 880 : 780
+      const baseH = playerSettings.floatingSize.value === 'compact' ? 680 : playerSettings.floatingSize.value === 'large' ? 880 : 780
+      const targetH = baseH + HEADER_HEIGHT
       await invoke('open_device_window', {
         serial: props.device.serial,
         title: store.displayName(props.device),
