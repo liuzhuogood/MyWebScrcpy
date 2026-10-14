@@ -47,3 +47,5 @@ Python 依赖不自动安装。macOS PyAV/OpenCV 的重复类警告、跨平台 
 方案为 prototypes/cases/matching-service-v1；只用本地模拟；界面截图与事实见 prototypes/README.md。验证未自动创建进程、缺依赖阻止启动、唯一进程、动态多设备、停止/崩溃回收、只读访问边界、正式 UI 和只读真机。Windows/Linux 原生未测保持明确边界。
 
 合并主分支时接入 managed Python 与 pip SDK 管理：依赖检测和运行进程使用同一解释器与导入环境（保留用户安装目录，过滤继承的 PYTHONPATH），运行期间阻止安装或清理。主程序 VERSION 保持不变，本次 Vision 新能力可通过源码/wheel 安装；正式 PyPI 发布需递增 VERSION，避免覆盖已发布的基础包。
+
+调试与正式任务分工：系统配置入口显示「模板匹配」，服务面板常驻说明「调试时按需启动模板匹配服务；正式执行任务时，由任务脚本负责模板匹配」。全局服务用于调试，正式任务的匹配流程由脚本管理。

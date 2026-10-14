@@ -30,7 +30,7 @@ watch(open, (value) => {
     <DialogContent class="flex max-h-[90dvh] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl" :aria-describedby="undefined">
       <DialogHeader class="shrink-0 border-b px-5 py-4"><DialogTitle>系统配置</DialogTitle></DialogHeader>
       <Tabs v-model="tab" class="flex min-h-0 flex-1 flex-col gap-0">
-        <div class="shrink-0 px-5 pt-4"><TabsList class="grid w-full grid-cols-4"><TabsTrigger value="theme">主题</TabsTrigger><TabsTrigger value="service">服务</TabsTrigger><TabsTrigger value="dependencies">依赖</TabsTrigger><TabsTrigger value="matching">匹配</TabsTrigger></TabsList></div>
+        <div class="shrink-0 px-5 pt-4"><TabsList class="grid w-full grid-cols-4"><TabsTrigger value="theme">主题</TabsTrigger><TabsTrigger value="service">服务</TabsTrigger><TabsTrigger value="dependencies">依赖</TabsTrigger><TabsTrigger value="matching">模板匹配</TabsTrigger></TabsList></div>
         <div v-if="tab !== 'dependencies'" class="min-h-0 overflow-y-auto px-5 py-5">
           <TabsContent value="theme" class="m-0 min-h-56 space-y-4">
             <p class="text-sm font-medium">外观</p>

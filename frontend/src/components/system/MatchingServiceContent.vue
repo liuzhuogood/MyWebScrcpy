@@ -13,6 +13,7 @@ const missing = computed(() => props.status?.environment.dependencies.filter(ite
 <template>
   <div class="space-y-4">
     <div class="flex items-center justify-between gap-3"><h2 class="text-sm font-medium">模板匹配服务</h2><Badge variant="outline">{{ status ? labels[status.state] : '读取中' }}</Badge></div>
+    <p class="text-xs leading-relaxed text-muted-foreground">调试时按需启动模板匹配服务；正式执行任务时，由任务脚本负责模板匹配。</p>
     <div class="space-y-3 rounded-lg border p-4">
       <div class="flex items-center justify-between gap-3"><span class="text-sm">Python 环境</span><Button variant="ghost" size="sm" :disabled="!status || busy || status.state === 'running'" @click="emit('action', 'check')"><RefreshCw class="size-3.5" :class="{ 'animate-spin': status?.state === 'checking' }" />检测依赖</Button></div>
       <template v-if="status?.environment.version"><p class="text-xs" :class="status.environment.ready ? 'text-muted-foreground' : 'text-destructive'">Python {{ status.environment.version }} · {{ status.environment.ready ? '依赖可用' : '环境不可用' }}</p><p class="break-all text-xs text-muted-foreground">{{ status.environment.path }}</p></template>
