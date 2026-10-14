@@ -27,6 +27,7 @@ func ServeDesktopWithMaintenance(addr, readyPath string, mux *http.ServeMux, han
 	}
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
+		log.Printf("[Desktop] 端口 %s 监听失败: %v（可能已被占用，请在系统设置中修改端口或释放该端口）", addr, err)
 		return err
 	}
 	defer listener.Close()
@@ -45,6 +46,7 @@ func ServeDesktopWithMaintenance(addr, readyPath string, mux *http.ServeMux, han
 		return err
 	}
 	defer os.Remove(readyPath)
+	defer os.Remove(EndpointFile)
 	if err = updater.PublishHealth(listener, false, "v"+os.Getenv("MYWEBSCRCPY_DESKTOP_VERSION")); err != nil {
 		return err
 	}

@@ -65,6 +65,39 @@ pub fn command(path: &Path) -> Command {
     command
 }
 
+fn resolve_port(data: &Path) -> u16 {
+    const DEFAULT_PORT: u16 = 1989;
+    if let Ok(val) = std::env::var("MYWEBSCRCPY_DESKTOP_PORT") {
+        if let Ok(port) = val.trim().parse::<u16>() {
+            if port > 0 {
+                return port;
+            }
+        }
+    }
+    if let Ok(val) = std::env::var("PORT") {
+        if let Ok(port) = val.trim().parse::<u16>() {
+            if port > 0 {
+                return port;
+            }
+        }
+    }
+    let config_path = data.join("desktop.json");
+    if let Ok(content) = fs::read_to_string(&config_path) {
+        #[derive(Deserialize)]
+        struct DesktopConfig {
+            port: Option<u16>,
+        }
+        if let Ok(cfg) = serde_json::from_str::<DesktopConfig>(&content) {
+            if let Some(port) = cfg.port {
+                if port > 0 {
+                    return port;
+                }
+            }
+        }
+    }
+    DEFAULT_PORT
+}
+
 impl Backend {
     pub fn start(data: &Path) -> Result<Self, String> {
         fs::create_dir_all(data).map_err(|e| format!("创建数据目录失败: {e}"))?;
@@ -78,11 +111,15 @@ impl Backend {
             .open(data.join("desktop.log"))
             .map_err(|e| format!("打开日志失败: {e}"))?;
         let error_log = log.try_clone().map_err(|e| e.to_string())?;
-        let mut service_command=command(&executable()?);
- service_command.env_remove("MYWEBSCRCPY_UPDATE_RECEIPT");
- if let Some(receipt)=crate::update_backup::pending_receipt(data)? {service_command.env("MYWEBSCRCPY_UPDATE_RECEIPT",receipt);}
- let mut child = service_command
-            .args(["--no-gui", "--listen", "127.0.0.1:0", "--data-dir"])
+        let mut service_command = command(&executable()?);
+        service_command.env_remove("MYWEBSCRCPY_UPDATE_RECEIPT");
+        if let Some(receipt) = crate::update_backup::pending_receipt(data)? {
+            service_command.env("MYWEBSCRCPY_UPDATE_RECEIPT", receipt);
+        }
+        let port = resolve_port(data);
+        let listen_addr = format!("127.0.0.1:{port}");
+        let mut child = service_command
+            .args(["--no-gui", "--listen", &listen_addr, "--data-dir"])
             .arg(data)
             .arg("--desktop-ready")
             .arg(&ready_file)
@@ -122,10 +159,17 @@ impl Backend {
             }
             match child.try_wait() {
                 Ok(Some(status)) => {
+                    let mut detail = String::new();
+                    if let Ok(log_content) = fs::read_to_string(data.join("desktop.log")) {
+                        let lines: Vec<&str> = log_content.lines().rev().take(3).collect();
+                        if !lines.is_empty() {
+                            detail = format!(": {}", lines.into_iter().rev().collect::<Vec<_>>().join(" "));
+                        }
+                    }
                     return Err(format!(
-                        "服务提前退出 ({status})，请查看 {}",
+                        "服务提前退出 ({status}){detail}，请查看 {}",
                         data.join("desktop.log").display()
-                    ))
+                    ));
                 }
                 Err(error) => {
                     Self::abort(&mut child);

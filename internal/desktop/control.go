@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -21,9 +22,10 @@ type Ready struct {
 }
 
 type Control struct {
-	token string
-	stop  chan struct{}
-	once  sync.Once
+	token         string
+	stop          chan struct{}
+	once          sync.Once
+	effectivePort int
 }
 
 func NewControl() (*Control, error) {
@@ -45,6 +47,36 @@ func (c *Control) Register(mux *http.ServeMux) {
 		w.WriteHeader(http.StatusAccepted)
 		c.once.Do(func() { close(c.stop) })
 	}))
+	mux.HandleFunc("GET /api/desktop/config", c.authorize(func(w http.ResponseWriter, r *http.Request) {
+		cfg, _ := LoadConfig()
+		envPort, hasEnv := ResolveEnvPort()
+		res := ConfigResponse{
+			Port:         cfg.Port,
+			Effective:    c.effectivePort,
+			EnvPort:      envPort,
+			IsOverridden: hasEnv,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(res)
+	}))
+	mux.HandleFunc("PUT /api/desktop/config", c.authorize(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Port int `json:"port"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&body); err != nil {
+			http.Error(w, "配置格式错误", http.StatusBadRequest)
+			return
+		}
+		if err := ValidatePort(body.Port); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := SaveConfig(Config{Port: body.Port}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
 }
 func (c *Control) authorize(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +89,7 @@ func (c *Control) authorize(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 func (c *Control) Publish(path string, listener net.Listener) error {
-	host, _, err := net.SplitHostPort(listener.Addr().String())
+	host, portStr, err := net.SplitHostPort(listener.Addr().String())
 	if err != nil {
 		return err
 	}
@@ -65,6 +97,7 @@ func (c *Control) Publish(path string, listener net.Listener) error {
 	if ip == nil || !ip.IsLoopback() {
 		return fmt.Errorf("桌面服务必须监听回环地址")
 	}
+	c.effectivePort, _ = strconv.Atoi(portStr)
 	value := Ready{URL: "http://" + listener.Addr().String(), Token: c.token, PID: os.Getpid()}
 	contents, err := json.Marshal(value)
 	if err != nil {
@@ -83,5 +116,20 @@ func (c *Control) Publish(path string, listener net.Listener) error {
 		os.Remove(file.Name())
 		return err
 	}
-	return os.Rename(path+".tmp", path)
+	if err = os.Rename(path+".tmp", path); err != nil {
+		return err
+	}
+	endpoint := struct {
+		URL  string `json:"url"`
+		Port int    `json:"port"`
+		PID  int    `json:"pid"`
+	}{
+		URL:  "http://" + listener.Addr().String(),
+		Port: c.effectivePort,
+		PID:  os.Getpid(),
+	}
+	if endData, err := json.MarshalIndent(endpoint, "", "  "); err == nil {
+		_ = os.WriteFile(EndpointFile, endData, 0644)
+	}
+	return nil
 }

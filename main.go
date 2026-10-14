@@ -16,6 +16,7 @@ import (
 	"mywebscrcpy/internal/aiprovider"
 	"mywebscrcpy/internal/db"
 	"mywebscrcpy/internal/dependencies"
+	"mywebscrcpy/internal/desktop"
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/mdscript"
@@ -87,7 +88,10 @@ func main() {
 
 	adbPath := findADB()
 	addr := "0.0.0.0:8080"
-	if p := os.Getenv("PORT"); p != "" {
+	if *readyFlag != "" {
+		port := desktop.ResolvePort(*listenFlag)
+		addr = fmt.Sprintf("127.0.0.1:%d", port)
+	} else if p := os.Getenv("PORT"); p != "" {
 		addr = "0.0.0.0:" + p
 	}
 
