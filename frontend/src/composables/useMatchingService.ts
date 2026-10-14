@@ -16,9 +16,13 @@ export function useMatchingService() {
     const desktopToken = (window as Window & { __MYWEBSCRCPY_DESKTOP_TOKEN__?: string }).__MYWEBSCRCPY_DESKTOP_TOKEN__
     const response = await fetch(`/api/matching-service/${operation}`, { method: operation === 'status' ? 'GET' : 'POST', headers: desktopToken ? { Authorization: `Bearer ${desktopToken}` } : {}, signal: AbortSignal.timeout(40000) })
     if (!response.ok) {
-      const failure = await response.json() as { error: string; status: MatchingStatus }
-      status.value = failure.status
-      throw new Error(failure.error)
+      if (response.headers.get('content-type')?.includes('application/json')) {
+        const failure = await response.json() as { error: string; status: MatchingStatus }
+        status.value = failure.status
+        throw new Error(failure.error)
+      }
+      const text = (await response.text()).trim()
+      throw new Error(text || `请求失败（${response.status}）`)
     }
     status.value = await response.json() as MatchingStatus
   }
