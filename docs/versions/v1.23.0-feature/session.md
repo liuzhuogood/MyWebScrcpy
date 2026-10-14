@@ -35,3 +35,5 @@ Git 交付：代码提交 8386f322e8f12f026dbd91127c8c8440b683dbf5 已普通推�
 合并结果验证：全 Go 普通/竞态套件（启用实际已安装 SDK 的任务 Vision 与多设备匹配测试）、go vet、版本同步测试通过；新隔离环境 pip 安装本次 wheel 后 21 项 Python 测试通过，sdist 安装到独立目标目录后 21 项也通过，wheel/sdist twine 严格检查通过。前端/原型 TypeScript 与生产构建通过，macOS 本机构建及 Linux/Windows amd64 交叉构建通过。实际二进制验证无自启、唯一进程、手动停止、Go 退出回收、重启关闭、运行中拒绝 Python 依赖安装，以及现有桌面生命周期/端口配置冒烟通过。
 
 合并后正式界面在独立数据目录、缺失 ADB 环境验证：四个页签、服务端口保留、匹配页依赖检测/启动/停止，390×844 页面无横向溢出，截图 merged-running.jpg 与 merged-mobile.jpg。未连接或操作真机。自有临时匹配进程、UI 测试服务及标签已关闭；现有服务未重启。测试生成的 desktop-endpoint.json 已转存到忽略的验证目录，未加入提交。待提交合并并核对远端 main。
+
+Git 收口：合并提交 1239e2a718a75ef4d7104dda10f33ffcd9bd3476，父提交为 main 的 9f58322 与版本分支的 078c8d4；已普通推送 origin/main，并通过 ls-remote 核对远端指向该合并提交。merge-base 验证版本提交为 main 祖先，工作区干净。版本分支保留。未更新 VERSION、未打 tag、未重启现有服务；本条为推送结果补记。
