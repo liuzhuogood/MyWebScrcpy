@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-restore-player-window"
+description = "Enables the restore_player_window command without any pre-configured scope."
+commands.allow = ["restore_player_window"]
+
+[[permission]]
+identifier = "deny-restore-player-window"
+description = "Denies the restore_player_window command without any pre-configured scope."
+commands.deny = ["restore_player_window"]

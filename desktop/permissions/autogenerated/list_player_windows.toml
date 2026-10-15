@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-list-player-windows"
+description = "Enables the list_player_windows command without any pre-configured scope."
+commands.allow = ["list_player_windows"]
+
+[[permission]]
+identifier = "deny-list-player-windows"
+description = "Denies the list_player_windows command without any pre-configured scope."
+commands.deny = ["list_player_windows"]

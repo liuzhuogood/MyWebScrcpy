@@ -21,6 +21,7 @@ pub fn show(app: &AppHandle) {
 pub fn action(app: &AppHandle, id: &str) {
     match id {
         "show" => show(app),
+        "restore-players" => crate::player_windows::restore_all(app),
         "hide" => {
             if let Some(window) = app.get_webview_window("main") {
                 if let Err(error) = window.hide() {
@@ -85,12 +86,14 @@ pub fn install(app: &mut App) -> tauri::Result<bool> {
         .text("scripts", "脚本与任务")
         .separator()
         .text("show", "打开主窗口")
+        .text("restore-players", "恢复所有小窗")
         .build()?;
     let menu = Menu::with_items(app, &[&application, &edit, &view])?;
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| action(app, event.id.as_ref()));
     let tray_menu = MenuBuilder::new(app)
         .text("show", "打开主窗口")
+        .text("restore-players", "恢复所有小窗")
         .text("home", "设备列表")
         .text("dashboard", "大屏监控")
         .text("scripts", "脚本与任务")

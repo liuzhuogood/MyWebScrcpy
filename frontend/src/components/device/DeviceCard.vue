@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AppWindow, Loader2, Pencil, RefreshCw, Smartphone, Trash2, Usb, Wifi } from 'lucide-vue-next'
+import { AppWindow, Loader2, Pencil, RefreshCw, Smartphone, Trash2, Usb, Wifi, RotateCcw } from 'lucide-vue-next'
 import { computed, nextTick, ref } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import { useRouter } from 'vue-router'
@@ -12,6 +12,7 @@ import type { Device } from '@/api/devices'
 import { useDeviceStore } from '@/stores/devices'
 import { usePlayerSettings } from '@/composables/usePlayerSettings'
 import { useDesktopConfig } from '@/composables/useDesktopConfig'
+import { usePlayerWindows } from '@/composables/usePlayerWindows'
 
 const props = defineProps<{ device: Device }>()
 const emit = defineEmits<{ openFloating: [serial: string] }>()
@@ -19,6 +20,7 @@ const store = useDeviceStore()
 const router = useRouter()
 const playerSettings = usePlayerSettings()
 const desktopConfig = useDesktopConfig()
+const windowEffects = usePlayerWindows(computed(() => props.device.serial))
 
 const isGui = computed(() => {
   return desktopConfig.isDesktop.value || Boolean(
@@ -209,6 +211,15 @@ async function openFloatingWindow(e?: Event) {
       </div>
 
       <div v-if="!isEditing" class="flex items-center gap-0.5">
+        <Button
+          v-if="windowEffects.native && windowEffects.needsRecovery.value"
+          variant="outline"
+          size="sm"
+          :disabled="windowEffects.busy.value"
+          @click.stop="windowEffects.restore"
+        >
+          <RotateCcw class="h-4 w-4" />恢复小窗
+        </Button>
         <Button
           v-if="isOnline"
           variant="ghost"

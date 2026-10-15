@@ -6,6 +6,10 @@ pub fn start(app: &AppHandle) {
     if std::env::var_os("MYWEBSCRCPY_NATIVE_REPORT").is_none() {
         return;
     }
+    if std::env::var_os("MYWEBSCRCPY_VERIFY_PLAYERS").is_some() {
+        crate::verify_players::start(app);
+        return;
+    }
     let app = app.clone();
     thread::spawn(move || {
         thread::sleep(Duration::from_secs(3));

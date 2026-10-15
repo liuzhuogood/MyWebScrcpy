@@ -19,6 +19,10 @@ fn main() {
             "open_device_window",
             "set_window_always_on_top",
             "is_window_always_on_top",
+            "list_player_windows",
+            "set_player_opacity",
+            "set_player_click_through",
+            "restore_player_window",
         ]),
     ))
     .expect("desktop build configuration failed")
