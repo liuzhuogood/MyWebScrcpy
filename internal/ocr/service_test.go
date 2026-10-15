@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -12,11 +13,164 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+var (
+	mockPythonOnce sync.Once
+	mockPythonExe  string
+	mockPythonErr  error
+)
+
+func createMockPythonShim(t *testing.T, scratchDir, name string) string {
+	t.Helper()
+	mockPythonOnce.Do(func() {
+		dir, err := os.MkdirTemp("", "mock-py-build-*")
+		if err != nil {
+			mockPythonErr = err
+			return
+		}
+		exeName := "mock-python-base"
+		if runtime.GOOS == "windows" {
+			exeName += ".exe"
+		}
+		target := filepath.Join(dir, exeName)
+		src := filepath.Join(dir, "main.go")
+		code := `package main
+
+import (
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
+)
+
+func main() {
+	name := strings.ToLower(filepath.Base(os.Args[0]))
+	if strings.Contains(name, "hang") {
+		time.Sleep(15 * time.Second)
+		os.Exit(0)
+	}
+
+	isProbe := len(os.Args) >= 3 && os.Args[1] == "-B" && os.Args[2] == "-c"
+	if isProbe {
+		if strings.Contains(name, "missing") {
+			fmt.Fprint(os.Stderr, "paddle,paddleocr")
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	if strings.Contains(name, "exit") || strings.Contains(name, "missing") {
+		os.Exit(1)
+	}
+
+	if len(os.Args) > 1 {
+		scriptPath := os.Args[1]
+		if data, err := os.ReadFile(scriptPath); err == nil {
+			content := string(data)
+			if strings.Contains(content, "sys.exit(1)") {
+				os.Exit(1)
+			}
+			if strings.Contains(content, "Never ready") {
+				runServer("never_ready")
+				return
+			}
+			if strings.Contains(content, "Model is initializing") {
+				runServer("wait_ready")
+				return
+			}
+		}
+	}
+
+	runServer("200")
+}
+
+func runServer(mode string) {
+	port := "5000"
+	for i, arg := range os.Args {
+		if arg == "--port" && i+1 < len(os.Args) {
+			port = os.Args[i+1]
+			break
+		}
+	}
+
+	startTime := time.Now()
+	mux := http.NewServeMux()
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if mode == "never_ready" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("{\"detail\":\"Never ready\"}"))
+			return
+		}
+		if mode == "wait_ready" && time.Since(startTime) < 350*time.Millisecond {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_, _ = w.Write([]byte("{\"detail\":\"Model is initializing\"}"))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("{\"status\":\"ok\",\"ready\":true}"))
+	}
+	mux.HandleFunc("/", handler)
+	mux.HandleFunc("/health", handler)
+
+	server := &http.Server{
+		Addr:    "127.0.0.1:" + port,
+		Handler: mux,
+	}
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		_ = server.Close()
+		os.Exit(0)
+	}()
+
+	_ = server.ListenAndServe()
+	os.Exit(0)
+}
+`
+		if err := os.WriteFile(src, []byte(code), 0644); err != nil {
+			mockPythonErr = err
+			return
+		}
+		buildCmd := exec.Command("go", "build", "-o", target, src)
+		if out, err := buildCmd.CombinedOutput(); err != nil {
+			mockPythonErr = fmt.Errorf("compile mock python: %v (%s)", err, out)
+			return
+		}
+		mockPythonExe = target
+	})
+	if mockPythonErr != nil {
+		t.Fatalf("failed to build mock python: %v", mockPythonErr)
+	}
+
+	targetName := name
+	if runtime.GOOS == "windows" && !strings.HasSuffix(strings.ToLower(targetName), ".exe") {
+		targetName += ".exe"
+	}
+	targetPath := filepath.Join(scratchDir, targetName)
+	data, err := os.ReadFile(mockPythonExe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(targetPath, data, 0755); err != nil {
+		t.Fatal(err)
+	}
+	return targetPath
+}
 
 func createTestPNG() []byte {
 	img := image.NewRGBA(image.Rect(0, 0, 100, 50))
@@ -124,11 +278,7 @@ with socketserver.TCPServer(('127.0.0.1', port), Handler) as httpd:
 	if err := os.WriteFile(filepath.Join(serverDir, "server.py"), []byte(fakeServerCode), 0644); err != nil {
 		t.Fatal(err)
 	}
-	shim := filepath.Join(scratch, "python-fixture")
-	shimCode := "#!/bin/sh\nif [ \"$1\" = \"-B\" ] && [ \"$2\" = \"-c\" ]; then exit 0; fi\nexec python3 \"$@\"\n"
-	if err := os.WriteFile(shim, []byte(shimCode), 0755); err != nil {
-		t.Fatal(err)
-	}
+	shim := createMockPythonShim(t, scratch, "python-fixture")
 	t.Setenv("MYWEBSCRCPY_PYTHON", shim)
 
 	service := NewService(nil, nil)
@@ -312,33 +462,21 @@ func TestProbePaddleDependenciesDetailed(t *testing.T) {
 	scratch := t.TempDir()
 
 	// 1. 模拟所有依赖就绪的 python
-	mockPyAll := filepath.Join(scratch, "mock-py-all")
-	scriptAll := "#!/bin/sh\nexit 0\n"
-	if err := os.WriteFile(mockPyAll, []byte(scriptAll), 0755); err != nil {
-		t.Fatal(err)
-	}
+	mockPyAll := createMockPythonShim(t, scratch, "mock-py-all")
 	ok, missing := probePaddleDependencies(context.Background(), mockPyAll)
 	if !ok || missing != "" {
 		t.Errorf("expected true, got %v with missing=%s", ok, missing)
 	}
 
 	// 2. 模拟缺少 paddle 和 paddleocr
-	mockPyMissing := filepath.Join(scratch, "mock-py-missing")
-	scriptMissing := "#!/bin/sh\necho 'paddle,paddleocr' >&2\nexit 1\n"
-	if err := os.WriteFile(mockPyMissing, []byte(scriptMissing), 0755); err != nil {
-		t.Fatal(err)
-	}
+	mockPyMissing := createMockPythonShim(t, scratch, "mock-py-missing")
 	ok, missing = probePaddleDependencies(context.Background(), mockPyMissing)
 	if ok || !strings.Contains(missing, "paddle") {
 		t.Errorf("expected false with paddle missing, got ok=%v missing=%s", ok, missing)
 	}
 
 	// 3. 模拟超时
-	mockPyHang := filepath.Join(scratch, "mock-py-hang")
-	scriptHang := "#!/bin/sh\nexec /bin/sleep 10\n"
-	if err := os.WriteFile(mockPyHang, []byte(scriptHang), 0755); err != nil {
-		t.Fatal(err)
-	}
+	mockPyHang := createMockPythonShim(t, scratch, "mock-py-hang")
 	shortCtx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
 	ok, missing = probePaddleDependencies(shortCtx, mockPyHang)
@@ -392,18 +530,7 @@ with socketserver.TCPServer(('127.0.0.1', port), Handler) as httpd:
 		t.Fatal(err)
 	}
 
-	// shim python：probe 返回 0，执行 server.py 时使用当前 python
-	shim := filepath.Join(scratch, "python-shim")
-	shimCode := `#!/bin/sh
-if [ "$1" = "-B" ] && [ "$2" = "-c" ]; then
-    exit 0
-fi
-exec python3 "$@"
-`
-	if err := os.WriteFile(shim, []byte(shimCode), 0755); err != nil {
-		t.Fatal(err)
-	}
-
+	shim := createMockPythonShim(t, scratch, "python-shim")
 	t.Setenv("MYWEBSCRCPY_PYTHON", shim)
 
 	service := NewService(nil, nil)
@@ -452,18 +579,7 @@ func TestStartPaddle_RejectsWhenDependenciesMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 模拟缺少 paddle 依赖的 python 运行时
-	shim := filepath.Join(scratch, "python-missing")
-	shimCode := `#!/bin/sh
-if [ "$1" = "-B" ] && [ "$2" = "-c" ]; then
-    echo "paddle,paddleocr" >&2
-    exit 1
-fi
-exit 1
-`
-	if err := os.WriteFile(shim, []byte(shimCode), 0755); err != nil {
-		t.Fatal(err)
-	}
+	shim := createMockPythonShim(t, scratch, "python-missing")
 	t.Setenv("MYWEBSCRCPY_PYTHON", shim)
 
 	service := NewService(nil, nil)
@@ -499,16 +615,7 @@ func TestStartPaddle_ProcessExitsBeforeReady(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	shim := filepath.Join(scratch, "python-exit")
-	shimCode := `#!/bin/sh
-if [ "$1" = "-B" ] && [ "$2" = "-c" ]; then
-    exit 0
-fi
-exit 1
-`
-	if err := os.WriteFile(shim, []byte(shimCode), 0755); err != nil {
-		t.Fatal(err)
-	}
+	shim := createMockPythonShim(t, scratch, "python-exit")
 	t.Setenv("MYWEBSCRCPY_PYTHON", shim)
 
 	service := NewService(nil, nil)
@@ -561,16 +668,7 @@ with socketserver.TCPServer(('127.0.0.1', port), Handler) as httpd:
 		t.Fatal(err)
 	}
 
-	shim := filepath.Join(scratch, "python-timeout-shim")
-	shimCode := `#!/bin/sh
-if [ "$1" = "-B" ] && [ "$2" = "-c" ]; then
-    exit 0
-fi
-exec python3 "$@"
-`
-	if err := os.WriteFile(shim, []byte(shimCode), 0755); err != nil {
-		t.Fatal(err)
-	}
+	shim := createMockPythonShim(t, scratch, "python-timeout-shim")
 	t.Setenv("MYWEBSCRCPY_PYTHON", shim)
 
 	service := NewService(nil, nil)
