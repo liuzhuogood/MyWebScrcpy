@@ -1,13 +1,9 @@
 package main
 
 import (
-	"bytes"
-	"crypto/sha256"
 	"embed"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"image/png"
 	"io/fs"
 	"log"
 	"net/http"
@@ -17,19 +13,14 @@ import (
 	"time"
 
 	"mywebscrcpy/internal/adbshell"
-	"mywebscrcpy/internal/aiprovider"
 	"mywebscrcpy/internal/db"
 	"mywebscrcpy/internal/dependencies"
 	"mywebscrcpy/internal/desktop"
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/matchingservice"
-	"mywebscrcpy/internal/mdscript"
 	"mywebscrcpy/internal/operationlog"
-	"mywebscrcpy/internal/pibundle"
-	"mywebscrcpy/internal/scheduler"
-	"mywebscrcpy/internal/scripts"
-	"mywebscrcpy/internal/taskmanager"
+	"mywebscrcpy/internal/taskrun"
 	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/uipage"
 	"mywebscrcpy/internal/uixml"
@@ -55,9 +46,6 @@ var defaultCert []byte
 //go:embed assets/certs/key.pem
 var defaultKey []byte
 
-//go:embed all:.pi/skills
-var piSkillsFS embed.FS
-
 func main() {
 	if handleUpdateCommand() {
 		return
@@ -68,19 +56,11 @@ func main() {
 		return
 	}
 	httpsFlag, listenFlag, readyFlag := opts.HTTPS, opts.Listen, opts.Ready
-	piSkills, err := fs.Sub(piSkillsFS, ".pi/skills")
-	if err != nil {
-		log.Fatalf("读取内置技能失败: %v", err)
-	}
 	dataDir, err := os.Getwd()
 	if err != nil {
 		log.Fatal(err)
 	}
-	skillsDir := filepath.Join(dataDir, ".pi", "skills")
-	if err := pibundle.InstallSkills(skillsDir, piSkills); err != nil {
-		log.Fatalf("释放项目技能失败: %v", err)
-	}
-	dependencyManager, err := dependencies.Initialize(dataDir, skillsDir)
+	dependencyManager, err := dependencies.Initialize(dataDir)
 	if err != nil {
 		log.Fatalf("读取依赖配置失败: %v", err)
 	}
@@ -131,10 +111,6 @@ func main() {
 	hub := ws.NewHub(adbPath, jarPath)
 	defer hub.Close()
 
-	// 初始化脚本管理目录
-	if err := scripts.EnsureRoot(); err != nil {
-		log.Printf("警告: 初始化脚本目录失败: %v", err)
-	}
 	fileManager := files.NewManager(adbPath)
 	uiXML := uixml.New(adbPath)
 	uiPage := uipage.New(adbPath)
@@ -157,8 +133,6 @@ func main() {
 		w.Write(openAPISpec)
 	})
 
-	// 脚本管理 API
-	scripts.RegisterRoutes(mux)
 	// 文件管理 API：每个请求都携带当前投屏页面选定的设备 serial，操作手机共享存储。
 	files.RegisterRoutes(mux, fileManager)
 
@@ -172,7 +146,6 @@ func main() {
 		updaterService.ConfigureRuntime(serviceUpdatePolicy(*readyFlag != "", addr), func() error { return updatePrepare() }, func() { close(updateStop) }, func() { updateResume() })
 	}
 
-	var updateTasks *taskmanager.Manager
 	var matchingManager *matchingservice.Manager
 	dependencyResume := func() {}
 	updatePrepare = func() error {
@@ -212,21 +185,12 @@ func main() {
 			updateGate.Unlock()
 			return fmt.Errorf("数据库不可用，无法安全更新")
 		}
-		if updateTasks != nil {
-			if err := updateTasks.BeginMaintenance(); err != nil {
-				updateGate.Unlock()
-				return err
-			}
-		}
 		prepared = true
 		return nil
 	}
 	updateResume = func() {
 		if !updatePrepared.Swap(false) {
 			return
-		}
-		if updateTasks != nil {
-			updateTasks.EndMaintenance()
 		}
 		updateGate.Unlock()
 		dependencyResume()
@@ -246,16 +210,7 @@ func main() {
 			updateGate.Unlock()
 			return nil, err
 		}
-		if updateTasks != nil {
-			if err := updateTasks.BeginMaintenance(); err != nil {
-				updateGate.Unlock()
-				return nil, err
-			}
-		}
 		return func() {
-			if updateTasks != nil {
-				updateTasks.EndMaintenance()
-			}
 			updateGate.Unlock()
 		}, nil
 	}
@@ -298,83 +253,11 @@ func main() {
 	defer matchingManager.Close()
 
 	if database == nil {
-		registerUnavailableScriptRoutes(mux)
+		registerUnavailableTaskRoutes(mux)
 	} else {
-		// Markdown 脚本与任务管理器 API
-		taskMgr := taskmanager.NewManager(database)
-		if err := taskMgr.ConfigureAPI(mux); err != nil {
-			log.Fatalf("任务运行接口初始化失败: %v", err)
-		}
-		updateTasks = taskMgr
-		taskMgr.Artifacts.SetRecorder(hub)
-		if err := taskMgr.Recover(); err != nil {
-			log.Fatalf("任务产物恢复失败: %v", err)
-		}
-		defer taskMgr.Close()
-		taskHandler := taskmanager.NewHandler(taskMgr)
-		taskHandler.RegisterRoutes(mux)
+		taskRunHandler := taskrun.NewHandler(taskrun.NewService(database))
+		taskRunHandler.RegisterRoutes(mux)
 
-		executor := mdscript.NewExecutor(database, taskMgr, func(serial string) (bool, bool) {
-			device, known := dm.GetDevice(serial)
-			return known, known && device.State == "device"
-		}, func(serial, id string) error {
-			asset, err := templateStorage.GetTemplate(id)
-			if err != nil {
-				return fmt.Errorf("读取模板 %s 失败: %w", id, err)
-			}
-			if asset == nil {
-				return fmt.Errorf("模板不存在: %s", id)
-			}
-			if !asset.Enabled {
-				return fmt.Errorf("模板已停用: %s", asset.Name)
-			}
-			if asset.Serial != template.GlobalSerial && asset.Serial != serial {
-				return fmt.Errorf("模板 %s 不属于设备 %s", asset.Name, serial)
-			}
-			return nil
-		})
-		// 内嵌 Cron 调度器
-		sched := scheduler.NewScheduler(database, executor)
-		defer startUpdateAwareScheduler(sched)()
-
-		schedHandler := scheduler.NewHandler(sched)
-		schedHandler.RegisterRoutes(mux)
-
-		mdHandler := mdscript.NewHandler(database, executor, sched)
-		mdHandler.RegisterRoutes(mux)
-
-		// AI 模型配置与代理 API
-		aiSvc := aiprovider.NewService(database, pibundle.Paths{})
-		aiSvc.RuntimeResolver = dependencyManager.AcquirePi
-		generator := mdscript.NewGenerator(database, aiSvc, filepath.Join(skillsDir, "markdown-to-python"), openAPISpec)
-		generator.TemplateSnapshot = func(id string) (json.RawMessage, error) {
-			tmpl, err := templateStorage.GetTemplate(id)
-			if err != nil {
-				return nil, err
-			}
-			img, err := templateStorage.GetTemplateImage(id)
-			if err != nil {
-				return nil, err
-			}
-			var buffer bytes.Buffer
-			if err := png.Encode(&buffer, img); err != nil {
-				return nil, err
-			}
-			hash := sha256.Sum256(buffer.Bytes())
-			return json.Marshal(struct {
-				Template  *template.Template `json:"template"`
-				ImageHash string             `json:"image_sha256"`
-			}{tmpl, hex.EncodeToString(hash[:])})
-		}
-		taskMgr.TemplateReadable = func(id, serial string) bool {
-			tmpl, err := templateStorage.GetTemplate(id)
-			return err == nil && (tmpl.Serial == template.GlobalSerial || tmpl.Serial == serial)
-		}
-		executor.ArtifactCheck = generator.Check
-		mdHandler.Generator = generator
-		taskMgr.Artifacts.ConfigureReports(aiSvc.SummarizeTask)
-		aiHandler := aiprovider.NewHandler(aiSvc)
-		aiHandler.RegisterRoutes(mux)
 	}
 
 	// API: 设备管理
@@ -617,15 +500,15 @@ func writeJarToTemp() (string, error) {
 	return f.Name(), nil
 }
 
-// Preserve the device app's existing non-persistent mode when script migration cannot open SQLite.
-func registerUnavailableScriptRoutes(mux *http.ServeMux) {
-	log.Print("脚本数据库不可用，脚本、调度和文档助手接口暂停")
+// Preserve the device app's existing non-persistent mode when SQLite cannot be opened.
+func registerUnavailableTaskRoutes(mux *http.ServeMux) {
+	log.Print("任务数据库不可用，任务运行接口暂停")
 	unavailable := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusServiceUnavailable)
-		_ = json.NewEncoder(w).Encode(map[string]string{"message": "脚本数据库不可用，请检查服务日志"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "数据库不可用，请检查服务日志"})
 	}
-	for _, prefix := range []string{"/api/md-scripts", "/api/md-scripts/", "/api/tasks/", "/api/scheduler/", "/api/ai/"} {
+	for _, prefix := range []string{"/api/task-runs", "/api/task-runs/"} {
 		mux.HandleFunc(prefix, unavailable)
 	}
 }

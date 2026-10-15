@@ -57,8 +57,6 @@ func registerManagedSettings(mux *http.ServeMux, authorize func(http.HandlerFunc
 			s.ADB = body.Selection
 		} else if body.ID == "python" {
 			s.Python = body.Selection
-		} else {
-			s.Pi = body.Selection
 		}
 		if e := validateShape(s); e != nil {
 			http.Error(w, e.Error(), 400)

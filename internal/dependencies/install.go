@@ -138,12 +138,9 @@ func (m *Manager) install(ctx context.Context, id string) error {
 	}
 	rec := installation{Schema: 1, ID: id, Version: c.Version, Platform: platform(), Files: map[string]installedFile{}}
 	// Stable ordering makes progress and installation logs repeatable.
-	names := []string{"pi", "fd", "rg"}
-	if id == "adb" {
-		names = []string{"adb"}
-	}
-	if id == "python" {
-		names = []string{"python"}
+	names := []string{id}
+	if id != "adb" && id != "python" {
+		return fmt.Errorf("未知依赖: %s", id)
 	}
 	for _, name := range names {
 		spec, ok := artifacts[name]
@@ -162,21 +159,6 @@ func (m *Manager) install(ctx context.Context, id string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if id == "pi-agent" {
-		raw, e := catalogFS.ReadFile("catalog/PI-LICENSE")
-		if e != nil {
-			return e
-		}
-		name := "third-party/PI-LICENSE"
-		p := filepath.Join(payload, filepath.FromSlash(name))
-		if e := os.MkdirAll(filepath.Dir(p), 0700); e != nil {
-			return e
-		}
-		if e := os.WriteFile(p, raw, 0644); e != nil {
-			return e
-		}
-		rec.Files[name] = installedFile{SHA256: fmt.Sprintf("%x", sha256.Sum256(raw)), Mode: 0644}
-	}
 	if err := writeJSON(filepath.Join(payload, "installation.json"), rec); err != nil {
 		return err
 	}
@@ -191,13 +173,6 @@ func (m *Manager) install(ctx context.Context, id string) error {
 		out, e := probe(ctx, filepath.Join(payload, name), args...)
 		if e != nil || !strings.HasPrefix(out, "Android Debug Bridge version ") {
 			return fmt.Errorf("下载的 ADB 无法运行: %v", e)
-		}
-	}
-	if id == "pi-agent" {
-		for _, name := range []string{exeName("pi"), "bin/" + exeName("fd"), "bin/" + exeName("rg")} {
-			if _, e := probe(ctx, filepath.Join(payload, name), "--version"); e != nil {
-				return e
-			}
 		}
 	}
 	if id == "python" {

@@ -12,7 +12,6 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -22,6 +21,9 @@ func platform() string { return runtime.GOOS + "/" + runtime.GOARCH }
 func extractArchive(ctx context.Context, archive, sourceURL, dest, id, component string, files map[string]installedFile) error {
 	if id == "python" {
 		return extractPythonArchive(ctx, archive, dest, files)
+	}
+	if id != "adb" {
+		return fmt.Errorf("未知依赖")
 	}
 	var expanded int64
 	write := func(name string, size int64, reader io.Reader) error {
@@ -37,17 +39,7 @@ func extractArchive(ctx context.Context, archive, sourceURL, dest, id, component
 				return fmt.Errorf("ADB 压缩包根目录无效")
 			}
 			relative = strings.TrimPrefix(name, "platform-tools/")
-		} else if component == "pi" {
-			if runtime.GOOS != "windows" {
-				if !strings.HasPrefix(name, "pi/") {
-					return fmt.Errorf("Pi 压缩包根目录无效")
-				}
-				relative = strings.TrimPrefix(name, "pi/")
-			}
-		} else if path.Base(name) == exeName(component) {
-			relative = "bin/" + exeName(component)
-		} else {
-			relative = "third-party/" + component + "/" + name
+
 		}
 		if !fs.ValidPath(relative) || relative == "." {
 			return fmt.Errorf("依赖文件路径无效")
@@ -60,7 +52,7 @@ func extractArchive(ctx context.Context, archive, sourceURL, dest, id, component
 			return fmt.Errorf("解包大小超过限制")
 		}
 		mode := fs.FileMode(0644)
-		if relative == exeName("adb") || relative == exeName("pi") || relative == "bin/"+exeName("fd") || relative == "bin/"+exeName("rg") || relative == exeName("fastboot") {
+		if relative == exeName("adb") || relative == exeName("fastboot") {
 			mode = 0755
 		}
 		p := filepath.Join(dest, filepath.FromSlash(relative))

@@ -11,7 +11,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -22,7 +21,7 @@ func (f downloadFunc) Do(r *http.Request) (*http.Response, error) { return f(r) 
 func newTestManager(t *testing.T) *Manager {
 	t.Helper()
 	root := t.TempDir()
-	m, e := NewManager(root, filepath.Join(root, ".pi", "skills"))
+	m, e := NewManager(root)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -36,8 +35,8 @@ func TestManagedSourceNeverFallsBack(t *testing.T) {
 	if _, e := m.resolveADB(m.settings.ADB); e == nil {
 		t.Fatal("missing built-in ADB fell back to system")
 	}
-	if _, e := m.resolvePi(Selection{Source: "system", Path: filepath.Join(t.TempDir(), "missing-pi")}); e == nil {
-		t.Fatal("missing selected Pi accepted")
+	if _, e := m.resolvePython(Selection{Source: "system", Path: filepath.Join(t.TempDir(), "missing-python")}); e == nil {
+		t.Fatal("missing selected Python accepted")
 	}
 	original := m.Settings()
 	invalid := original
@@ -166,7 +165,7 @@ func TestDependencySettingsAllowAllRequestSources(t *testing.T) {
 		{"[2001:db8::1]:1000", "proxy.example", "https://frontend.example"},
 	} {
 		t.Run(test.addr, func(t *testing.T) {
-			r := httptest.NewRequest("POST", "http://"+test.host+"/api/dependencies/detect", strings.NewReader(`{"id":"pi-agent","selection":{"source":"builtin","path":"","fd":"","rg":""}}`))
+			r := httptest.NewRequest("POST", "http://"+test.host+"/api/dependencies/detect", strings.NewReader(`{"id":"adb","selection":{"source":"builtin","path":""}}`))
 			r.RemoteAddr = test.addr
 			r.Header.Set("Origin", test.origin)
 			r.Header.Set("Sec-Fetch-Site", "cross-site")
@@ -180,7 +179,7 @@ func TestDependencySettingsAllowAllRequestSources(t *testing.T) {
 }
 func TestExternalProcessLock(t *testing.T) {
 	m := newTestManager(t)
-	other, e := NewManager(filepath.Dir(m.root), m.skills)
+	other, e := NewManager(filepath.Dir(m.root))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -197,121 +196,6 @@ func TestExternalProcessLock(t *testing.T) {
 		t.Fatal(e)
 	}
 	release()
-}
-func TestRealManagedPiFromLockedArchives(t *testing.T) {
-	cache := os.Getenv("MYWEBSCRCPY_PI_ARCHIVE_CACHE")
-	if cache == "" {
-		t.Skip("set MYWEBSCRCPY_PI_ARCHIVE_CACHE for authentic upstream installation")
-	}
-	m := newTestManager(t)
-	m.client = downloadFunc(func(r *http.Request) (*http.Response, error) {
-		raw, e := os.ReadFile(filepath.Join(cache, filepath.Base(r.URL.Path)))
-		if e != nil {
-			return nil, e
-		}
-		return &http.Response{StatusCode: 200, Header: http.Header{}, ContentLength: int64(len(raw)), Body: io.NopCloser(bytes.NewReader(raw))}, nil
-	})
-	if e := m.install(context.Background(), "pi-agent"); e != nil {
-		t.Fatal(e)
-	}
-	if _, e := m.installation("pi-agent", true); e != nil {
-		t.Fatal(e)
-	}
-	detected := m.detect("pi-agent", Selection{Source: "builtin"})
-	if !detected.Installed {
-		t.Fatal(detected.Error)
-	}
-	p, release, e := m.AcquirePi()
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e := m.Uninstall("pi-agent"); e == nil {
-		t.Fatal("active Pi lease ignored")
-	}
-	release()
-	// System tools intentionally live in separate directories, not alongside Pi.
-	system := Selection{Source: "system", Path: p.Executable, FD: p.FD, RG: p.RG}
-	if runtime.GOOS != "windows" {
-		for name, original := range map[string]string{"fd": p.FD, "rg": p.RG} {
-			dest := filepath.Join(t.TempDir(), name)
-			raw, err := os.ReadFile(original)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(dest, raw, 0755); err != nil {
-				t.Fatal(err)
-			}
-			if name == "fd" {
-				system.FD = dest
-			} else {
-				system.RG = dest
-			}
-		}
-		if d := m.detect("pi-agent", system); !d.Installed {
-			t.Fatal(d.Error)
-		}
-		t.Setenv("PI_CODING_AGENT_DIR", t.TempDir())
-		t.Setenv("PATH", strings.Join([]string{filepath.Dir(system.Path), filepath.Dir(system.FD), filepath.Dir(system.RG), os.Getenv("PATH")}, string(os.PathListSeparator)))
-		auto := m.detect("pi-agent", Selection{Source: "system"})
-		if !auto.Installed || auto.Path != system.Path || auto.SearchPaths["fd"] != system.FD || auto.SearchPaths["rg"] != system.RG {
-			t.Fatalf("PATH detection failed: %+v", auto)
-		}
-		bin := filepath.Join(os.Getenv("PI_CODING_AGENT_DIR"), "bin")
-		if err := os.Mkdir(bin, 0700); err != nil {
-			t.Fatal(err)
-		}
-		for name, original := range map[string]string{"fd": system.FD, "rg": system.RG} {
-			raw, err := os.ReadFile(original)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(filepath.Join(bin, name), raw, 0755); err != nil {
-				t.Fatal(err)
-			}
-		}
-		t.Setenv("PATH", filepath.Dir(system.Path))
-		cached := m.detect("pi-agent", Selection{Source: "system"})
-		if !cached.Installed || cached.SearchPaths["fd"] != filepath.Join(bin, "fd") || cached.SearchPaths["rg"] != filepath.Join(bin, "rg") {
-			t.Fatalf("Pi-managed search tool detection failed: %+v", cached)
-		}
-	}
-
-	if runtime.GOOS != "windows" {
-		adb := filepath.Join(t.TempDir(), "adb")
-		if err := os.WriteFile(adb, []byte("#!/bin/sh\nprintf 'Android Debug Bridge version 1.0.41\\nVersion test\\n'\n"), 0755); err != nil {
-			t.Fatal(err)
-		}
-		candidate := m.Settings()
-		candidate.ADB = Selection{Source: "system", Path: adb}
-		configDir := filepath.Join(m.root, "config.json")
-		if err := os.Mkdir(configDir, 0700); err != nil {
-			t.Fatal(err)
-		}
-		original := m.Settings()
-		if err := m.Apply(candidate); err == nil {
-			t.Fatal("failed atomic rename was reported as success")
-		}
-		if m.Settings() != original {
-			t.Fatal("failed save changed runtime settings")
-		}
-		os.Remove(configDir)
-		if err := m.Apply(candidate); err != nil {
-			t.Fatal(err)
-		}
-		reloaded, err := NewManager(filepath.Dir(m.root), m.skills)
-		if err != nil || reloaded.Settings() != candidate {
-			t.Fatal("persisted selection did not reload", err)
-		}
-	}
-	if e := m.Uninstall("pi-agent"); e != nil {
-		t.Fatal(e)
-	}
-	if _, e := os.Stat(p.Executable); !os.IsNotExist(e) {
-		t.Fatal("Pi was not physically removed")
-	}
-	if e := m.install(context.Background(), "pi-agent"); e != nil {
-		t.Fatal("reinstallation failed", e)
-	}
 }
 
 func TestRealManagedADBFromArchive(t *testing.T) {
@@ -388,9 +272,9 @@ func TestIndependentDependencyLeases(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer release()
-	done, err := m.exclusive([]string{"pi-agent"}, false)
+	done, err := m.exclusive([]string{"python"}, false)
 	if err != nil {
-		t.Fatal("ADB blocked independent Pi publication", err)
+		t.Fatal("ADB blocked independent Python publication", err)
 	}
 	done()
 }

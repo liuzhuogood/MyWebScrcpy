@@ -16,19 +16,15 @@ import (
 	"sync"
 
 	"github.com/gofrs/flock"
-	"mywebscrcpy/internal/pibundle"
 )
 
 type Selection struct {
 	Source string `json:"source"`
 	Path   string `json:"path"`
-	FD     string `json:"fd"`
-	RG     string `json:"rg"`
 }
 type Settings struct {
 	Schema int       `json:"schema"`
 	ADB    Selection `json:"adb"`
-	Pi     Selection `json:"pi"`
 	Python Selection `json:"python"`
 }
 type installedFile struct {
@@ -66,7 +62,6 @@ type Manager struct {
 	uses       map[string]*sync.RWMutex
 	jobs       sync.WaitGroup
 	root       string
-	skills     string
 	mu         sync.RWMutex
 	settings   Settings
 	tasks      map[string]InstallTask
@@ -79,14 +74,14 @@ type Manager struct {
 
 var active *Manager
 
-func Initialize(dataDir, skillsDir string) (*Manager, error) {
-	m, err := NewManager(dataDir, skillsDir)
+func Initialize(dataDir string) (*Manager, error) {
+	m, err := NewManager(dataDir)
 	if err == nil {
 		active = m
 	}
 	return m, err
 }
-func NewManager(dataDir, skillsDir string) (*Manager, error) {
+func NewManager(dataDir string) (*Manager, error) {
 	base, err := filepath.Abs(dataDir)
 	if err != nil {
 		return nil, err
@@ -106,17 +101,32 @@ func NewManager(dataDir, skillsDir string) (*Manager, error) {
 	if resolved != root {
 		return nil, fmt.Errorf("依赖目录不能包含符号链接")
 	}
-	m := &Manager{root: root, skills: skillsDir, tasks: map[string]InstallTask{}, cancels: map[string]func(){}, uses: map[string]*sync.RWMutex{"adb": {}, "pi-agent": {}, "python": {}}, client: defaultDownloader()}
-	// Existing schema-1 configurations predate the Python selector. Preserve
-	// their confirmed system Python path when decoding the additive field.
-	m.settings = Settings{Schema: 1, ADB: Selection{Source: "system", Path: Current().ADB}, Pi: Selection{Source: "builtin"}, Python: Selection{Source: "system", Path: Current().Python}}
+	m := &Manager{root: root, tasks: map[string]InstallTask{}, cancels: map[string]func(){}, uses: map[string]*sync.RWMutex{"adb": {}, "python": {}}, client: defaultDownloader()}
+	m.settings = Settings{Schema: 2, ADB: Selection{Source: "system", Path: Current().ADB}, Python: Selection{Source: "system", Path: Current().Python}}
 	raw, err := os.ReadFile(filepath.Join(root, "config.json"))
 	if err == nil {
-		if err := strictJSON(raw, &m.settings); err != nil {
-			return nil, err
-		}
-		if err := validateShape(m.settings); err != nil {
-			return nil, err
+		var s Settings
+		if err := strictJSON(raw, &s); err == nil && s.Schema == 2 {
+			if err := validateShape(s); err != nil {
+				return nil, err
+			}
+			m.settings = s
+		} else {
+			var header struct {
+				Schema int `json:"schema"`
+			}
+			if err := json.Unmarshal(raw, &header); err != nil {
+				return nil, fmt.Errorf("依赖配置解析失败: %w", err)
+			}
+			if header.Schema != 1 {
+				return nil, fmt.Errorf("不支持依赖配置版本 %d", header.Schema)
+			}
+			// Early-stage upgrade: reset application-owned dependency selections.
+			// No Pi configuration or old selection is migrated or archived.
+			if err := writeJSON(filepath.Join(root, "config.json"), m.settings); err != nil {
+				return nil, err
+			}
+			log.Print("[Dependencies] 已重置旧版依赖配置，仅保留 ADB 和 Python 设置项")
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
@@ -135,24 +145,16 @@ func strictJSON(raw []byte, value any) error {
 	return nil
 }
 func validateShape(s Settings) error {
-	if s.Schema != 1 {
+	if s.Schema != 2 {
 		return fmt.Errorf("不支持依赖配置版本 %d", s.Schema)
 	}
-	for _, v := range []Selection{s.ADB, s.Pi, s.Python} {
+	for _, v := range []Selection{s.ADB, s.Python} {
 		if v.Source != "builtin" && v.Source != "system" {
 			return fmt.Errorf("依赖来源必须为内置或系统")
 		}
-		for _, p := range []string{v.Path, v.FD, v.RG} {
-			if p != "" && !filepath.IsAbs(p) {
-				return fmt.Errorf("依赖必须使用绝对路径")
-			}
+		if v.Path != "" && !filepath.IsAbs(v.Path) {
+			return fmt.Errorf("依赖必须使用绝对路径")
 		}
-	}
-	if s.ADB.FD != "" || s.ADB.RG != "" {
-		return fmt.Errorf("ADB 不接受搜索工具配置")
-	}
-	if s.Python.FD != "" || s.Python.RG != "" {
-		return fmt.Errorf("Python 不接受搜索工具配置")
 	}
 	return nil
 }
@@ -163,7 +165,7 @@ func exeName(name string) string {
 	}
 	return name
 }
-func knownID(id string) bool { return id == "adb" || id == "pi-agent" || id == "python" }
+func knownID(id string) bool { return id == "adb" || id == "python" }
 func (m *Manager) ownedDir(id string) (string, error) {
 	if !knownID(id) {
 		return "", fmt.Errorf("未知依赖")
@@ -224,9 +226,7 @@ func verifyInstallation(dir, id string, hashes bool) (installation, error) {
 		return rec, fmt.Errorf("依赖安装清单无效")
 	}
 	required := []string{exeName("adb")}
-	if id == "pi-agent" {
-		required = []string{exeName("pi"), "bin/" + exeName("fd"), "bin/" + exeName("rg"), "package.json"}
-	}
+
 	if id == "python" {
 		required = []string{pythonRelativePath()}
 	}
@@ -312,66 +312,6 @@ func (m *Manager) resolveADB(s Selection) (string, error) {
 	}
 	return p, nil
 }
-func (m *Manager) resolvePi(s Selection) (p pibundle.Paths, err error) {
-	p.SkillsDir = m.skills
-	if s.Source == "builtin" {
-		if _, err = m.installation("pi-agent", false); err != nil {
-			return p, fmt.Errorf("请安装内置 pi-agent: %w", err)
-		}
-		root := filepath.Join(m.root, "pi-agent")
-		p.Executable = filepath.Join(root, exeName("pi"))
-		p.ToolsDir = filepath.Join(root, "bin")
-		p.FD = filepath.Join(p.ToolsDir, exeName("fd"))
-		p.RG = filepath.Join(p.ToolsDir, exeName("rg"))
-		return p, nil
-	}
-	if p.Executable, err = pathFor(s.Path, "pi"); err != nil {
-		return p, fmt.Errorf("pi: %w", err)
-	}
-	if p.FD, err = piToolPath(s.FD, "fd"); err != nil {
-		return p, fmt.Errorf("fd: %w", err)
-	}
-	if p.RG, err = piToolPath(s.RG, "rg"); err != nil {
-		return p, fmt.Errorf("rg: %w", err)
-	}
-	return p, nil
-}
-
-// Follow Pi's confirmed tool lookup: its agent bin directory, then PATH.
-// The assistant copies these tools into each isolated session without borrowing
-// the application's managed installation or touching the user's Pi directory.
-func piToolPath(configured, name string) (string, error) {
-	if configured != "" {
-		return checkExecutable(configured)
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	agent := os.Getenv("PI_CODING_AGENT_DIR")
-	if agent == "" {
-		agent = filepath.Join(home, ".pi", "agent")
-	} else if agent == "~" {
-		agent = home
-	} else if strings.HasPrefix(agent, "~/") {
-		agent = filepath.Join(home, agent[2:])
-	}
-	agent, err = filepath.Abs(agent)
-	if err != nil {
-		return "", err
-	}
-	cached := filepath.Join(agent, "bin", exeName(name))
-	if _, err := os.Lstat(cached); err == nil {
-		return checkExecutable(cached)
-	} else if !os.IsNotExist(err) {
-		return "", err
-	}
-	path, err := exec.LookPath(name)
-	if err != nil {
-		return "", fmt.Errorf("缺少 Pi 搜索工具 %s，请安装该工具或使用内置来源", name)
-	}
-	return path, nil
-}
 func (m *Manager) acquire(id string) (func(), error) {
 	if !knownID(id) {
 		return nil, fmt.Errorf("未知依赖")
@@ -389,18 +329,6 @@ func (m *Manager) acquire(id string) (func(), error) {
 		return nil, fmt.Errorf("依赖正在修改，请稍后重试")
 	}
 	return func() { _ = lock.Unlock(); m.uses[id].RUnlock() }, nil
-}
-func (m *Manager) AcquirePi() (p pibundle.Paths, release func(), err error) {
-	release, err = m.acquire("pi-agent")
-	if err != nil {
-		return p, nil, err
-	}
-	p, err = m.resolvePi(m.Settings().Pi)
-	if err != nil {
-		release()
-		return p, nil, err
-	}
-	return p, release, nil
 }
 func (m *Manager) exclusive(ids []string, adb bool) (func(), error) {
 	if err := safeDirectory(m.root); err != nil {
@@ -456,7 +384,7 @@ func (m *Manager) Apply(s Settings) error {
 	if busy {
 		return fmt.Errorf("请等待依赖安装完成")
 	}
-	release, err := m.exclusive([]string{"adb", "pi-agent", "python"}, s.ADB != m.Settings().ADB)
+	release, err := m.exclusive([]string{"adb", "python"}, s.ADB != m.Settings().ADB)
 	if err != nil {
 		return err
 	}
@@ -467,7 +395,7 @@ func (m *Manager) Apply(s Settings) error {
 	for _, item := range []struct {
 		id        string
 		next, old Selection
-	}{{"adb", s.ADB, previous.ADB}, {"pi-agent", s.Pi, previous.Pi}, {"python", s.Python, previous.Python}} {
+	}{{"adb", s.ADB, previous.ADB}, {"python", s.Python, previous.Python}} {
 		if item.next != item.old {
 			if tool := m.detect(item.id, item.next); !tool.Installed {
 				return fmt.Errorf("%s: %s", item.id, tool.Error)

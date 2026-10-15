@@ -1656,399 +1656,6 @@
         }
       }
     },
-    "/api/scripts/categories": {
-      "get": {
-        "tags": [
-          "脚本"
-        ],
-        "summary": "列出脚本分类",
-        "description": "查询当前服务端已创建的所有脚本分类目录列表。",
-        "responses": {
-          "200": {
-            "description": "分类列表",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScriptCategoryListResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "读取分类目录失败",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "脚本"
-        ],
-        "summary": "创建脚本分类",
-        "description": "创建新的脚本分类目录，分类名只允许中文、字母、数字、_、-。",
-        "x-side-effect": true,
-        "requestBody": {
-          "required": true,
-          "description": "分类名称",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ScriptCategoryCreateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "分类创建成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScriptCategoryActionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "分类名不合法或分类已存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/scripts/categories/{cat}": {
-      "patch": {
-        "tags": [
-          "脚本"
-        ],
-        "summary": "重命名分类",
-        "description": "将现有脚本分类目录重命名为新名称。",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/cat"
-          }
-        ],
-        "x-side-effect": true,
-        "requestBody": {
-          "required": true,
-          "description": "新分类名称",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ScriptCategoryRenameRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "重命名成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScriptCategoryActionResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "分类名不合法或目标分类名已存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "脚本"
-        ],
-        "summary": "删除分类",
-        "description": "删除脚本分类目录及其下的全部脚本，必须在 query 中显式传递 confirm=true 进行二次确认。",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/cat"
-          },
-          {
-            "name": "confirm",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "true"
-              ]
-            },
-            "description": "必须为 true 确认删除"
-          }
-        ],
-        "x-side-effect": true,
-        "responses": {
-          "200": {
-            "description": "分类删除成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleOkResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "未传 confirm=true 或分类名非法",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/scripts": {
-      "get": {
-        "tags": [
-          "脚本"
-        ],
-        "summary": "列出脚本",
-        "description": "获取指定分类下的全部脚本基本信息列表。",
-        "parameters": [
-          {
-            "name": "category",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "脚本分类名称"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "脚本列表",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScriptListResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "缺少 category 参数或分类名非法",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/scripts/{cat}": {
-      "post": {
-        "tags": [
-          "脚本"
-        ],
-        "summary": "创建脚本",
-        "description": "在指定分类下创建新脚本文件并保存其元数据（描述、参数配置与代码正文）。",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/cat"
-          }
-        ],
-        "x-side-effect": true,
-        "requestBody": {
-          "required": true,
-          "description": "脚本定义",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateScriptRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "脚本创建成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScriptDetailResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "脚本名称不合法或已存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/scripts/{cat}/{name}": {
-      "get": {
-        "tags": [
-          "脚本"
-        ],
-        "summary": "读取脚本",
-        "description": "读取指定分类下单个脚本的完整详情，包含元数据、创建修改时间及脚本完整代码。",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/cat"
-          },
-          {
-            "$ref": "#/components/parameters/name"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "脚本完整详情",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScriptDetail"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "脚本不存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "tags": [
-          "脚本"
-        ],
-        "summary": "更新脚本",
-        "description": "更新脚本元数据及源码内容。支持传入 updated 时间戳作为并发乐观锁保护（冲突返回 409）。",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/cat"
-          },
-          {
-            "$ref": "#/components/parameters/name"
-          }
-        ],
-        "x-side-effect": true,
-        "requestBody": {
-          "required": true,
-          "description": "更新内容及可选并发保护字段",
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateScriptRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "脚本更新成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ScriptDetailResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "参数非法",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "脚本已被他人更新（并发冲突）",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "脚本"
-        ],
-        "summary": "删除脚本",
-        "description": "删除指定的脚本及其元数据文件。",
-        "parameters": [
-          {
-            "$ref": "#/components/parameters/cat"
-          },
-          {
-            "$ref": "#/components/parameters/name"
-          }
-        ],
-        "x-side-effect": true,
-        "responses": {
-          "200": {
-            "description": "脚本删除成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleOkResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "参数非法",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/ui/xml": {
       "get": {
         "tags": [
@@ -2699,891 +2306,6 @@
         }
       }
     },
-    "/api/ai/chat": {
-      "post": {
-        "tags": [
-          "文档助手"
-        ],
-        "summary": "运行 Pi 文档助手并实时返回思考、工具调用与回复",
-        "description": "通过内置 Pi 0.86.1 独立程序 RPC 运行一次对话，无需另装 Pi 或 Node.js。模型配置沿用 /api/ai/config。每次请求自动扫描程序旁的 .pi/skills/，内置技能启动时释放，已有技能修改保留，技能正文按需读取。工具为 read、grep、find、ls，建议由用户显式应用。响应为 SSE，每条 data 为 JSON；工具进度 output 为累计快照，按 tool_call_id 替换。断开请求取消对应 Pi 进程。旧的 JSON 整包回复已移除。",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "messages",
-                  "document"
-                ],
-                "properties": {
-                  "messages": {
-                    "type": "array",
-                    "minItems": 2,
-                    "description": "第一条为 system，历史仅 user/assistant，最后一条必须为非空 user。",
-                    "items": {
-                      "type": "object",
-                      "required": [
-                        "role",
-                        "content"
-                      ],
-                      "properties": {
-                        "role": {
-                          "type": "string",
-                          "enum": [
-                            "system",
-                            "user",
-                            "assistant"
-                          ]
-                        },
-                        "content": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  },
-                  "document": {
-                    "type": "string",
-                    "description": "当前未保存的 Markdown 文档快照，写入 Pi 临时工作目录的 current.md。"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "实时事件流；done 表示完整运行结束，error 表示失败。",
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "type": "string"
-                },
-                "example": "data: {\"type\":\"thinking_delta\",\"delta\":\"正在检查文档\"}\n\ndata: {\"type\":\"tool_start\",\"tool_call_id\":\"call_1\",\"tool_name\":\"read\",\"args\":{\"path\":\"current.md\"}}\n\ndata: {\"type\":\"tool_end\",\"tool_call_id\":\"call_1\",\"tool_name\":\"read\",\"output\":\"# 步骤\"}\n\ndata: {\"type\":\"text_delta\",\"delta\":\"建议调整等待时长。\"}\n\ndata: {\"type\":\"done\",\"reply\":\"建议调整等待时长。\"}\n\n"
-              }
-            }
-          },
-          "400": {
-            "description": "消息结构无效或请求过大。"
-          }
-        }
-      }
-    },
-    "/api/md-scripts/{id}/dispatches": {
-      "get": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "分页查看脚本执行批次",
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          },
-          {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            },
-            "description": "服务端返回的游标；不从设备任务时间推断。"
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 20
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "dispatches",
-                    "next_cursor",
-                    "has_more"
-                  ],
-                  "properties": {
-                    "dispatches": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ScriptDispatch"
-                      }
-                    },
-                    "next_cursor": {
-                      "type": "string"
-                    },
-                    "has_more": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/md-scripts/{id}/dispatches/{dispatch_id}": {
-      "get": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "查看不可变批次快照及逐设备运行",
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          },
-          {
-            "name": "dispatch_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "dispatch",
-                    "tasks"
-                  ],
-                  "properties": {
-                    "dispatch": {
-                      "$ref": "#/components/schemas/ScriptDispatch"
-                    },
-                    "tasks": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ExecutionTask"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tasks/{id}": {
-      "get": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "查看单次设备执行及产物状态",
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskDetail"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tasks/{id}/logs": {
-      "get": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "查看、搜索和增量跟随日志",
-        "description": "after/before 互斥。不传游标读取尾页；next_cursor 包含被筛选排除的扫描行。before 页面按倒序扫描、升序展示。旧记录 availability=unavailable，到期 availability=expired。",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          },
-          {
-            "name": "after",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "description": ""
-          },
-          {
-            "name": "before",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "description": ""
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 500,
-              "default": 200
-            },
-            "description": ""
-          },
-          {
-            "name": "stream",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "enum": [
-                "all",
-                "stdout",
-                "stderr",
-                "system"
-              ]
-            },
-            "description": ""
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskLogPage"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tasks/{id}/recording": {
-      "get": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "查看本次任务的录制状态",
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRecordingState"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tasks/{id}/report": {
-      "get": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "查看最后成功报告及最新生成状态",
-        "description": "generation_revision 与 available_revision 分别表示最新尝试及最后成功版本。旧历史或未开启不能追溯生成。",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          },
-          {
-            "name": "revision",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskReportResult"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tasks/{id}/report/retry": {
-      "post": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "使用冻结证据重新生成设备报告",
-        "description": "原子创建一个在途修订，运行中或未开启返回 409。失败保留上次成功报告。",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "已入队"
-          },
-          "409": {
-            "description": "当前不允许生成或已有在途修订"
-          }
-        }
-      }
-    },
-    "/api/tasks/{id}/logs/download": {
-      "get": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "下载 JSONL 日志",
-        "description": "仅使用任务关联的产物；不读取最新设备文件。",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/x-ndjson": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "410": {
-            "description": "日志未采集或已过期"
-          }
-        }
-      }
-    },
-    "/api/tasks/{id}/recording/media": {
-      "get": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "播放或下载本任务 MP4",
-        "description": "仅使用任务关联的产物；不读取最新设备文件。",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "video/mp4": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "206": {
-            "description": "支持 Range 的局部 MP4 内容"
-          },
-          "409": {
-            "description": "录制尚未完成"
-          },
-          "410": {
-            "description": "录制文件已过期"
-          }
-        }
-      }
-    },
-    "/api/tasks/{id}/report/download": {
-      "get": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "下载成功报告 Markdown",
-        "description": "仅使用任务关联的产物；不读取最新设备文件。",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          },
-          {
-            "name": "revision",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "text/markdown": {
-                "schema": {
-                  "type": "string",
-                  "format": "binary"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tasks/active": {
-      "get": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "查看占用设备的任务",
-        "description": "",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "tasks",
-                    "total"
-                  ],
-                  "properties": {
-                    "tasks": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ManagedTask"
-                      }
-                    },
-                    "total": {
-                      "type": "integer",
-                      "format": "int64"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/tasks/{id}/kill": {
-      "post": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "终止任务进程树",
-        "description": "托管进程确认退出后释放调用方，保存终态日志，只停止本任务拥有的录制。",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleOkResponse"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/md-scripts/{id}/runs": {
-      "get": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "现有逐设备运行历史",
-        "description": "",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "tasks",
-                    "total"
-                  ],
-                  "properties": {
-                    "tasks": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ManagedTask"
-                      }
-                    },
-                    "total": {
-                      "type": "integer",
-                      "format": "int64"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/md-scripts/{id}/run": {
-      "post": {
-        "tags": [
-          "任务执行记录"
-        ],
-        "summary": "按已保存目标与头部快照分发脚本",
-        "description": "头部 recording/report 默认关闭；日志始终采集。录制失败继续执行，报告失败不改变任务结果。",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "ok",
-                    "dispatch_id",
-                    "results",
-                    "total"
-                  ],
-                  "properties": {
-                    "ok": {
-                      "type": "boolean"
-                    },
-                    "dispatch_id": {
-                      "type": "string"
-                    },
-                    "results": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "required": [
-                          "dispatch_id",
-                          "device_serial",
-                          "status",
-                          "task",
-                          "error"
-                        ],
-                        "properties": {
-                          "dispatch_id": {
-                            "type": "string"
-                          },
-                          "device_serial": {
-                            "type": "string"
-                          },
-                          "status": {
-                            "type": "string",
-                            "enum": [
-                              "started",
-                              "skipped",
-                              "failed"
-                            ]
-                          },
-                          "task": {
-                            "$ref": "#/components/schemas/ManagedTask"
-                          },
-                          "error": {
-                            "type": "string"
-                          }
-                        }
-                      }
-                    },
-                    "total": {
-                      "type": "integer",
-                      "format": "int64"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "实体不存在或批次不属于脚本",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/templates/{id}/images": {
       "post": {
         "tags": [
@@ -3962,6 +2684,628 @@
                     }
                   }
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/task-runs": {
+      "get": {
+        "tags": [
+          "Task Runs"
+        ],
+        "summary": "分页查询任务运行",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TaskRun"
+                      }
+                    },
+                    "total": {
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "page": {
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "limit": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "total",
+                    "page",
+                    "limit"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "运行不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "内容冲突或终态冻结",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "description": ""
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "description": ""
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "running",
+                "succeeded",
+                "failed",
+                "cancelled"
+              ]
+            },
+            "description": ""
+          },
+          {
+            "in": "query",
+            "name": "connectivity",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "connected",
+                "disconnected"
+              ]
+            },
+            "description": "只筛选运行中任务的连接情况；失联不改变执行状态"
+          },
+          {
+            "in": "query",
+            "name": "device_serial",
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            },
+            "description": ""
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Task Runs"
+        ],
+        "summary": "创建运行；相同 client_run_id 和元数据去重，冲突拒绝",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "运行不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "内容冲突或终态冻结",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "已创建",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRun"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskRunRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/task-runs/{id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Task Runs"
+        ],
+        "summary": "查询运行详情",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "运行不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "内容冲突或终态冻结",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/task-runs/{id}/heartbeat": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "Task Runs"
+        ],
+        "summary": "上报心跳；终态不可回退",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "运行不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "内容冲突或终态冻结",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/task-runs/{id}/logs": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Task Runs"
+        ],
+        "summary": "分页读取或下载日志",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TaskRunLog"
+                      }
+                    },
+                    "acknowledged_seq": {
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "acknowledged_seq",
+                    "truncated"
+                  ]
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "运行不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "内容冲突或终态冻结",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "after",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "description": ""
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000,
+              "default": 500
+            },
+            "description": ""
+          },
+          {
+            "in": "query",
+            "name": "stream",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "stdout",
+                "stderr"
+              ]
+            },
+            "description": ""
+          },
+          {
+            "in": "query",
+            "name": "download",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "true 时返回完整纯文本日志"
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Task Runs"
+        ],
+        "summary": "按连续序号追加日志；重发去重，跳号拒绝",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "acknowledged_seq": {
+                      "type": "integer",
+                      "format": "int64"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "acknowledged_seq",
+                    "truncated"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "运行不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "内容冲突或终态冻结",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "entries": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/TaskRunLog"
+                    },
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "entries"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/task-runs/{id}/finish": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "Task Runs"
+        ],
+        "summary": "提交最终结果；相同结果幂等，冲突拒绝",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRun"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求不合法",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "运行不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "内容冲突或终态冻结",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskRunError"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinishTaskRunRequest"
               }
             }
           }
@@ -4948,246 +4292,6 @@
           "token"
         ]
       },
-      "ScriptCategoryListResponse": {
-        "type": "object",
-        "description": "脚本分类列表响应",
-        "properties": {
-          "categories": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "分类名称列表",
-            "example": [
-              "默认",
-              "自动化测试"
-            ]
-          }
-        },
-        "required": [
-          "categories"
-        ]
-      },
-      "ScriptCategoryCreateRequest": {
-        "type": "object",
-        "description": "新建脚本分类请求参数",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "分类名，仅允许中文、字母、数字、_、-",
-            "example": "自动化测试"
-          }
-        },
-        "required": [
-          "name"
-        ]
-      },
-      "ScriptCategoryRenameRequest": {
-        "type": "object",
-        "description": "重命名脚本分类请求参数",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "新分类名称",
-            "example": "常用工具"
-          }
-        },
-        "required": [
-          "name"
-        ]
-      },
-      "ScriptCategoryActionResponse": {
-        "type": "object",
-        "description": "脚本分类操作响应",
-        "properties": {
-          "ok": {
-            "type": "boolean",
-            "example": true
-          },
-          "name": {
-            "type": "string",
-            "example": "自动化测试"
-          }
-        },
-        "required": [
-          "ok",
-          "name"
-        ]
-      },
-      "ScriptInfo": {
-        "type": "object",
-        "description": "脚本元数据模型",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "脚本名称",
-            "example": "unlock_device.sh"
-          },
-          "description": {
-            "type": "string",
-            "description": "脚本功能说明",
-            "example": "点亮并滑动解锁屏幕"
-          },
-          "params": {
-            "type": "string",
-            "description": "参数配置或说明",
-            "example": ""
-          },
-          "content": {
-            "type": "string",
-            "description": "脚本源码正文（可选）"
-          },
-          "created": {
-            "type": "string",
-            "description": "创建时间",
-            "example": "2026-09-14T06:00:00Z"
-          },
-          "updated": {
-            "type": "string",
-            "description": "最后更新时间",
-            "example": "2026-09-14T06:00:00Z"
-          }
-        },
-        "required": [
-          "name"
-        ]
-      },
-      "ScriptDetail": {
-        "type": "object",
-        "description": "脚本完整详情模型",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "脚本名称",
-            "example": "unlock_device.sh"
-          },
-          "description": {
-            "type": "string",
-            "description": "脚本描述",
-            "example": "点亮并滑动解锁屏幕"
-          },
-          "params": {
-            "type": "string",
-            "description": "参数配置说明",
-            "example": ""
-          },
-          "content": {
-            "type": "string",
-            "description": "完整脚本源码文本",
-            "example": "#!/bin/bash\ninput keyevent 26\ninput swipe 500 1500 500 500\n"
-          },
-          "created": {
-            "type": "string",
-            "description": "创建时间",
-            "example": "2026-09-14T06:00:00Z"
-          },
-          "updated": {
-            "type": "string",
-            "description": "最后更新时间",
-            "example": "2026-09-14T06:00:00Z"
-          }
-        },
-        "required": [
-          "name",
-          "content"
-        ]
-      },
-      "ScriptListResponse": {
-        "type": "object",
-        "description": "脚本列表响应",
-        "properties": {
-          "scripts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ScriptInfo"
-            }
-          }
-        },
-        "required": [
-          "scripts"
-        ]
-      },
-      "CreateScriptRequest": {
-        "type": "object",
-        "description": "新建脚本请求体",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "脚本名称，只允许中文、字母、数字、_、-",
-            "example": "unlock_device.sh"
-          },
-          "description": {
-            "type": "string",
-            "description": "脚本功能描述",
-            "example": "点亮并滑动解锁屏幕"
-          },
-          "params": {
-            "type": "string",
-            "description": "参数说明或结构化配置",
-            "example": ""
-          },
-          "content": {
-            "type": "string",
-            "description": "脚本正文代码",
-            "example": "#!/bin/bash\ninput keyevent 26\n"
-          }
-        },
-        "required": [
-          "name",
-          "content"
-        ]
-      },
-      "UpdateScriptRequest": {
-        "type": "object",
-        "description": "更新脚本请求体",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "重命名脚本（可选）",
-            "example": "unlock_device.sh"
-          },
-          "description": {
-            "type": "string",
-            "description": "更新描述",
-            "example": "点亮并滑动解锁屏幕"
-          },
-          "params": {
-            "type": "string",
-            "description": "更新参数说明",
-            "example": ""
-          },
-          "content": {
-            "type": "string",
-            "description": "更新脚本源码",
-            "example": "#!/bin/bash\ninput keyevent 26\n"
-          },
-          "updated": {
-            "type": "string",
-            "description": "上一次更新时间戳，用于乐观锁并发防覆盖校验",
-            "example": "2026-09-14T06:00:00Z"
-          }
-        },
-        "required": [
-          "content"
-        ]
-      },
-      "ScriptDetailResponse": {
-        "type": "object",
-        "description": "脚本操作成功返回模型",
-        "properties": {
-          "ok": {
-            "type": "boolean",
-            "example": true
-          },
-          "script": {
-            "$ref": "#/components/schemas/ScriptDetail"
-          }
-        },
-        "required": [
-          "ok",
-          "script"
-        ]
-      },
       "UIXMLResponse": {
         "type": "object",
         "description": "Android UI 布局快照响应",
@@ -5295,103 +4399,6 @@
           "component",
           "window_name",
           "fetched_at"
-        ]
-      },
-      "VisionActionRequest": {
-        "type": "object",
-        "description": "Vision 通道上行动作请求消息（WebSocket 文本 JSON，发送到 /api/vision/stream）。",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "action.request"
-            ],
-            "description": "消息类型"
-          },
-          "request_id": {
-            "type": "string",
-            "description": "请求标识，action.result 中回显"
-          },
-          "device_id": {
-            "type": "string",
-            "description": "目标设备 serial；缺省时用连接绑定的 serial"
-          },
-          "session_id": {
-            "type": "string",
-            "description": "会话标识（可选），用于校验"
-          },
-          "action": {
-            "type": "string",
-            "enum": [
-              "tap",
-              "swipe",
-              "key",
-              "text"
-            ],
-            "description": "动作类型"
-          },
-          "x": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "归一化 X 坐标 0~1；tap 落点 / swipe 起点"
-          },
-          "y": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "归一化 Y 坐标 0~1"
-          },
-          "x2": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "swipe 终点归一化 X 坐标"
-          },
-          "y2": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "swipe 终点归一化 Y 坐标"
-          },
-          "keycode": {
-            "type": "integer",
-            "description": "Android keycode（action=key 时必填）"
-          },
-          "text": {
-            "type": "string",
-            "description": "注入的 UTF-8 文本（action=text 时必填）"
-          },
-          "frame_id": {
-            "type": "integer",
-            "description": "关联的视频帧 ID（可选）"
-          },
-          "expires_ms": {
-            "type": "integer",
-            "description": "动作执行超时毫秒（可选）"
-          },
-          "humanize": {
-            "type": "boolean",
-            "default": false,
-            "description": "拟人化触摸，仅对 tap/swipe 生效。tap：落点高斯随机偏移、压力随机、按下到抬起加入随机按压时长；swipe：起止点间生成多个中间点、走带随机抖动的曲线路径并模拟起慢中快收慢变速。默认关闭，行为与精确注入一致，便于自动化复现。注意 scrcpy 协议无按压面积字段，拟人仅以落点偏移+压力近似。"
-          },
-          "mode": {
-            "type": "string",
-            "enum": [
-              "sdk",
-              "adb"
-            ],
-            "default": "sdk",
-            "description": "点击/滑动执行通道。sdk（默认）：复用 scrcpy 控制 Socket 极速注入；adb：调用系统 adb shell input tap/swipe，支持拟人化物理手指微偏移与按压时长。"
-          },
-          "duration_ms": {
-            "type": "integer",
-            "description": "滑动或按压时长毫秒数，对 swipe 或持续按压生效"
-          }
-        },
-        "required": [
-          "type",
-          "action"
         ]
       },
       "VisionSessionStats": {
@@ -5507,102 +4514,6 @@
         "required": [
           "device_id",
           "events"
-        ]
-      },
-      "VisionObject": {
-        "type": "object",
-        "description": "视觉检测识别目标",
-        "properties": {
-          "label": {
-            "type": "string",
-            "description": "目标类别标签",
-            "example": "button"
-          },
-          "confidence": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "识别置信度 (0~1)",
-            "example": 0.95
-          },
-          "x": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "归一化左上角 X (0~1)",
-            "example": 0.12
-          },
-          "y": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "归一化左上角 Y (0~1)",
-            "example": 0.34
-          },
-          "w": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "归一化宽度 (0~1)",
-            "example": 0.25
-          },
-          "h": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "description": "归一化高度 (0~1)",
-            "example": 0.06
-          }
-        },
-        "required": [
-          "label",
-          "confidence",
-          "x",
-          "y",
-          "w",
-          "h"
-        ]
-      },
-      "VisionMessage": {
-        "type": "object",
-        "description": "Vision 广播消息体（目标识别或触控可视化）",
-        "properties": {
-          "type": {
-            "type": "string",
-            "description": "消息类型，如 detection.result / touch",
-            "example": "detection.result"
-          },
-          "protocol_version": {
-            "type": "string",
-            "example": "1"
-          },
-          "device_id": {
-            "type": "string",
-            "example": "emulator-5554"
-          },
-          "session_id": {
-            "type": "string",
-            "example": "sess_1710400000"
-          },
-          "frame_id": {
-            "type": "integer",
-            "example": 105
-          },
-          "timestamp": {
-            "type": "integer",
-            "description": "Unix 毫秒时间戳",
-            "example": 1710400000000
-          },
-          "objects": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/VisionObject"
-            },
-            "description": "检测到的目标物体列表（为空表示清空绘制）"
-          }
-        },
-        "required": [
-          "type"
         ]
       },
       "Template": {
@@ -5774,603 +4685,6 @@
           },
           "image_base64": {
             "type": "string"
-          }
-        }
-      },
-      "TaskLogState": {
-        "type": "object",
-        "required": [
-          "availability",
-          "capture_state",
-          "truncated",
-          "last_seq",
-          "bytes",
-          "expires_at",
-          "error_msg"
-        ],
-        "properties": {
-          "availability": {
-            "type": "string",
-            "enum": [
-              "available",
-              "unavailable",
-              "expired"
-            ]
-          },
-          "capture_state": {
-            "type": "string",
-            "enum": [
-              "waiting",
-              "running",
-              "completed",
-              "degraded"
-            ]
-          },
-          "truncated": {
-            "type": "boolean"
-          },
-          "last_seq": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "bytes": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "expires_at": {
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
-          "error_msg": {
-            "type": "string"
-          }
-        }
-      },
-      "TaskRecordingState": {
-        "type": "object",
-        "required": [
-          "state",
-          "recording_id",
-          "record_audio",
-          "coverage_complete",
-          "error_msg"
-        ],
-        "properties": {
-          "state": {
-            "type": "string",
-            "enum": [
-              "unavailable",
-              "disabled",
-              "not_started",
-              "preparing",
-              "recording",
-              "stopping",
-              "completed",
-              "failed",
-              "expired"
-            ]
-          },
-          "recording_id": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "record_audio": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "coverage_complete": {
-            "type": [
-              "boolean",
-              "null"
-            ]
-          },
-          "error_msg": {
-            "type": "string"
-          }
-        }
-      },
-      "TaskReportState": {
-        "type": "object",
-        "required": [
-          "state",
-          "generation_revision",
-          "available_revision",
-          "can_retry",
-          "error_msg"
-        ],
-        "properties": {
-          "state": {
-            "type": "string",
-            "enum": [
-              "unavailable",
-              "disabled",
-              "waiting",
-              "pending",
-              "running",
-              "completed",
-              "failed"
-            ]
-          },
-          "generation_revision": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "available_revision": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "can_retry": {
-            "type": "boolean"
-          },
-          "error_msg": {
-            "type": "string"
-          }
-        }
-      },
-      "ManagedTask": {
-        "type": "object",
-        "required": [
-          "id",
-          "script_id",
-          "script_name",
-          "device_serial",
-          "pid",
-          "status",
-          "exit_code",
-          "error_msg",
-          "started_at",
-          "ended_at"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "script_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "script_name": {
-            "type": "string"
-          },
-          "device_serial": {
-            "type": "string"
-          },
-          "pid": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "preparing",
-              "running",
-              "stopping",
-              "completed",
-              "failed",
-              "killed",
-              "skipped"
-            ]
-          },
-          "exit_code": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "error_msg": {
-            "type": "string"
-          },
-          "started_at": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "ended_at": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "ExecutionTask": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/ManagedTask"
-          },
-          {
-            "type": "object",
-            "required": [
-              "dispatch_id",
-              "preparation_state"
-            ],
-            "properties": {
-              "dispatch_id": {
-                "type": "string"
-              },
-              "preparation_state": {
-                "type": "string",
-                "enum": [
-                  "preparing",
-                  "ready",
-                  "failed",
-                  "finished"
-                ]
-              }
-            }
-          }
-        ]
-      },
-      "TaskDetail": {
-        "type": "object",
-        "required": [
-          "task",
-          "artifacts"
-        ],
-        "properties": {
-          "task": {
-            "$ref": "#/components/schemas/ExecutionTask"
-          },
-          "artifacts": {
-            "type": "object",
-            "required": [
-              "log",
-              "recording",
-              "report"
-            ],
-            "properties": {
-              "log": {
-                "$ref": "#/components/schemas/TaskLogState"
-              },
-              "recording": {
-                "$ref": "#/components/schemas/TaskRecordingState"
-              },
-              "report": {
-                "$ref": "#/components/schemas/TaskReportState"
-              }
-            }
-          }
-        }
-      },
-      "TaskLogLine": {
-        "type": "object",
-        "required": [
-          "task_id",
-          "seq",
-          "at_ms",
-          "stream",
-          "message",
-          "continued"
-        ],
-        "properties": {
-          "task_id": {
-            "type": "string"
-          },
-          "seq": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "at_ms": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "stream": {
-            "type": "string",
-            "enum": [
-              "stdout",
-              "stderr",
-              "system"
-            ]
-          },
-          "message": {
-            "type": "string"
-          },
-          "continued": {
-            "type": "boolean"
-          }
-        }
-      },
-      "TaskLogPage": {
-        "type": "object",
-        "required": [
-          "items",
-          "next_cursor",
-          "has_more",
-          "complete",
-          "truncated",
-          "availability",
-          "oldest_seq",
-          "latest_seq"
-        ],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/TaskLogLine"
-            }
-          },
-          "next_cursor": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "has_more": {
-            "type": "boolean"
-          },
-          "complete": {
-            "type": "boolean"
-          },
-          "truncated": {
-            "type": "boolean"
-          },
-          "availability": {
-            "type": "string",
-            "enum": [
-              "available",
-              "unavailable",
-              "expired"
-            ]
-          },
-          "oldest_seq": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "latest_seq": {
-            "type": "integer",
-            "format": "int64"
-          }
-        }
-      },
-      "ExecutionSnapshot": {
-        "type": "object",
-        "required": [
-          "availability",
-          "script_name",
-          "document",
-          "document_hash",
-          "compiled_hash",
-          "document_version",
-          "target_devices",
-          "recording",
-          "report"
-        ],
-        "properties": {
-          "availability": {
-            "type": "string",
-            "enum": [
-              "available",
-              "legacy_unavailable"
-            ]
-          },
-          "script_name": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "document": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "document_hash": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "compiled_hash": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "document_version": {
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "target_devices": {
-            "type": [
-              "array",
-              "null"
-            ],
-            "items": {
-              "type": "string"
-            }
-          },
-          "recording": {
-            "anyOf": [
-              {
-                "type": "object",
-                "required": [
-                  "enabled",
-                  "record_audio"
-                ],
-                "properties": {
-                  "enabled": {
-                    "type": "boolean"
-                  },
-                  "record_audio": {
-                    "type": "boolean"
-                  }
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "report": {
-            "anyOf": [
-              {
-                "type": "object",
-                "required": [
-                  "enabled",
-                  "prompt"
-                ],
-                "properties": {
-                  "enabled": {
-                    "type": "boolean"
-                  },
-                  "prompt": {
-                    "type": "string"
-                  }
-                }
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        }
-      },
-      "ScriptDispatch": {
-        "type": "object",
-        "required": [
-          "id",
-          "cursor",
-          "script_id",
-          "started_at",
-          "ended_at",
-          "trigger",
-          "dispatch_state",
-          "status",
-          "error_msg",
-          "snapshot"
-        ],
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "cursor": {
-            "type": "string"
-          },
-          "script_id": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "started_at": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "ended_at": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "trigger": {
-            "type": "string",
-            "enum": [
-              "manual",
-              "schedule",
-              "legacy_unknown"
-            ]
-          },
-          "dispatch_state": {
-            "type": "string",
-            "enum": [
-              "dispatching",
-              "finished"
-            ]
-          },
-          "status": {
-            "type": "string"
-          },
-          "error_msg": {
-            "type": "string"
-          },
-          "snapshot": {
-            "$ref": "#/components/schemas/ExecutionSnapshot"
-          }
-        }
-      },
-      "TaskReportOutput": {
-        "type": "object",
-        "required": [
-          "markdown",
-          "citations",
-          "provider",
-          "model"
-        ],
-        "properties": {
-          "markdown": {
-            "type": "string"
-          },
-          "citations": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "seq"
-              ],
-              "properties": {
-                "seq": {
-                  "type": "integer",
-                  "format": "int64"
-                }
-              }
-            }
-          },
-          "provider": {
-            "type": "string"
-          },
-          "model": {
-            "type": "string"
-          }
-        }
-      },
-      "TaskReportResult": {
-        "type": "object",
-        "required": [
-          "generation",
-          "report",
-          "revision",
-          "created_at",
-          "input_hash",
-          "log_availability",
-          "evidence"
-        ],
-        "properties": {
-          "generation": {
-            "$ref": "#/components/schemas/TaskReportState"
-          },
-          "report": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TaskReportOutput"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "revision": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "created_at": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "input_hash": {
-            "type": "string"
-          },
-          "log_availability": {
-            "type": "string",
-            "enum": [
-              "available",
-              "unavailable",
-              "expired"
-            ]
-          },
-          "evidence": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "description": "本次设备执行的冻结证据，日志输入有界；重新生成沿用同一证据。"
           }
         }
       },
@@ -6549,6 +4863,411 @@
             "description": "下一页的排他序号游标，0 表示没有下一页"
           }
         }
+      },
+      "TaskRun": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "client_run_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "device_serial": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "report_markdown": {
+            "type": "string"
+          },
+          "log_count": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updated_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last_heartbeat_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ended_at": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "exit_code": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "log_truncated": {
+            "type": "boolean"
+          },
+          "connectivity": {
+            "type": "string",
+            "enum": [
+              "connected",
+              "disconnected",
+              "closed"
+            ]
+          },
+          "disconnected": {
+            "type": "boolean"
+          },
+          "connectivity_message": {
+            "type": "string"
+          },
+          "acknowledged_seq": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "id",
+          "client_run_id",
+          "name",
+          "source",
+          "device_serial",
+          "summary",
+          "report_markdown",
+          "log_count",
+          "created_at",
+          "updated_at",
+          "last_heartbeat_at",
+          "ended_at",
+          "duration_ms",
+          "status",
+          "exit_code",
+          "log_truncated",
+          "connectivity",
+          "disconnected"
+        ]
+      },
+      "TaskRunLog": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "timestamp": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "stream": {
+            "type": "string",
+            "enum": [
+              "stdout",
+              "stderr"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "seq",
+          "timestamp",
+          "stream",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "CreateTaskRunRequest": {
+        "type": "object",
+        "properties": {
+          "client_run_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "device_serial": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "report_markdown": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "client_run_id",
+          "name",
+          "device_serial"
+        ],
+        "additionalProperties": false
+      },
+      "FinishTaskRunRequest": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "succeeded",
+              "failed",
+              "cancelled"
+            ]
+          },
+          "exit_code": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "summary": {
+            "type": "string"
+          },
+          "report_markdown": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "TaskRunError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "VisionActionRequest": {
+        "type": "object",
+        "description": "Vision 通道上行动作请求消息（WebSocket 文本 JSON，发送到 /api/vision/stream）。",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "action.request"
+            ],
+            "description": "消息类型"
+          },
+          "request_id": {
+            "type": "string",
+            "description": "请求标识，action.result 中回显"
+          },
+          "device_id": {
+            "type": "string",
+            "description": "目标设备 serial；缺省时用连接绑定的 serial"
+          },
+          "session_id": {
+            "type": "string",
+            "description": "会话标识（可选），用于校验"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "tap",
+              "swipe",
+              "key",
+              "text"
+            ],
+            "description": "动作类型"
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化 X 坐标 0~1；tap 落点 / swipe 起点"
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化 Y 坐标 0~1"
+          },
+          "x2": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "swipe 终点归一化 X 坐标"
+          },
+          "y2": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "swipe 终点归一化 Y 坐标"
+          },
+          "keycode": {
+            "type": "integer",
+            "description": "Android keycode（action=key 时必填）"
+          },
+          "text": {
+            "type": "string",
+            "description": "注入的 UTF-8 文本（action=text 时必填）"
+          },
+          "frame_id": {
+            "type": "integer",
+            "description": "关联的视频帧 ID（可选）"
+          },
+          "expires_ms": {
+            "type": "integer",
+            "description": "动作执行超时毫秒（可选）"
+          },
+          "humanize": {
+            "type": "boolean",
+            "default": false,
+            "description": "拟人化触摸，仅对 tap/swipe 生效。tap：落点高斯随机偏移、压力随机、按下到抬起加入随机按压时长；swipe：起止点间生成多个中间点、走带随机抖动的曲线路径并模拟起慢中快收慢变速。默认关闭，行为与精确注入一致，便于自动化复现。注意 scrcpy 协议无按压面积字段，拟人仅以落点偏移+压力近似。"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "sdk",
+              "adb"
+            ],
+            "default": "sdk",
+            "description": "点击/滑动执行通道。sdk（默认）：复用 scrcpy 控制 Socket 极速注入；adb：调用系统 adb shell input tap/swipe，支持拟人化物理手指微偏移与按压时长。"
+          },
+          "duration_ms": {
+            "type": "integer",
+            "description": "滑动或按压时长毫秒数，对 swipe 或持续按压生效"
+          }
+        },
+        "required": [
+          "type",
+          "action"
+        ]
+      },
+      "VisionObject": {
+        "type": "object",
+        "description": "视觉检测识别目标",
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "目标类别标签",
+            "example": "button"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "识别置信度 (0~1)",
+            "example": 0.95
+          },
+          "x": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化左上角 X (0~1)",
+            "example": 0.12
+          },
+          "y": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化左上角 Y (0~1)",
+            "example": 0.34
+          },
+          "w": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化宽度 (0~1)",
+            "example": 0.25
+          },
+          "h": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "归一化高度 (0~1)",
+            "example": 0.06
+          }
+        },
+        "required": [
+          "label",
+          "confidence",
+          "x",
+          "y",
+          "w",
+          "h"
+        ]
+      },
+      "VisionMessage": {
+        "type": "object",
+        "description": "Vision 广播消息体（目标识别或触控可视化）",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "消息类型，如 detection.result / touch",
+            "example": "detection.result"
+          },
+          "protocol_version": {
+            "type": "string",
+            "example": "1"
+          },
+          "device_id": {
+            "type": "string",
+            "example": "emulator-5554"
+          },
+          "session_id": {
+            "type": "string",
+            "example": "sess_1710400000"
+          },
+          "frame_id": {
+            "type": "integer",
+            "example": 105
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "Unix 毫秒时间戳",
+            "example": 1710400000000
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VisionObject"
+            },
+            "description": "检测到的目标物体列表（为空表示清空绘制）"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "专用任务运行上报令牌"
       }
     }
   }

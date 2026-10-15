@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log"
-	"mywebscrcpy/internal/scheduler"
 	"mywebscrcpy/internal/updater"
 	"net"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 // The gate covers in-flight requests, including long-lived device connections.
@@ -40,32 +38,6 @@ func updateMiddleware(next http.Handler) http.Handler {
 		defer updateGate.RUnlock()
 		next.ServeHTTP(w, r)
 	})
-}
-
-// Keep cron disabled until the supervisor has committed the new startup.
-func startUpdateAwareScheduler(sched *scheduler.Scheduler) func() {
-	stop := make(chan struct{})
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		receipt := os.Getenv("MYWEBSCRCPY_UPDATE_RECEIPT")
-		if receipt != "" {
-			for {
-				if _, err := os.Stat(receipt + ".confirmed"); err == nil {
-					break
-				}
-				select {
-				case <-stop:
-					return
-				case <-time.After(100 * time.Millisecond):
-				}
-			}
-		}
-		if err := sched.Start(); err != nil {
-			fmt.Fprintf(os.Stderr, "[Scheduler] 启动失败: %v\n", err)
-		}
-	}()
-	return func() { close(stop); <-done; sched.Stop() }
 }
 
 func handleUpdateCommand() bool {

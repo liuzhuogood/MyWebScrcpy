@@ -16,16 +16,13 @@ type OperationLog struct {
 	OccurredAt  int64  `json:"occurred_at"`
 }
 
-func (d *DB) migrateOperationLogs() error {
-	_, err := d.db.Exec(`CREATE TABLE IF NOT EXISTS operation_logs (
+const operationLogsSchema = `CREATE TABLE IF NOT EXISTS operation_logs (
 		sequence INTEGER PRIMARY KEY AUTOINCREMENT,
 		id TEXT NOT NULL UNIQUE, serial TEXT NOT NULL, type TEXT NOT NULL,
 		description TEXT NOT NULL, adb_command TEXT NOT NULL, occurred_at INTEGER NOT NULL
 	);
 	CREATE INDEX IF NOT EXISTS idx_operation_logs_time ON operation_logs(occurred_at, sequence);
-	CREATE INDEX IF NOT EXISTS idx_operation_logs_device ON operation_logs(serial, occurred_at, sequence);`)
-	return err
-}
+	CREATE INDEX IF NOT EXISTS idx_operation_logs_device ON operation_logs(serial, occurred_at, sequence);`
 
 func (d *DB) AppendOperationLogs(ctx context.Context, items []OperationLog) error {
 	tx, err := d.db.BeginTx(ctx, nil)

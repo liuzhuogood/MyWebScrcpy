@@ -3,10 +3,11 @@ package dependencies
 import (
 	"embed"
 	"encoding/json"
+	"fmt"
 	"runtime"
 )
 
-//go:embed catalog/*.json catalog/PI-LICENSE
+//go:embed catalog/*.json
 var catalogFS embed.FS
 
 type artifact struct {
@@ -21,13 +22,10 @@ type catalog struct {
 
 func (m *Manager) spec(id string) (catalog, map[string]artifact, error) {
 	var c catalog
-	name := "pi"
-	if id == "adb" {
-		name = "adb"
+	if id != "adb" && id != "python" {
+		return c, nil, fmt.Errorf("未知依赖: %s", id)
 	}
-	if id == "python" {
-		name = "python"
-	}
+	name := id
 	raw, err := catalogFS.ReadFile("catalog/" + name + ".json")
 	if err != nil {
 		return c, nil, err
