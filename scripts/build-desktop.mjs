@@ -85,7 +85,6 @@ function injectDmgDoc(dmgPath, sourceFile, targetFilename) {
   let mounted = false
   try {
     run('hdiutil', ['convert', dmgPath, '-format', 'UDRW', '-o', tempRw])
-    run('hdiutil', ['resize', '-size', '+5m', tempRw])
     run('hdiutil', ['attach', '-nobrowse', '-mountpoint', mountPoint, tempRw])
     mounted = true
     copyFileSync(sourceFile, path.join(mountPoint, targetFilename))
