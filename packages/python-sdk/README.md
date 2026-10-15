@@ -20,7 +20,7 @@ python -m build packages/python-sdk
 python -m pip install --force-reinstall 'packages/python-sdk/dist/mywebscrcpy_sdk-1.20.1-py3-none-any.whl[vision]'
 ```
 
-安装后脚本可以放在其他目录运行。应用任务和全局匹配服务使用所选 Python 环境中安装的 SDK。系统配置的 Python 卡片通过 pip 安装同版本 SDK 及识图依赖；服务仍需手动启动。
+安装后脚本可以放在其他目录运行。外部脚本和全局匹配服务使用其 Python 环境中安装的 SDK。系统配置的 Python 卡片通过 pip 安装同版本 SDK 及识图依赖；服务仍需手动启动。
 
 ## 匹配与操作
 
@@ -101,3 +101,7 @@ python -m unittest discover -s packages/python-sdk/tests -v
 SDK 版本与仓库根目录 `VERSION` 一致，Python 包版本去掉 `v` 前缀。修改 `VERSION` 后运行 `node scripts/sync-version.mjs`，同时更新主程序与 SDK 版本。
 
 GitHub Actions 的 `Publish Python SDK` 工作流在主分支的版本、SDK 或发布配置变更时运行，也支持 `v*` 标签和手动触发；构建检查及安装测试通过后发布未发布的版本，已存在的完整版本会跳过。仓库需在 Settings → Secrets and variables → Actions 配置 `PYPI_API_TOKEN`，值为有此项目发布权限的 PyPI API Token。只修改 SDK 而不更新版本号不会覆盖 PyPI 上已有的版本。
+
+## 外部任务上报
+
+`TaskReporter(base_url, name=..., device_serial=..., source="codex")` 支持状态、心跳、实时日志和结果上报，无需专用上报令牌。完整示例与失败处理见 [任务运行集成](../../docs/task-runs.md) 和 `examples/report_task_run.py`。本版发布前请从本仓库安装 SDK。

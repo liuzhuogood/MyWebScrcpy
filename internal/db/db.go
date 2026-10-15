@@ -3,8 +3,10 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,12 +32,11 @@ type DeviceRecord struct {
 
 // DB 封装 SQLite 数据库操作
 type DB struct {
-	db   *sql.DB
-	path string
-	mu   sync.RWMutex
+	db *sql.DB
+	mu sync.RWMutex
 }
 
-// Open 打开或创建 SQLite 数据库，并自动执行建表迁移
+// Open 打开数据库；v1.25 首次使用时重置旧结构，此后保留新数据。
 func Open(dbPath string) (*DB, error) {
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
 		return nil, fmt.Errorf("创建数据库目录失败: %w", err)
@@ -47,10 +48,10 @@ func Open(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("连接 SQLite 失败: %w", err)
 	}
 
-	d := &DB{db: db, path: dbPath}
-	if err := d.migrate(); err != nil {
+	d := &DB{db: db}
+	if err := d.initializeSchema(); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("执行迁移失败: %w", err)
+		return nil, fmt.Errorf("初始化数据库结构失败: %w", err)
 	}
 
 	return d, nil
@@ -61,97 +62,80 @@ func (d *DB) Close() error {
 	return d.db.Close()
 }
 
-func (d *DB) migrate() error {
-	schema := `
-	CREATE TABLE IF NOT EXISTS devices (
-		id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-		serial              TEXT NOT NULL UNIQUE,
-		source              TEXT NOT NULL DEFAULT 'manual',
-		alias               TEXT NOT NULL DEFAULT '',
-		state               TEXT NOT NULL DEFAULT 'offline',
-		product             TEXT NOT NULL DEFAULT '',
-		model               TEXT NOT NULL DEFAULT '',
-		device_name         TEXT NOT NULL DEFAULT '',
-		transport_id        TEXT NOT NULL DEFAULT '',
-		auto_reconnect      INTEGER NOT NULL DEFAULT 1,
-		last_connected_at   INTEGER NOT NULL DEFAULT 0,
-		created_at          INTEGER NOT NULL,
-		updated_at          INTEGER NOT NULL
-	);
-	CREATE INDEX IF NOT EXISTS idx_devices_source ON devices(source);
-	CREATE INDEX IF NOT EXISTS idx_devices_state ON devices(state);
+// SchemaVersion marks the independent external task-run schema.
+const SchemaVersion = 12500
 
-	CREATE TABLE IF NOT EXISTS markdown_scripts (
-		id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-		name                TEXT NOT NULL,
-		target_device       TEXT NOT NULL DEFAULT 'auto',
-		content             TEXT NOT NULL DEFAULT '',
-		extracted_version   TEXT NOT NULL DEFAULT '',
-		schedule_cron       TEXT NOT NULL DEFAULT '',
-		is_enabled          INTEGER NOT NULL DEFAULT 1,
-		timeout_sec         INTEGER NOT NULL DEFAULT 120,
-		compiled_version    TEXT NOT NULL DEFAULT '',
-		compiled_python     TEXT NOT NULL DEFAULT '',
-		compiled_at         INTEGER NOT NULL DEFAULT 0,
-		last_run_at         INTEGER NOT NULL DEFAULT 0,
-		last_run_status     TEXT NOT NULL DEFAULT '',
-		created_at          INTEGER NOT NULL,
-		updated_at          INTEGER NOT NULL
-	);
-	CREATE INDEX IF NOT EXISTS idx_md_scripts_schedule ON markdown_scripts(is_enabled, schedule_cron);
+func (d *DB) initializeSchema() error {
+	tx, err := d.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var version int
+	if err := tx.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
+		return err
+	}
+	if version == SchemaVersion {
+		return tx.Commit()
+	}
+	if version != 0 {
+		return fmt.Errorf("不支持数据库结构版本 %d", version)
+	}
 
-	CREATE TABLE IF NOT EXISTS running_tasks (
-		id              TEXT PRIMARY KEY,
-		script_id       INTEGER NOT NULL,
-		script_name     TEXT NOT NULL,
-		device_serial   TEXT NOT NULL,
-		pid             INTEGER NOT NULL,
-		status          TEXT NOT NULL DEFAULT 'running',
-		exit_code       INTEGER DEFAULT 0,
-		error_msg       TEXT NOT NULL DEFAULT '',
-		started_at      INTEGER NOT NULL,
-		ended_at        INTEGER DEFAULT 0
-	);
-	CREATE INDEX IF NOT EXISTS idx_running_tasks_lock ON running_tasks(device_serial, status);
-
- CREATE TABLE IF NOT EXISTS script_dispatches (
-  id TEXT PRIMARY KEY, script_id INTEGER NOT NULL, started_ns INTEGER NOT NULL
+	// Existing releases use user_version=0. The early-stage product deliberately
+	// discards that database instead of maintaining script/task/model migrations.
+	rows, err := tx.Query(`SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%'`)
+	if err != nil {
+		return err
+	}
+	var tables []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			rows.Close()
+			return err
+		}
+		tables = append(tables, name)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, name := range tables {
+		quoted := "\"" + strings.ReplaceAll(name, "\"", "\"\"") + "\""
+		if _, err := tx.Exec("DROP TABLE " + quoted); err != nil {
+			return err
+		}
+	}
+	const coreSchema = `
+ CREATE TABLE devices (
+ id INTEGER PRIMARY KEY AUTOINCREMENT, serial TEXT NOT NULL UNIQUE,
+ source TEXT NOT NULL DEFAULT 'manual', alias TEXT NOT NULL DEFAULT '',
+ state TEXT NOT NULL DEFAULT 'offline', product TEXT NOT NULL DEFAULT '',
+ model TEXT NOT NULL DEFAULT '', device_name TEXT NOT NULL DEFAULT '',
+ transport_id TEXT NOT NULL DEFAULT '', auto_reconnect INTEGER NOT NULL DEFAULT 1,
+ last_connected_at INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL,
+ updated_at INTEGER NOT NULL
  );
- CREATE INDEX IF NOT EXISTS idx_script_dispatches ON script_dispatches(script_id, started_ns);
- CREATE TABLE IF NOT EXISTS script_dispatch_tasks (
-  dispatch_id TEXT NOT NULL, task_id TEXT NOT NULL UNIQUE,
-  PRIMARY KEY(dispatch_id, task_id)
- );
-
-	CREATE TABLE IF NOT EXISTS system_configs (
-		key         TEXT PRIMARY KEY,
-		value       TEXT NOT NULL DEFAULT '',
-		updated_at  INTEGER NOT NULL
-	);
-	`
-	if _, err := d.db.Exec(schema); err != nil {
+ CREATE INDEX idx_devices_source ON devices(source);
+ CREATE INDEX idx_devices_state ON devices(state);
+ `
+	for _, schema := range []string{coreSchema, operationLogsSchema, taskRunsSchema, configsSchema} {
+		if _, err := tx.Exec(schema); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d", SchemaVersion)); err != nil {
 		return err
 	}
-
-	// 渐进式列迁移：支持已有旧数据库无缝升级
-	_ = d.addColumnIfNotExists("markdown_scripts", "last_run_at", "INTEGER NOT NULL DEFAULT 0")
-	_ = d.addColumnIfNotExists("markdown_scripts", "last_run_status", "TEXT NOT NULL DEFAULT ''")
-	if err := d.migrateScriptTargets(); err != nil {
+	if err := tx.Commit(); err != nil {
 		return err
 	}
-	if err := d.migrateGenerations(); err != nil {
-		return err
+	if len(tables) > 0 {
+		log.Printf("[DB] 已重置旧数据库（%d 张表），结构版本 %d", len(tables), SchemaVersion)
 	}
-	if err := d.migrateOperationLogs(); err != nil {
-		return err
-	}
-	return d.migrateArtifacts()
-}
-
-func (d *DB) addColumnIfNotExists(table, column, colType string) error {
-	query := fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, colType)
-	_, err := d.db.Exec(query)
-	return err
+	return nil
 }
 
 // ListManualDevices 获取所有手动添加的设备记录

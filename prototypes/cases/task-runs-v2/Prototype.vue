@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import MarkdownContent from '@/components/scripts/MarkdownContent.vue'
+import MarkdownContent from '../../components/script-history/MarkdownContent.vue'
 import { batches, documentSource } from './data'
 
 const mode = ref('history')

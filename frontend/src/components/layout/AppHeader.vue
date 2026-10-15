@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Ellipsis, FileCode2, Github, LayoutGrid, Settings, Sparkles } from 'lucide-vue-next'
+import { Ellipsis, Github, LayoutGrid, ListTodo, Settings, Sparkles } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -65,9 +65,9 @@ onMounted(() => {
         </Button>
 
         <Button variant="outline" size="sm" as-child>
-          <RouterLink to="/scripts">
-            <FileCode2 class="h-4 w-4" />
-            脚本与任务
+          <RouterLink to="/tasks">
+            <ListTodo class="h-4 w-4" />
+            任务
           </RouterLink>
         </Button>
         <Button variant="outline" size="sm" as-child>
@@ -99,7 +99,7 @@ onMounted(() => {
           </DropdownMenuItem>
           <DropdownMenuSeparator v-if="updater.checkResult?.has_update" />
           <DropdownMenuItem as-child>
-            <RouterLink to="/scripts"><FileCode2 class="h-4 w-4" />脚本与任务</RouterLink>
+            <RouterLink to="/tasks"><ListTodo class="h-4 w-4" />任务</RouterLink>
           </DropdownMenuItem>
           <DropdownMenuItem as-child>
             <RouterLink to="/dashboard"><LayoutGrid class="h-4 w-4" />大屏模式</RouterLink>

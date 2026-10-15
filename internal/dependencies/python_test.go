@@ -59,9 +59,9 @@ func TestPythonSelectionAndModuleInstallation(t *testing.T) {
 	candidate := m.Settings()
 	candidate.Python = s
 	if err := m.Apply(candidate); err != nil {
-		t.Fatal("missing optional ADB/Pi blocked Python configuration", err)
+		t.Fatal("missing optional ADB blocked Python configuration", err)
 	}
-	reloaded, err := NewManager(filepath.Dir(m.root), m.skills)
+	reloaded, err := NewManager(filepath.Dir(m.root))
 	if err != nil || reloaded.Settings().Python != s {
 		t.Fatal("Python selection not persisted", err)
 	}
@@ -170,7 +170,7 @@ func TestExistingConfigKeepsSystemPython(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(m.root, "config.json"), []byte(old), 0600); err != nil {
 		t.Fatal(err)
 	}
-	reloaded, err := NewManager(filepath.Dir(m.root), m.skills)
+	reloaded, err := NewManager(filepath.Dir(m.root))
 	if err != nil || reloaded.Settings().Python != (Selection{Source: "system", Path: Current().Python}) {
 		t.Fatal("known older configuration changed Python source", err)
 	}

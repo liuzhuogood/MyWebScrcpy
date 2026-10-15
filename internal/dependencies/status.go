@@ -1,13 +1,9 @@
 package dependencies
 
 import (
-	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,22 +41,10 @@ func (m *Manager) detect(id string, s Selection) Tool {
 	tool := Tool{ID: id, Name: id}
 	var path string
 	var err error
-	var searchErr error
 	if id == "adb" {
 		path, err = m.resolveADB(s)
 	} else if id == "python" {
 		path, err = m.resolvePython(s)
-	} else if id == "pi-agent" {
-		var pErr error
-		p, pErr := m.resolvePi(s)
-		path = p.Executable
-		tool.Path = p.Executable
-		tool.SearchPaths = map[string]string{"fd": p.FD, "rg": p.RG}
-		if path == "" {
-			err = pErr
-		} else {
-			searchErr = pErr
-		}
 	} else {
 		tool.Error = "未知依赖"
 		return tool
@@ -86,34 +70,6 @@ func (m *Manager) detect(id string, s Selection) Tool {
 		tool.Error = "指定程序不是 ADB"
 		return tool
 	}
-	if id == "pi-agent" {
-		help, e := probe(context.Background(), path, "--help")
-		if e != nil {
-			tool.Error = e.Error()
-			return tool
-		}
-		for _, flag := range []string{"--mode", "rpc", "--offline", "--no-session", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files", "--tools", "--skill", "--system-prompt"} {
-			if !strings.Contains(help, flag) {
-				tool.Error = "Pi 缺少所需能力: " + flag
-				return tool
-			}
-		}
-		if err := probeRPC(path); err != nil {
-			tool.Error = err.Error()
-			return tool
-		}
-		if searchErr != nil {
-			tool.Error = searchErr.Error()
-			return tool
-		}
-		for _, name := range []string{"fd", "rg"} {
-			out, e := probe(context.Background(), tool.SearchPaths[name], "--version")
-			if e != nil || !strings.HasPrefix(out, map[string]string{"fd": "fd ", "rg": "ripgrep "}[name]) {
-				tool.Error = fmt.Sprintf("%s 不可用或不是所需程序", name)
-				return tool
-			}
-		}
-	}
 	tool.Version = strings.SplitN(out, "\n", 2)[0]
 	if len(tool.Version) > 512 {
 		tool.Version = tool.Version[:512]
@@ -127,7 +83,7 @@ func (m *Manager) Tools() []ManagedTool {
 	for _, item := range []struct {
 		id, name string
 		s        Selection
-	}{{"pi-agent", "pi-agent", settings.Pi}, {"adb", "ADB", settings.ADB}, {"python", "Python", settings.Python}} {
+	}{{"adb", "ADB", settings.ADB}, {"python", "Python", settings.Python}} {
 		tool := ManagedTool{ID: item.id, Name: item.name, Selection: item.s, Supported: m.supported(item.id), Effective: Tool{ID: item.id, Name: item.name}}
 		release, leaseErr := m.acquire(item.id)
 		if leaseErr == nil {
@@ -146,10 +102,6 @@ func (m *Manager) Tools() []ManagedTool {
 			} else if item.id == "adb" {
 				if p, pErr := m.resolveADB(Selection{Source: "builtin"}); pErr == nil {
 					tool.BuiltinPath = p
-				}
-			} else if item.id == "pi-agent" {
-				if p, pErr := m.resolvePi(Selection{Source: "builtin"}); pErr == nil && p.Executable != "" {
-					tool.BuiltinPath = p.Executable
 				}
 			}
 		}
@@ -178,63 +130,4 @@ func (m *Manager) Tools() []ManagedTool {
 		tools = append(tools, tool)
 	}
 	return tools
-}
-
-// get_state checks the actual RPC response without contacting a model provider.
-func probeRPC(path string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	temp, err := os.MkdirTemp("", "mywebscrcpy-pi-probe-*")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(temp)
-	args := []string{"--mode", "rpc", "--no-session", "--offline", "--no-extensions", "--no-skills", "--no-prompt-templates", "--no-themes", "--no-context-files", "--tools", "read,grep,find,ls"}
-	cmd := exec.CommandContext(ctx, path, args...)
-	cmd.Dir = temp
-	cmd.WaitDelay = time.Second
-	for _, entry := range os.Environ() {
-		name, _, _ := strings.Cut(entry, "=")
-		if !strings.EqualFold(name, "PI_CODING_AGENT_DIR") && !strings.EqualFold(name, "PI_PACKAGE_DIR") {
-			cmd.Env = append(cmd.Env, entry)
-		}
-	}
-	cmd.Env = append(cmd.Env, "PI_CODING_AGENT_DIR="+temp)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	var stderr boundedOutput
-	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	defer func() { cancel(); stdin.Close(); _ = cmd.Wait() }()
-	if _, err := io.WriteString(stdin, "{\"id\":\"dependency-check\",\"type\":\"get_state\"}\n"); err != nil {
-		return err
-	}
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 4096), 64*1024)
-	for scanner.Scan() {
-		var reply struct {
-			ID      string `json:"id"`
-			Type    string `json:"type"`
-			Command string `json:"command"`
-			Success bool   `json:"success"`
-		}
-		if err := json.Unmarshal(scanner.Bytes(), &reply); err != nil {
-			return errors.New("Pi RPC 返回无效 JSON")
-		}
-		if reply.ID == "dependency-check" {
-			if reply.Type == "response" && reply.Command == "get_state" && reply.Success {
-				return nil
-			}
-			return errors.New("Pi RPC 能力检查失败")
-		}
-	}
-	return errors.New("Pi 未返回所需 RPC 响应")
 }

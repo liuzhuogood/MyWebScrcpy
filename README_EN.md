@@ -250,3 +250,9 @@ MyWebScrcpy/
 ## License
 
 MIT
+
+## External task runs (v1.25)
+
+Scheduling and script execution belong to external tools. The `/tasks` panel receives status, heartbeat, logs and results through the public API or Python `TaskReporter`, without a dedicated reporter token. See [integration guide](docs/task-runs.md).
+
+Opening a pre-v1.25 database resets all database records once. Legacy scripts, task history, model settings and device records are not migrated or exported. New records survive subsequent restarts. Old dependency selections reset to ADB/Python settings; global Pi installations and personal files are left in place.

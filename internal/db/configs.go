@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+// Current OCR settings use this store; legacy model settings are reset with the old database.
+const configsSchema = `CREATE TABLE system_configs (
+ key TEXT PRIMARY KEY,
+ value TEXT NOT NULL DEFAULT '',
+ updated_at INTEGER NOT NULL
+);`
+
 // GetConfig 根据 key 获取配置值
 func (d *DB) GetConfig(key string) (string, error) {
 	d.mu.RLock()

@@ -9,7 +9,7 @@ import (
 )
 
 func TestSDKContractValidator(t *testing.T) {
-	source, err := os.ReadFile("../../.pi/skills/markdown-to-python/assets/example.py")
+	source, err := os.ReadFile("testdata/example.py")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +27,7 @@ func TestSDKContractValidator(t *testing.T) {
 			t.Fatalf("accepted %s", replacement)
 		}
 	}
-	vision, err := os.ReadFile("../../.pi/skills/markdown-to-python/assets/vision-example.py")
+	vision, err := os.ReadFile("testdata/vision-example.py")
 	if err != nil {
 		t.Fatal(err)
 	}

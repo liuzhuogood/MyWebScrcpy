@@ -23,7 +23,7 @@ func newAppHandler(appRoot fs.FS) http.Handler {
 			return
 		}
 		switch r.URL.Path {
-		case "/", "/index.html", "/player", "/dashboard", "/files", "/scripts", "/dependencies":
+		case "/", "/index.html", "/player", "/dashboard", "/files", "/tasks", "/dependencies":
 			if indexErr != nil {
 				http.Error(w, "web app unavailable", http.StatusServiceUnavailable)
 				return

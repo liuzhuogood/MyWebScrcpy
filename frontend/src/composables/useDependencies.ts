@@ -1,9 +1,9 @@
 import { computed, onUnmounted, ref } from 'vue'
 import type { DependencyInfo, DependencyStatus } from '@/types/dependencies'
 
-export type DependencyId = 'pi-agent' | 'adb' | 'python'
-export interface Selection { source: 'builtin' | 'system'; path: string; fd: string; rg: string }
-export interface Config { schema: 1; adb: Selection; pi: Selection; python: Selection }
+export type DependencyId = 'adb' | 'python'
+export interface Selection { source: 'builtin' | 'system'; path: string }
+export interface Config { schema: 2; adb: Selection; python: Selection }
 export interface InstallTask { stage: string; received: number; total: number; error: string }
 export interface ManagedTool {
   id: DependencyId
@@ -19,10 +19,10 @@ export interface ManagedTool {
   modules_task?: InstallTask
 }
 export interface ManagedStatus extends DependencyStatus { managed: ManagedTool[]; config: Config }
-const emptySelection = (): Selection => ({ source: 'system', path: '', fd: '', rg: '' })
+const emptySelection = (): Selection => ({ source: 'system', path: '' })
 export function useDependencies() {
   const status = ref<ManagedStatus>()
-  const draft = ref<Config>({ schema: 1, adb: emptySelection(), pi: { ...emptySelection(), source: 'builtin' }, python: emptySelection() })
+  const draft = ref<Config>({ schema: 2, adb: emptySelection(), python: emptySelection() })
   const error = ref('')
   const message = ref('')
   const loading = ref(false)
@@ -65,7 +65,7 @@ export function useDependencies() {
     catch (cause) { refreshing = undefined; error.value = cause instanceof Error ? cause.message : '依赖检测失败' }
   }
   async function load() { loading.value = true; await refresh(true); loading.value = false }
-  function selection(id: DependencyId) { return id === 'adb' ? draft.value.adb : id === 'python' ? draft.value.python : draft.value.pi }
+  function selection(id: DependencyId) { return draft.value[id] }
   function runtimeBusy(tool: ManagedTool) { return ['downloading', 'verifying', 'publishing', 'removing'].includes(tool.task.stage) }
   function busy(tool: ManagedTool) { return runtimeBusy(tool) || tool.modules_task?.stage === 'installing' }
   const pending = computed(() => status.value?.managed.some(busy) || Boolean(acting.value) || Boolean(checking.value))

@@ -7,7 +7,6 @@ export interface DependencyInfo {
   version: string
   error: string
   download_url: string
-  search_paths?: { fd: string; rg: string }
   python?: { pip_available: boolean; sdk_version: string; sdk_error: string; required_version: string; ready: boolean }
 }
 export interface DependencyPaths { adb: string; python: string }

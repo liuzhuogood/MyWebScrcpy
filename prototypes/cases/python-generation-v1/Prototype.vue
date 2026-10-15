@@ -3,8 +3,8 @@ import { computed, onUnmounted, reactive, ref } from 'vue'
 import { Code2, Play, Square } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import AssistantActivities from '@/components/scripts/AssistantActivities.vue'
-import type { AssistantActivity } from '@/scripts/useScriptAssistant'
+import AssistantActivities from '../../components/script-history/AssistantActivities.vue'
+import type { AssistantActivity } from '../../components/script-history/assistantActivity'
 
 const document = ref('---\nversion: 1.0.0\n---\n\n# 设备查询\n- 使用 ADB 查询设备型号并打印\n')
 const tab = ref('source')

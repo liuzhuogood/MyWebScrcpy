@@ -60,12 +60,6 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"/api/files/rename",
 		"/api/files/delete",
 		"/api/files/undo",
-		// 脚本管理
-		"/api/scripts/categories",
-		"/api/scripts/categories/{cat}",
-		"/api/scripts",
-		"/api/scripts/{cat}",
-		"/api/scripts/{cat}/{name}",
 		// UI 检查
 		"/api/ui/xml",
 		"/api/ui/page-info",
@@ -80,8 +74,8 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"/api/templates/import",
 		"/api/templates/{id}",
 		"/api/templates/{id}/image",
-		// 文档助手
-		"/api/ai/chat",
+		// 任务运行
+		"/api/task-runs",
 		// 系统元接口
 		"/api/openapi.json",
 	}
@@ -122,16 +116,6 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"DeleteFilesRequest",
 		"DeleteFilesResponse",
 		"UndoFilesRequest",
-		"ScriptCategoryListResponse",
-		"ScriptCategoryCreateRequest",
-		"ScriptCategoryRenameRequest",
-		"ScriptCategoryActionResponse",
-		"ScriptInfo",
-		"ScriptDetail",
-		"ScriptListResponse",
-		"CreateScriptRequest",
-		"UpdateScriptRequest",
-		"ScriptDetailResponse",
 		"UIXMLResponse",
 		"UIPageInfoResponse",
 		"VisionActionRequest",

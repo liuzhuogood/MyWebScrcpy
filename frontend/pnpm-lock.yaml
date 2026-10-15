@@ -29,9 +29,6 @@ importers:
       dompurify:
         specifier: ^3.4.16
         version: 3.4.16
-      eventsource-parser:
-        specifier: ^4.1.1
-        version: 4.1.1
       lucide-vue-next:
         specifier: ^1.0.0
         version: 1.0.0(vue@3.5.42(typescript@6.0.3))
@@ -528,10 +525,6 @@ packages:
 
   estree-walker@2.0.2:
     resolution: {integrity: sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w==}
-
-  eventsource-parser@4.1.1:
-    resolution: {integrity: sha512-zaWNqeSLeyzEAAt2Q6aDBRDRk/VnPmsKqvToyGvv6aahvLv71A4Jw7jG93Hckf11zXurbqgsffvpSgKPoeU1Qw==}
-    engines: {node: '>=22.12'}
 
   exsolve@1.1.1:
     resolution: {integrity: sha512-9U/jZUgjnSGyntRr6y5Muu1MJcwFl6kPu7k8qLF0IMNfLqvw0NZ4nnVDq0RVoZ0RvCyumib4Ez3KYrVfilrw+g==}
@@ -1378,8 +1371,6 @@ snapshots:
   entities@7.0.1: {}
 
   estree-walker@2.0.2: {}
-
-  eventsource-parser@4.1.1: {}
 
   exsolve@1.1.1: {}
 
