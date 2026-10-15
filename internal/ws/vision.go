@@ -132,7 +132,7 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 					_ = writeJSON(map[string]interface{}{"type": "action.result", "request_id": msg.RequestID, "device_id": serial, "session_id": meta.SessionID, "accepted": false, "executed": false, "error_code": "read_only"})
 					continue
 				}
-				result := <-ms.actions.Submit(actionCtx, action.Request{RequestID: msg.RequestID, DeviceID: serial, Source: "vision", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, Text: msg.Text, Keycode: msg.Keycode, MetaState: msg.MetaState, FrameID: msg.FrameID, ExpiresMS: msg.ExpiresMS, Humanize: msg.Humanize, Mode: msg.Mode, DurationMS: msg.DurationMS})
+				result := <-ms.actions.Submit(actionCtx, action.Request{RequestID: msg.RequestID, DeviceID: serial, Source: "vision", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, Text: msg.Text, Keycode: msg.Keycode, MetaState: msg.MetaState, FrameID: msg.FrameID, ExpiresMS: msg.ExpiresMS, Humanize: msg.Humanize, Mode: h.resolveActionMode(msg.Mode), DurationMS: msg.DurationMS})
 				h.recordEvent(debuglog.Event{Type: "action.result", DeviceID: serial, SessionID: meta.SessionID, RequestID: result.RequestID, Fields: map[string]interface{}{"accepted": result.Accepted, "executed": result.Executed, "error_code": result.ErrorCode}})
 				_ = writeJSON(map[string]interface{}{"type": "action.result", "request_id": result.RequestID, "device_id": serial, "session_id": meta.SessionID, "accepted": result.Accepted, "executed": result.Executed, "error_code": result.ErrorCode})
 			}

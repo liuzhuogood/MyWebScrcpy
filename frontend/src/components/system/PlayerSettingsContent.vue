@@ -66,6 +66,20 @@ const s = usePlayerSettings()
       <h3 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">声音与交互</h3>
       <div class="flex items-center justify-between gap-4">
         <div>
+          <p class="text-sm font-medium">点击注入模式</p>
+          <p class="text-xs text-muted-foreground">模拟器或风控严格的应用用 HID 更不易被识别为自动点击</p>
+        </div>
+        <Select :model-value="s.injectMode.value" aria-label="点击注入模式" @update:model-value="v => s.injectMode.value = v as any">
+          <SelectTrigger class="w-36"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="sdk">标准注入（默认）</SelectItem>
+            <SelectItem value="hid">HID 硬件模拟</SelectItem>
+            <SelectItem value="adb">ADB 命令</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div class="flex items-center justify-between gap-4 border-t pt-3">
+        <div>
           <p class="text-sm font-medium">自动打开音量</p>
           <p class="text-xs text-muted-foreground">连接后自动播放手机声音（关闭则默认静音）</p>
         </div>

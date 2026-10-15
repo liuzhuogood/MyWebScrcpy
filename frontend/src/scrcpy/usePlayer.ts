@@ -372,6 +372,26 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
       ws.send(bytes as Uint8Array<ArrayBuffer>)
   }
 
+  /**
+   * HID 模式下的手动触摸：把浏览器指针事件转成一次 action.request 交给
+   * 后端 UHID 通道（服务端设置的全局注入模式也走这里）。
+   * move/up 复用 down 的 device_id；后端按 source=browser 走 HID digitizer。
+   */
+  function sendHidPointer(kind: 'tap' | 'swipe', x1: number, y1: number, x2: number, y2: number) {
+    if (!ws || ws.readyState !== WebSocket.OPEN)
+      return
+    const dw = packer.deviceWidth || 1
+    const dh = packer.deviceHeight || 1
+    ws.send(JSON.stringify({
+      type: 'input.hid',
+      action: kind,
+      x: +(x1 / dw).toFixed(6),
+      y: +(y1 / dh).toFixed(6),
+      x2: +(x2 / dw).toFixed(6),
+      y2: +(y2 / dh).toFixed(6),
+    }))
+  }
+
   function toDevice(clientX: number, clientY: number): { x: number, y: number } {
     const canvas = canvasRef.value
     const rect = canvas?.getBoundingClientRect()
@@ -467,6 +487,12 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     lastMousePoint = { x, y }
     mouseDownTime = Date.now()
     beginDrag(x, y)
+    if (playerSettings.injectMode.value === 'hid')
+      return // hid：down 仅记录起点，抬手时整体按 tap/swipe 提交
+    if (playerSettings.injectMode.value === 'adb') {
+      // adb：抬手时按 tap/swipe 一次性提交，down 仅记录起点
+      return
+    }
     send(packer.touch(ACTION_DOWN, POINTER_MOUSE, x, y, 1.0, 0x1, 0x1))
     opts.onTouch?.({ kind: 'down', x: x / packer.deviceWidth, y: y / packer.deviceHeight })
   }
@@ -475,6 +501,14 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     if (!mouseDown)
       return
     e.preventDefault()
+    const mode = playerSettings.injectMode.value
+    if (mode === 'hid' || mode === 'adb') {
+      // tap/swipe 抬手时整体提交，move 期间仅采样轨迹
+      const { x, y } = toDevice(e.clientX, e.clientY)
+      sampleDrag(x, y)
+      opts.onTouch?.({ kind: 'move', x: x / packer.deviceWidth, y: y / packer.deviceHeight })
+      return
+    }
     const { x, y } = toDevice(e.clientX, e.clientY)
     sampleDrag(x, y)
     sendMouseMove(x, y)
@@ -495,6 +529,30 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
       return
     mouseDown = false
     const { x, y } = toDevice(e.clientX, e.clientY)
+    const mode = playerSettings.injectMode.value
+    if (mode === 'hid' || mode === 'adb') {
+      const start = mouseDownPos
+      const dx = start ? x - start.x : 0
+      const dy = start ? y - start.y : 0
+      if (start && Math.sqrt(dx * dx + dy * dy) >= 15) {
+        if (mode === 'hid')
+          sendHidPointer('swipe', start.x, start.y, x, y)
+        else
+          submitAdbPointer('swipe', start.x, start.y, x, y)
+      }
+      else {
+        if (mode === 'hid')
+          sendHidPointer('tap', x, y, x, y)
+        else
+          submitAdbPointer('tap', x, y, x, y)
+      }
+      opts.onTouch?.({ kind: 'tap', x: x / packer.deviceWidth, y: y / packer.deviceHeight })
+      logTapSwipe(mouseDownPos, mouseDownTime, x, y)
+      mouseDownPos = null
+      lastMousePoint = null
+      dragPath = []
+      return
+    }
     sendMouseMove(x, y)
     send(packer.touch(ACTION_UP, POINTER_MOUSE, x, y, 0.0, 0, 0))
     opts.onTouch?.({ kind: 'up', x: x / packer.deviceWidth, y: y / packer.deviceHeight })
@@ -502,6 +560,22 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     mouseDownPos = null
     lastMousePoint = null
     dragPath = []
+  }
+
+  /** adb 模式手动触摸：经动作队列以 adb shell input 执行（后端按全局默认或请求 mode 分发）。 */
+  function submitAdbPointer(kind: 'tap' | 'swipe', x1: number, y1: number, x2: number, y2: number) {
+    if (!ws || ws.readyState !== WebSocket.OPEN)
+      return
+    const dw = packer.deviceWidth || 1
+    const dh = packer.deviceHeight || 1
+    ws.send(JSON.stringify({
+      type: 'input.pointer',
+      action: kind,
+      x: +(x1 / dw).toFixed(6),
+      y: +(y1 / dh).toFixed(6),
+      x2: +(x2 / dw).toFixed(6),
+      y2: +(y2 / dh).toFixed(6),
+    }))
   }
 
   function onWheel(e: WheelEvent) {
@@ -530,6 +604,9 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     lastTouchPoint = { x, y }
     touchStartTime = Date.now()
     beginDrag(x, y)
+    const mode = playerSettings.injectMode.value
+    if (mode === 'hid' || mode === 'adb')
+      return // 抬手时按 tap/swipe 整体提交
     send(packer.touch(ACTION_DOWN, POINTER_FINGER_BASE, x, y, t.force || 1.0))
     opts.onTouch?.({ kind: 'down', x: x / packer.deviceWidth, y: y / packer.deviceHeight })
   }
@@ -541,6 +618,11 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     const t = e.touches[0]
     const { x, y } = toDevice(t.clientX, t.clientY)
     sampleDrag(x, y)
+    const mode = playerSettings.injectMode.value
+    if (mode === 'hid' || mode === 'adb') {
+      opts.onTouch?.({ kind: 'move', x: x / packer.deviceWidth, y: y / packer.deviceHeight })
+      return
+    }
     sendTouchMove(x, y, t.force || 1.0)
     opts.onTouch?.({ kind: 'move', x: x / packer.deviceWidth, y: y / packer.deviceHeight })
   }
@@ -558,6 +640,30 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     touchActive = false
     const t = e.changedTouches[0]
     const { x, y } = toDevice(t.clientX, t.clientY)
+    const mode = playerSettings.injectMode.value
+    if (mode === 'hid' || mode === 'adb') {
+      const start = touchStartPos
+      const dx = start ? x - start.x : 0
+      const dy = start ? y - start.y : 0
+      if (start && Math.sqrt(dx * dx + dy * dy) >= 15) {
+        if (mode === 'hid')
+          sendHidPointer('swipe', start.x, start.y, x, y)
+        else
+          submitAdbPointer('swipe', start.x, start.y, x, y)
+      }
+      else {
+        if (mode === 'hid')
+          sendHidPointer('tap', x, y, x, y)
+        else
+          submitAdbPointer('tap', x, y, x, y)
+      }
+      opts.onTouch?.({ kind: 'tap', x: x / packer.deviceWidth, y: y / packer.deviceHeight })
+      logTapSwipe(touchStartPos, touchStartTime, x, y)
+      touchStartPos = null
+      lastTouchPoint = null
+      dragPath = []
+      return
+    }
     sendTouchMove(x, y, t.force || 1.0)
     send(packer.touch(ACTION_UP, POINTER_FINGER_BASE, x, y, 0))
     opts.onTouch?.({ kind: 'up', x: x / packer.deviceWidth, y: y / packer.deviceHeight })

@@ -22,6 +22,7 @@ import (
 )
 
 type managedSession struct {
+	h               *Hub
 	sess            *session
 	meta            *handshakeMeta
 	replay          bool // true when serving an MP4 replay instead of live scrcpy
@@ -46,6 +47,7 @@ type managedSession struct {
 	frames          uint64
 	dropped         uint64
 	lastFrame       time.Time
+	hidTouchReady   bool // HID digitizer 已在设备端创建（模式 hid 下懒创建一次）
 }
 
 const sharedVideoQueueSize = 64
@@ -148,7 +150,7 @@ func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, fu
 		h.recordEvent(debuglog.Event{Type: "session.start_failed", DeviceID: serial, Message: err.Error()})
 		return nil, nil, nil, err
 	}
-	ms := &managedSession{sess: sess, meta: meta, refs: call.waiters, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), clipboardSubs: make(map[chan string]struct{}), audioAvailable: meta.AudioAvailable, audioReason: meta.AudioReason, width: meta.Width, height: meta.Height}
+	ms := &managedSession{h: h, sess: sess, meta: meta, refs: call.waiters, subs: make(map[chan sharedVideoFrame]struct{}), audioSubs: make(map[chan sharedAudioPacket]struct{}), clipboardSubs: make(map[chan string]struct{}), audioAvailable: meta.AudioAvailable, audioReason: meta.AudioReason, width: meta.Width, height: meta.Height}
 	ms.actions = action.New(deviceActionExecutor{ms: ms, gate: h.gateFor(serial), touch: touchPublisher{h: h, serial: serial, sessionID: meta.SessionID}, commands: h.commands}, 64)
 	if h.sessions == nil {
 		h.sessions = make(map[string]*managedSession)
@@ -558,6 +560,8 @@ type deviceActionExecutor struct {
 	gate     *devicegate.Gate
 	touch    touchPublisher
 	commands *adbcommand.Manager
+	// mode 为空时用会话/全局默认；Vision 与 HTTP 提交可按请求覆盖。
+	mode string
 }
 
 func (e deviceActionExecutor) Execute(ctx context.Context, r action.Request) error {
@@ -567,6 +571,74 @@ func (e deviceActionExecutor) Execute(ctx context.Context, r action.Request) err
 	return e.execute(ctx, r)
 }
 
+// defaultMode 返回该会话动作的默认注入模式：执行器自带配置优先，
+// 否则取 Hub 挂载的全局设置；都为空回落 sdk。
+func (e deviceActionExecutor) defaultMode() string {
+	if e.mode != "" {
+		return e.mode
+	}
+	if e.ms != nil && e.ms.h != nil {
+		if mode := e.ms.h.defaultMode(); mode != "" {
+			return mode
+		}
+	}
+	return action.ModeSDK
+}
+
+// executeHID 在 UHID 虚拟触摸屏上执行 tap / swipe；key/text 不走 HID
+// （Android HID 键盘映射有限且文本注入无意义），回落 sdk 注入。
+func (e deviceActionExecutor) executeHID(ctx context.Context, r action.Request) error {
+	// Replay sessions have no control socket; reject input instead of
+	// dereferencing a nil connection.
+	if e.ms.sess == nil || e.ms.sess.conn == nil {
+		return errors.New("replay_mode")
+	}
+	e.ms.mu.Lock()
+	width, height := e.ms.width, e.ms.height
+	e.ms.mu.Unlock()
+	if width == 0 {
+		width = 1080
+	}
+	if height == 0 {
+		height = 1920
+	}
+	w, h := uint16(width), uint16(height)
+
+	switch r.Action {
+	case "tap":
+		x := clampInt32(int32(math.Round(r.X*float64(width))), 0, int32(width)-1)
+		y := clampInt32(int32(math.Round(r.Y*float64(height))), 0, int32(height)-1)
+		e.ms.controlMu.Lock()
+		defer e.ms.controlMu.Unlock()
+		// HID 通道自带拟人节奏（高斯偏移 + 随机压力 + 随机按压时长），
+		// Humanize 参数在其中已生效，无需单独分支。
+		if err := e.hidTap(x, y, w, h); err != nil {
+			return err
+		}
+		e.touch.emit("tap", r.X, r.Y, 0, 0, r.Source)
+		return nil
+	case "swipe":
+		x1 := clampInt32(int32(math.Round(r.X*float64(width))), 0, int32(width)-1)
+		y1 := clampInt32(int32(math.Round(r.Y*float64(height))), 0, int32(height)-1)
+		x2 := clampInt32(int32(math.Round(r.X2*float64(width))), 0, int32(width)-1)
+		y2 := clampInt32(int32(math.Round(r.Y2*float64(height))), 0, int32(height)-1)
+		e.ms.controlMu.Lock()
+		defer e.ms.controlMu.Unlock()
+		if err := e.hidSwipe(x1, y1, x2, y2, w, h); err != nil {
+			return err
+		}
+		e.touch.emit("swipe", r.X, r.Y, r.X2, r.Y2, r.Source)
+		return nil
+	case "key", "text":
+		// HID 键盘映射有限，key/text 仍走 sdk 注入通道。
+		return e.executeSDK(ctx, r)
+	default:
+		return errors.New("unsupported_action_for_hid_mode")
+	}
+}
+
+// execute 解析生效模式并分发到对应注入通道：
+// 请求显式 mode 优先，否则用系统设置默认，最后回落 sdk。
 func (e deviceActionExecutor) execute(ctx context.Context, r action.Request) error {
 	select {
 	case <-ctx.Done():
@@ -574,10 +646,22 @@ func (e deviceActionExecutor) execute(ctx context.Context, r action.Request) err
 	default:
 	}
 
-	if r.Mode == "adb" {
-		return e.executeADB(ctx, r)
+	mode := r.Mode
+	if mode == "" {
+		mode = e.defaultMode()
 	}
 
+	switch mode {
+	case action.ModeADB:
+		return e.executeADB(ctx, r)
+	case action.ModeHID:
+		return e.executeHID(ctx, r)
+	}
+	return e.executeSDK(ctx, r)
+}
+
+// executeSDK 是原有 scrcpy 控制 socket 注入路径。
+func (e deviceActionExecutor) executeSDK(ctx context.Context, r action.Request) error {
 	// Replay sessions have no control socket; reject input instead of
 	// dereferencing a nil connection.
 	if e.ms.sess == nil || e.ms.sess.conn == nil {
