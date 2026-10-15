@@ -2,7 +2,7 @@
   "name": "mywebscrcpy-frontend",
   "packageManager": "pnpm@11.7.0",
   "private": true,
-  "version": "1.21.0",
+  "version": "1.23.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
