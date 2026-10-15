@@ -4,6 +4,7 @@ import SidePanelHeader from '@/components/layout/SidePanelHeader.vue'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ColorTab from './ColorTab.vue'
 import { inspectorTab, setInspector } from './guard'
+import OcrTab from './OcrTab.vue'
 import OpLogTab from './OpLogTab.vue'
 import PageInfoTab from './PageInfoTab.vue'
 import { useInspector } from './useInspector'
@@ -71,14 +72,16 @@ onUnmounted(() => {
   <aside class="flex h-full min-h-0 w-full flex-col overflow-hidden bg-card" aria-label="检查面板">
     <SidePanelHeader title="检查" @close="close()" />
     <Tabs :model-value="inspectorTab" class="flex min-h-0 flex-1 flex-col overflow-hidden" @update:model-value="onTabChange">
-      <TabsList class="mx-3 mt-2 grid shrink-0 grid-cols-4">
+      <TabsList class="mx-3 mt-2 grid shrink-0 grid-cols-5">
         <TabsTrigger value="color" @click="onTabClick('color')">取色</TabsTrigger>
         <TabsTrigger value="xml" @click="onTabClick('xml')">XML</TabsTrigger>
+        <TabsTrigger value="ocr" @click="onTabClick('ocr')">OCR</TabsTrigger>
         <TabsTrigger value="page" @click="onTabClick('page')">页面</TabsTrigger>
         <TabsTrigger value="log" @click="onTabClick('log')">日志</TabsTrigger>
       </TabsList>
       <TabsContent value="color" class="min-h-0 flex-1 overflow-auto"><ColorTab /></TabsContent>
       <TabsContent value="xml" class="min-h-0 flex-1 overflow-hidden"><XmlTab /></TabsContent>
+      <TabsContent value="ocr" class="min-h-0 flex-1 overflow-hidden"><OcrTab /></TabsContent>
       <TabsContent value="page" class="min-h-0 flex-1 overflow-auto"><PageInfoTab /></TabsContent>
       <TabsContent value="log" class="min-h-0 flex-1 overflow-hidden"><OpLogTab /></TabsContent>
     </Tabs>

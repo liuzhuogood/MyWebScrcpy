@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Copy, Download, ImagePlus, Undo2, X } from 'lucide-vue-next'
+import { Copy, Download, ImagePlus, Loader2, ScanText, Undo2, X } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { detectOCR } from '@/api/ocr'
 import { createTemplate } from '@/api/templates'
 import { useCapture } from './useCapture'
 import type { CaptureMode, CaptureShape } from './useCapture'
@@ -407,6 +408,62 @@ async function submitTemplate() {
   }
 }
 
+const ocrOpen = ref(false)
+const ocrBusy = ref(false)
+const ocrText = ref('')
+const ocrBoxes = ref<any[]>([])
+
+function copyText(text: string) {
+  navigator.clipboard.writeText(text).then(
+    () => toast.success('已复制文本'),
+    () => toast.error('复制失败'),
+  )
+}
+
+async function runOcr() {
+  const blob = await cap.toBlob()
+  if (!blob) {
+    toast.error('生成选区图像失败')
+    return
+  }
+  const canvas = props.getCanvas()
+  const b = cap.bounds()
+  const normBBox = canvas?.width && canvas.height && b
+    ? [
+        Math.max(0, Math.min(1, b.x / canvas.width)),
+        Math.max(0, Math.min(1, b.y / canvas.height)),
+        Math.max(0, Math.min(1, b.width / canvas.width)),
+        Math.max(0, Math.min(1, b.height / canvas.height)),
+      ]
+    : [0, 0, 1, 1]
+
+  const form = new FormData()
+  form.append('file', blob, 'crop.png')
+  form.append('serial', props.serial)
+  form.append('mark', 'true')
+  form.append('bbox', JSON.stringify(normBBox))
+
+  ocrBusy.value = true
+  try {
+    const res = await detectOCR(form)
+    ocrText.value = res.text || ''
+    ocrBoxes.value = res.boxes || []
+    ocrOpen.value = true
+    if (!res.text) {
+      toast('选区内未识别到文字')
+    }
+    else {
+      toast.success(`识别完成 (${res.boxes?.length || 0} 处文本)`)
+    }
+  }
+  catch (e) {
+    toast.error(e instanceof Error ? e.message : 'OCR 识别失败')
+  }
+  finally {
+    ocrBusy.value = false
+  }
+}
+
 function close() {
   if (tplUrl) {
     URL.revokeObjectURL(tplUrl)
@@ -560,11 +617,29 @@ onUnmounted(() => {
       <Button size="sm" variant="secondary" class="h-7 text-xs" @click="saveDownload()"><Download class="h-3.5 w-3.5" />保存</Button>
       <Button size="sm" variant="secondary" class="h-7 text-xs" :disabled="cap.shape.value !== 'freehand' || !cap.canUndo.value" @click="cap.undo()"><Undo2 class="h-3.5 w-3.5" />撤销</Button>
       <Button size="sm" variant="secondary" class="h-7 text-xs" @click="copyImage()"><Copy class="h-3.5 w-3.5" />复制</Button>
+      <Button size="sm" variant="secondary" class="h-7 text-xs" :disabled="ocrBusy" @click="runOcr()"><Loader2 v-if="ocrBusy" class="h-3.5 w-3.5 animate-spin" /><ScanText v-else class="h-3.5 w-3.5" />OCR</Button>
       <Button size="sm" variant="secondary" class="h-7 text-xs" @click="copyBbox()">BBOX</Button>
       <Button size="sm" variant="secondary" class="h-7 text-xs" @click="openSaveTemplate()"><ImagePlus class="h-3.5 w-3.5" />存为模板</Button>
       <Button size="sm" variant="ghost" class="h-7 text-xs" @click="close()"><X class="h-3.5 w-3.5" />取消</Button>
     </div>
     </Teleport>
+
+    <!-- OCR 识别结果 -->
+    <Dialog v-model:open="ocrOpen">
+      <DialogContent @pointerdown.stop @pointermove.stop @pointerup.stop>
+        <DialogHeader>
+          <DialogTitle>选区 OCR 识别结果</DialogTitle>
+          <DialogDescription>选区文字已在屏幕上叠加绿框显示。</DialogDescription>
+        </DialogHeader>
+        <div class="max-h-60 overflow-y-auto rounded-md border bg-muted/40 p-3 font-mono text-xs">
+          <pre class="whitespace-pre-wrap">{{ ocrText || '未识别到文字' }}</pre>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" @click="ocrOpen = false">关闭</Button>
+          <Button :disabled="!ocrText" @click="copyText(ocrText)">复制识别文本</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <!-- 存为模板 -->
     <Dialog v-model:open="saveOpen">

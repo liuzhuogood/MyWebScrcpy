@@ -10,9 +10,10 @@ import { theme } from '@/composables/useTheme'
 import { useDesktopConfig } from '@/composables/useDesktopConfig'
 import DependencyPanel from '@/components/dependencies/DependencyPanel.vue'
 import MatchingServicePanel from './MatchingServicePanel.vue'
+import OcrServicePanel from './OcrServicePanel.vue'
 import PlayerSettingsContent from './PlayerSettingsContent.vue'
 
-const props = defineProps<{ initialTab?: 'general' | 'player' | 'theme' | 'service' | 'dependencies' | 'matching' }>()
+const props = defineProps<{ initialTab?: 'general' | 'player' | 'theme' | 'service' | 'dependencies' | 'matching' | 'ocr' }>()
 
 const open = defineModel<boolean>('open', { default: false })
 const tab = ref('general')
@@ -32,12 +33,13 @@ watch(open, (value) => {
       <DialogHeader class="shrink-0 border-b px-5 py-4"><DialogTitle>系统设置</DialogTitle></DialogHeader>
       <Tabs v-model="tab" class="flex min-h-0 flex-1 flex-col gap-0">
         <div class="shrink-0 px-5 pt-4">
-          <TabsList class="grid w-full grid-cols-5">
+          <TabsList class="grid w-full grid-cols-6">
             <TabsTrigger value="general">通用设置</TabsTrigger>
             <TabsTrigger value="player">投屏设置</TabsTrigger>
             <TabsTrigger value="service">服务</TabsTrigger>
             <TabsTrigger value="dependencies">依赖</TabsTrigger>
             <TabsTrigger value="matching">模板匹配</TabsTrigger>
+            <TabsTrigger value="ocr">OCR 服务</TabsTrigger>
           </TabsList>
         </div>
         <div v-if="tab !== 'dependencies'" class="min-h-0 overflow-y-auto px-5 py-5">
@@ -49,6 +51,7 @@ watch(open, (value) => {
           </TabsContent>
           <TabsContent value="player" class="m-0"><PlayerSettingsContent /></TabsContent>
           <TabsContent value="matching" class="m-0"><MatchingServicePanel v-if="open" /></TabsContent>
+          <TabsContent value="ocr" class="m-0"><OcrServicePanel v-if="open" /></TabsContent>
           <TabsContent value="service" class="m-0 space-y-4">
             <div class="space-y-3 rounded-lg border p-4">
               <div class="flex items-center justify-between gap-3">

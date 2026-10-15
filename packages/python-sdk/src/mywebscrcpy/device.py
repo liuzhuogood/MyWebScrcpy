@@ -131,6 +131,137 @@ class Device:
         from .watch import Watch
         return Watch(self, publish=publish, max_fps=max_fps, timeout=timeout)
 
+    def ocr(
+        self,
+        bbox: list[float] | tuple[float, float, float, float] | None = None,
+        *,
+        keywords: list[str] | str | None = None,
+        mark: bool = False,
+        mark_duration_ms: int = 3000,
+        engine: str = "auto",
+        macocr_url: str | None = None,
+        macocr_auth: str | None = None,
+        paddleocr_url: str | None = None,
+        timeout: float = 10,
+    ):
+        from .ocr import OCRBox, OCRResult, crop_image, perform_ocr
+        deadline = Deadline(timeout)
+        started = time.monotonic()
+        frame = self._session(deadline, video=True).current_frame(deadline)
+        image = frame.image
+
+        norm_bbox = list(bbox) if bbox is not None else [0.0, 0.0, 1.0, 1.0]
+        if len(norm_bbox) != 4 or any(not (0 <= v <= 1) for v in norm_bbox):
+            raise ValueError("bbox 必须包含 4 个 0 到 1 之间的数值 [x, y, w, h]")
+
+        crop, _ = crop_image(image, norm_bbox)
+        result, engine_used, errors = perform_ocr(
+            crop,
+            engine=engine,
+            macocr_url=macocr_url,
+            macocr_auth=macocr_auth,
+            paddleocr_url=paddleocr_url,
+            timeout=deadline.remaining(FrameTimeout),
+        )
+
+        wanted = []
+        if isinstance(keywords, str):
+            wanted = [k.strip().casefold() for k in keywords.split(",") if k.strip()]
+        elif isinstance(keywords, (list, tuple)):
+            wanted = [str(k).strip().casefold() for k in keywords if str(k).strip()]
+
+        ch, cw = crop.shape[:2]
+        ox, oy, ow, oh = norm_bbox
+        boxes: list[OCRBox] = []
+        for raw in result.get("ocr_boxes", []):
+            text = str(raw.get("text", "")).strip()
+            if not text:
+                continue
+            if wanted and not any(k in text.casefold() for k in wanted):
+                continue
+            rx, ry = float(raw.get("x", 0)), float(raw.get("y", 0))
+            rw, rh = float(raw.get("w", 0)), float(raw.get("h", 0))
+            # 兼容像素坐标与已归一化坐标
+            if max(abs(rx), abs(ry), abs(rw), abs(rh)) > 1.0:
+                nx, ny = rx / max(cw, 1), ry / max(ch, 1)
+                nw, nh = rw / max(cw, 1), rh / max(ch, 1)
+                px, py, pw, ph = round(rx), round(ry), round(rw), round(rh)
+            else:
+                nx, ny, nw, nh = rx, ry, rw, rh
+                px, py, pw, ph = round(rx * cw), round(ry * ch), round(rw * cw), round(rh * ch)
+
+            gx = ox + nx * ow
+            gy = oy + ny * oh
+            gw = nw * ow
+            gh = nh * oh
+            boxes.append(
+                OCRBox(
+                    text=text,
+                    confidence=float(raw.get("confidence", 1.0)),
+                    x=gx,
+                    y=gy,
+                    w=gw,
+                    h=gh,
+                    pixel_x=px,
+                    pixel_y=py,
+                    pixel_w=pw,
+                    pixel_h=ph,
+                )
+            )
+
+        full_text = str(result.get("ocr_result", "")).strip()
+        ocr_result = OCRResult(
+            status="matched" if boxes else "not_found",
+            matched=bool(boxes),
+            text=full_text,
+            boxes=boxes,
+            engine=engine_used,
+            frame_id=frame.frame_id,
+            elapsed_ms=round((time.monotonic() - started) * 1000),
+            fallback_reason=errors,
+        )
+
+        if mark and boxes:
+            self._session(deadline).publish_current(frame, boxes, expires_ms=mark_duration_ms)
+
+        return ocr_result
+
+    def tap_text(self, text: str, *, timeout: float = 10, **kwargs):
+        """识别并点击指定文本所在中心位置。"""
+        res = self.ocr(keywords=[text], timeout=timeout, **kwargs)
+        matched = res.find(text)
+        if not matched:
+            raise MatchTimeout(f"未在画面中找到文字: {text}")
+        target = max(matched, key=lambda b: b.confidence)
+        return self.tap(target.center, timeout=timeout)
+
+    def wait_for_text(self, text: str, *, timeout: float = 10, interval: float = 0.5, **kwargs):
+        """持续识别画面，直到出现指定文字或达到超时；找到时返回 OCRResult。"""
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError("text 必须为非空字符串")
+        total = _seconds(timeout)
+        if type(interval) not in {int, float} or not math.isfinite(interval) or not 0 < interval <= 60:
+            raise ValueError("interval 必须在 0 到 60 秒之间")
+
+        end = time.monotonic() + total
+        while True:
+            self._check_open()
+            remaining = end - time.monotonic()
+            if remaining <= 0:
+                raise MatchTimeout(f"{total:g} 秒内未找到文字: {text}")
+            try:
+                result = self.ocr(keywords=text, timeout=remaining, **kwargs)
+            except FrameTimeout as error:
+                raise MatchTimeout(f"{total:g} 秒内未找到文字: {text}") from error
+            if result.find(text):
+                return result
+
+            remaining = end - time.monotonic()
+            if remaining <= 0:
+                raise MatchTimeout(f"{total:g} 秒内未找到文字: {text}")
+            if self._stop.wait(min(float(interval), remaining)):
+                self._check_open()
+
     @staticmethod
     def _point(point):
         if not isinstance(point, (tuple, list)) or len(point) != 2 or any(type(v) not in {int, float} or not math.isfinite(v) or not 0 <= v <= 1 for v in point):

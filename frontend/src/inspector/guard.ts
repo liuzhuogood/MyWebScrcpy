@@ -4,8 +4,8 @@ import { ref } from 'vue'
 // 用显式状态而非监听器注册顺序，可测、可靠。
 
 export const inspectorOpen = ref(false)
-/** 当前 Tab：color 会固定十字线并吞掉点击；xml 点中绿框时选中节点 */
-export const inspectorTab = ref<'color' | 'xml' | 'page' | 'log'>('color')
+/** 当前 Tab：color 会固定十字线并吞掉点击；xml 点中绿框时选中节点；ocr 展示文字识别 */
+export const inspectorTab = ref<'color' | 'xml' | 'ocr' | 'page' | 'log'>('color')
 
 export function setInspector(open: boolean, tab: typeof inspectorTab.value = 'color') {
   inspectorOpen.value = open

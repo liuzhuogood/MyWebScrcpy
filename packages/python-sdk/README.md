@@ -38,7 +38,16 @@ with Client('http://HOST:PORT') as client:
         result = device.tap_match(target, max_age_ms=600)
 ```
 
-`frame()` 等待调用后到达的新画面。重放的缓存关键帧只初始化解码，不满足取帧请求；静止画面可能超时。`match()` 正常未命中返回 `[]`，`wait_for()` 到期抛 `MatchTimeout`。仅支持模板主图片与 `TM_CCOEFF_NORMED`；未知算法、禁用模板、其他设备模板明确报错。多参考图不会自动聚合，无 OCR。
+`frame()` 等待调用后到达的新画面。重放的缓存关键帧只初始化解码，不满足取帧请求；静止画面可能超时。`match()` 正常未命中返回 `[]`，`wait_for()` 到期抛 `MatchTimeout`。仅支持模板主图片与 `TM_CCOEFF_NORMED`；未知算法、禁用模板、其他设备模板明确报错。多参考图不会自动聚合。
+
+OCR 可直接用于脚本判断当前画面或等待文字出现：
+
+```python
+result = device.wait_for_text("登录", timeout=15, interval=0.5)
+print(result.matched, result.text)
+```
+
+`wait_for_text()` 每隔 `interval` 秒识别一次，找到包含文字的结果后返回 `OCRResult`；超过 `timeout` 秒抛出 `MatchTimeout`。`device.ocr(keywords="登录", timeout=10)` 只识别一次当前画面。两种方法都可通过 `bbox`、`engine` 等参数限定识别范围或引擎。
 
 `Frame.image` 为只读 uint8 BGR ndarray。`Match` 带模板 ID、名称、置信度、归一化框及 `center`、来源设备/会话/连接/重置代数、帧 ID 和本地接收时间。`tap_match()` 拒绝旧连接、旧配置与过期结果；仍不能消除画面变化与点击之间的竞态。
 
@@ -50,6 +59,8 @@ with Client('http://HOST:PORT') as client:
 | `client.templates.import_zip/export_zip` | ZIP bytes；导入使用 multipart `file` + `serial` |
 | `device.adb(args, timeout=30)` | 明确参数数组；不含 adb 或宿主/设备选择参数；检查真实退出状态 |
 | `device.page_info(timeout=10)` | 返回正整数 width/height |
+| `device.ocr(keywords=None, timeout=10)` | 识别当前画面；`keywords` 可筛选文字框，返回 `OCRResult` |
+| `device.wait_for_text(text, timeout=10, interval=0.5)` | 轮询 OCR 直到找到文字并返回结果；总期限到达时抛 `MatchTimeout` |
 | `device.tap(point)` / `swipe(start, end, duration_ms=300)` | 归一化坐标 0..1；滑动时长为毫秒 |
 | `device.key(keycode, meta_state=0)` / `text(text)` | uint32 按键；文本最多 300 UTF-8 字节，具体字符输入能力需设备验证 |
 | `Matcher.match_image(image, template, ...)` | 内存 BGR 图像离线匹配，无网络，返回归一化框与分数 |

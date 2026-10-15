@@ -1,6 +1,7 @@
 import { computed, inject, onUnmounted, provide, ref } from 'vue'
 import type { InjectionKey, Ref } from 'vue'
 import { fetchPageInfo, fetchXml, type PageInfo } from '@/api/ui'
+import { detectOCR, type OCRDetectResponse } from '@/api/ocr'
 import { inspectorOpen, inspectorTab, xmlHitTest } from './guard'
 import { evalXPath, makeXPath, measureBasis, parseXml, toBox, type Box } from './xmlUtils'
 
@@ -43,6 +44,12 @@ export interface InspectorContext {
   pageError: Ref<string>
   pageInfo: Ref<PageInfo | null>
   loadPageInfo: () => Promise<void>
+  // OCR
+  ocrLoading: Ref<boolean>
+  ocrResult: Ref<OCRDetectResponse | null>
+  ocrError: Ref<string>
+  runOcr: () => Promise<void>
+  clearOcr: () => void
 }
 
 const key: InjectionKey<InspectorContext> = Symbol('inspector')
@@ -407,6 +414,103 @@ export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElem
     }
   }
 
+  // ---------- OCR ----------
+  const ocrLoading = ref(false)
+  const ocrResult = ref<OCRDetectResponse | null>(null)
+  const ocrError = ref('')
+
+async function cropCanvasRegion(
+  sourceCanvas: HTMLCanvasElement,
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+): Promise<Blob | null> {
+  if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
+    const cropCanvas = document.createElement('canvas')
+    cropCanvas.width = width
+    cropCanvas.height = height
+    const ctx = cropCanvas.getContext('2d')
+    if (ctx) {
+      ctx.drawImage(sourceCanvas, left, top, width, height, 0, 0, width, height)
+      return new Promise<Blob | null>(resolve => cropCanvas.toBlob(resolve, 'image/png'))
+    }
+  }
+  return null
+}
+
+  async function runOcr() {
+    ocrError.value = ''
+    const canvas = getCanvas()
+    if (!canvas?.width || !canvas.height) {
+      ocrError.value = '投屏画面未就绪'
+      return
+    }
+
+    let bbox: [number, number, number, number] = [0, 0, 1, 1]
+    let blob: Blob | null = null
+
+    if (selectedNode.value) {
+      const box = toBox(selectedNode.value, basis.value, canvas.width, canvas.height)
+      if (!box || ![box.x, box.y, box.w, box.h].every(Number.isFinite) || box.w <= 0 || box.h <= 0) {
+        ocrError.value = '无法确定选中元素的画面区域'
+        return
+      }
+
+      const left = Math.max(0, Math.min(canvas.width, Math.floor(box.x)))
+      const top = Math.max(0, Math.min(canvas.height, Math.floor(box.y)))
+      const right = Math.max(0, Math.min(canvas.width, Math.ceil(box.x + box.w)))
+      const bottom = Math.max(0, Math.min(canvas.height, Math.ceil(box.y + box.h)))
+      if (right <= left || bottom <= top) {
+        ocrError.value = '选中元素不在当前画面内'
+        return
+      }
+
+      const cropW = right - left
+      const cropH = bottom - top
+      bbox = [left / canvas.width, top / canvas.height, cropW / canvas.width, cropH / canvas.height]
+      try {
+        blob = await cropCanvasRegion(canvas as HTMLCanvasElement, left, top, cropW, cropH)
+      }
+      catch {
+        ocrError.value = '截取选中区域失败'
+        return
+      }
+    }
+    else {
+      blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'))
+    }
+
+    if (!blob) {
+      ocrError.value = '截取投屏画面失败'
+      return
+    }
+
+    const form = new FormData()
+    form.append('file', blob, selectedNode.value ? 'crop.png' : 'screen.png')
+    form.append('serial', serial)
+    form.append('mark', 'true')
+    form.append('bbox', JSON.stringify(bbox))
+
+    ocrLoading.value = true
+    ocrError.value = ''
+    try {
+      const res = await detectOCR(form)
+      ocrResult.value = res
+    }
+    catch (e) {
+      ocrError.value = e instanceof Error ? e.message : 'OCR 识别失败'
+    }
+    finally {
+      ocrLoading.value = false
+    }
+  }
+
+  function clearOcr() {
+    ocrResult.value = null
+    ocrError.value = ''
+  }
+
   // ---------- 清理 ----------
   function closeInspector() {
     xmlHitTest.fn = null
@@ -415,6 +519,7 @@ export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElem
     selectNode(null)
     clearXpath()
     clearOverlay()
+    clearOcr()
   }
 
   onUnmounted(() => {
@@ -459,6 +564,11 @@ export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElem
     pageError,
     pageInfo,
     loadPageInfo,
+    ocrLoading,
+    ocrResult,
+    ocrError,
+    runOcr,
+    clearOcr,
   }
   provide(key, ctx)
   return ctx

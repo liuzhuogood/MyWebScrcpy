@@ -25,6 +25,7 @@ import (
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/matchingservice"
 	"mywebscrcpy/internal/mdscript"
+	"mywebscrcpy/internal/ocr"
 	"mywebscrcpy/internal/operationlog"
 	"mywebscrcpy/internal/pibundle"
 	"mywebscrcpy/internal/scheduler"
@@ -274,6 +275,9 @@ func main() {
 	templateService := template.NewService(templateStorage)
 	defer templateService.Stop()
 	template.RegisterRoutes(mux, templateService)
+	ocrService := ocr.NewService(database, hub)
+	defer ocrService.StopPaddle()
+	ocrService.RegisterRoutes(mux)
 	matchingManager = matchingservice.New(matchingservice.Options{
 		Python: dependencies.AcquirePython,
 		Devices: func() []string {
