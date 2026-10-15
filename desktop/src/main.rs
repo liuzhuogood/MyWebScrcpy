@@ -5,10 +5,13 @@ mod backend;
 mod embedded_service;
 mod links;
 mod menu;
+mod player_windows;
 mod update_backup;
 mod updater;
 #[cfg(feature = "native-verify")]
 mod verify;
+#[cfg(feature = "native-verify")]
+mod verify_players;
 
 use std::{
     path::PathBuf,
@@ -69,6 +72,7 @@ fn main() {
         }
     };
     let builder = tauri::Builder::default()
+        .manage(player_windows::PlayerWindows::default())
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
             menu::show(app);
             if let Some(index) = args.iter().position(|value| value == "--launcher-ready") {
@@ -82,6 +86,10 @@ fn main() {
             links::open_device_window,
             links::set_window_always_on_top,
             links::is_window_always_on_top,
+            player_windows::list_player_windows,
+            player_windows::set_player_opacity,
+            player_windows::set_player_click_through,
+            player_windows::restore_player_window,
             updater::desktop_check_update,
             updater::desktop_upgrade
         ])
@@ -100,11 +108,16 @@ fn main() {
                     .permission("allow-open-device-window")
                     .permission("allow-set-window-always-on-top")
                     .permission("allow-is-window-always-on-top")
+                    .permission("allow-list-player-windows")
+                    .permission("allow-set-player-opacity")
+                    .permission("allow-set-player-click-through")
+                    .permission("allow-restore-player-window")
  .permission("allow-desktop-check-update")
  .permission("allow-desktop-upgrade"),
             )?;
  let token=serde_json::to_string(&backend.ready.token)?;
             app.manage(State { backend: Mutex::new(Some(backend)), url: url.clone(), tray_available: AtomicBool::new(false) });
+            player_windows::install(app.handle());
             let local_origin = url.parse().map_err(std::io::Error::other)?;
             let navigation_app=app.handle().clone();
  let popup_app=app.handle().clone();
@@ -139,6 +152,9 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            if matches!(event, WindowEvent::Destroyed) {
+                player_windows::forget(window.app_handle(), window.label());
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
                     let state = window.state::<State>();

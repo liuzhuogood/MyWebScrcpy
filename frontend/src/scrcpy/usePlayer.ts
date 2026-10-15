@@ -66,7 +66,7 @@ interface WsMeta {
 export interface TouchVisualEvent { kind: 'down' | 'move' | 'up' | 'tap' | 'swipe', x: number, y: number, x2?: number, y2?: number }
 
 /** 投屏连接：WS 生命周期 + 解码 + 输入 + 工具栏动作，视图只做渲染 */
-export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: OpPayload) => void, onTouch?: (event: TouchVisualEvent) => void } = {}) {
+export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: OpPayload) => void, onTouch?: (event: TouchVisualEvent) => void, onDisconnect?: () => void } = {}) {
   const playerSettings = usePlayerSettings()
   const op = (type: OpType, data: OpPayload) => opts.onOp?.(type, data)
   const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -227,6 +227,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   function handleStreamLoss(message: string) {
     if (!connected && reconnectTimer !== undefined)
       return
+    if (connected) opts.onDisconnect?.()
     connected = false
     clearWatchdog()
     closeWebSocket()
@@ -264,6 +265,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
       console.log('[ws] closed')
       ws = null
       clearConnectTimer()
+      if (connected) opts.onDisconnect?.()
       connected = false
       clearWatchdog()
       if (reconnectAttempts < MAX_RECONNECT) {

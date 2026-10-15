@@ -129,3 +129,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+html.desktop-player,
+html.desktop-player body {
+  background: transparent;
+}
+
+html.desktop-player #app {
+  opacity: var(--player-opacity, 1);
+}

@@ -29,6 +29,7 @@ pub fn open_device_window(
     let label = format!("player-{}", safe_serial);
 
     if let Some(existing) = app.get_webview_window(&label) {
+        crate::player_windows::restore(&app, &label)?;
         let _ = existing.show();
         let _ = existing.unminimize();
         let _ = existing.set_focus();
@@ -60,10 +61,23 @@ pub fn open_device_window(
         .title(win_title)
         .inner_size(w, h)
         .min_inner_size(240.0, 360.0)
+        .transparent(true)
+        .on_page_load(|window, payload| {
+            if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
+                if let Err(error) = crate::player_windows::restore(window.app_handle(), window.label()) {
+                    eprintln!("[Desktop] 页面加载后恢复小窗失败: {error}");
+                }
+            }
+        })
         .initialization_script(&token_script)
         .initialization_script(CLICK_SCRIPT);
 
-    builder.build().map_err(|e| e.to_string())?;
+    // Track before loading so the first frontend snapshot already has this window.
+    crate::player_windows::track(&app, &label, &serial)?;
+    if let Err(error) = builder.build() {
+        crate::player_windows::forget(&app, &label);
+        return Err(error.to_string());
+    }
     Ok(())
 }
 

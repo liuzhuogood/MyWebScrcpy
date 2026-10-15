@@ -33,6 +33,7 @@ import {
 } from 'lucide-vue-next'
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { invoke, isTauri } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useElementSize } from '@vueuse/core'
 import { RouterLink } from 'vue-router'
 import {
@@ -76,6 +77,8 @@ import AdbShellPanel from '@/scrcpy/AdbShellPanel.vue'
 import SplitLayout from '@/components/layout/SplitLayout.vue'
 import FilesView from '@/views/FilesView.vue'
 import PlayerSettingsPanel from '@/components/player/PlayerSettingsPanel.vue'
+import WindowEffectsControl from '@/components/player/WindowEffectsControl.vue'
+import { usePlayerWindows } from '@/composables/usePlayerWindows'
 import TemplatePanel from '@/template/TemplatePanel.vue'
 import { useTemplateMatches } from '@/template/useTemplateMatches'
 import { useDesktopConfig } from '@/composables/useDesktopConfig'
@@ -87,6 +90,8 @@ const emit = defineEmits<{
   layout: [layout: { width: number, height: number, side: 'capture' | 'tools' | null }]
 }>()
 const serial = computed(() => props.serial)
+const windowEffects = usePlayerWindows(serial)
+const nativePlayerWindow = isTauri() && getCurrentWindow().label.startsWith('player-')
 const desktopConfig = useDesktopConfig()
 const isGui = computed(() => {
   return desktopConfig.isDesktop.value || Boolean(
@@ -102,6 +107,10 @@ const p = usePlayer(serial.value, {
     recordOp(serial.value, type, data)
   },
   onTouch: event => touchVisualizerRef.value?.handle(event),
+  onDisconnect: () => {
+    if (props.embedded && nativePlayerWindow)
+      void windowEffects.restore()
+  },
 })
 const showPip = computed(() => !isGui.value && p.pipSupported.value)
 const ins = provideInspector(serial.value, () => p.canvasRef.value)
@@ -360,6 +369,16 @@ defineExpose({ handleEscape })
 
       <!-- 小窗模式专属精简工具栏：默认只显示 置顶(GUI)、返回、主页、切换 + 更多；过窄时全部收入更多 -->
       <div v-if="embedded" class="ml-auto flex shrink-0 items-center gap-0.5">
+        <WindowEffectsControl
+          v-if="nativePlayerWindow"
+          :opacity="windowEffects.player.value?.opacity ?? 100"
+          :click-through="windowEffects.player.value?.clickThrough ?? false"
+          :shortcut="windowEffects.shortcut.value"
+          :busy="windowEffects.busy.value"
+          @opacity="windowEffects.setOpacity"
+          @click-through="windowEffects.setClickThrough"
+          @restore="windowEffects.restore"
+        />
         <Button
           v-if="isGui"
           variant="ghost"

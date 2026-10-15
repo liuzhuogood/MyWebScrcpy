@@ -53,7 +53,7 @@
 | [v1.21.0-feature](v1.21.0-feature/version.md) | 第一阶段已实现；补充验收待完成 | Pi 技能生成 Python、可安装 SDK 基础能力、来源校验与有效产物执行；真机及其他平台原生链路未测。 |
 | [v1.23.0-feature](v1.23.0-feature/version.md) | 已发布 v1.23.0 | 系统设置全局手动匹配服务、Python 依赖检测、多设备 SDK 任务与模板面板提示。 |
 | [v1.22.0-feature](v1.22.0-feature/version.md) | 已合入 main，部分验收待完成 | SDK 封装模板资产、Vision 与进程内匹配；接入 Pi sdk-v2，软件测试及只读真机通过，点击、浏览器与原生跨平台验收待完成。 |
-| [v1.24.0-feature](v1.24.0-feature/version.md) | 待实施 | GUI 小窗透明度调节与鼠标穿透：完成技术可行性评估、防死锁时序设计、版本规划与基线分支建立。 |
+| [v1.24.0-feature](v1.24.0-feature/version.md) | 待桌面验收 | GUI 小窗透明度 0%～100% 与鼠标穿透，已实现快捷键、主窗口与托盘恢复入口。 |
 
 ## Vue 前端迁移版本
 
