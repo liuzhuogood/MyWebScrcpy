@@ -1,0 +1,18 @@
+【macOS 提示“已损坏”或“无法验证开发者”解决指引】
+
+如果打开 MyWebScrcpy 时，系统提示以下任一情况：
+1. “MyWebScrcpy 已损坏，无法打开。您应该将它移到废纸篓。”
+2. “无法打开 MyWebScrcpy，因为 Apple 无法检查其是否包含恶意软件。”
+3. “无法打开，因为它来自身份不明的开发者。”
+
+这是 macOS Gatekeeper（门禁安全机制）对未上架 App Store 的开源应用添加的隔离标记导致的，属于正常安全拦截，软件本身安全无害。
+
+【解决办法】
+1. 先将本窗口中的 MyWebScrcpy.app 拖入“应用程序”（Applications）文件夹。
+2. 打开 Mac 自带的“终端”（Terminal）应用（可按快捷键 Command + 空格，搜索“终端”打开）。
+3. 复制并执行以下命令（按回车执行）：
+
+sudo xattr -rd com.apple.quarantine "/Applications/MyWebScrcpy.app"
+
+4. 终端提示“Password:”时，输入您的 Mac 开机登录密码并回车（注：输入密码时终端不会显示字符，属于正常现象，直接输完回车即可）。
+5. 执行完成后，即可正常双击打开 MyWebScrcpy 使用。

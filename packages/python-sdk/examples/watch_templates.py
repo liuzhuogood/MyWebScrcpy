@@ -7,7 +7,7 @@ from mywebscrcpy import Client
 def main():
     parser = argparse.ArgumentParser(description='持续匹配并发布绿框')
     parser.add_argument('serial')
-    parser.add_argument('--base-url', default=os.environ.get('MYWEBSCRCPY_API_URL', ''))
+    parser.add_argument('--base-url', default=os.environ.get('MYWEBSCRCPY_API_URL', 'http://127.0.0.1:8080'))
     parser.add_argument('--token', default=os.environ.get('MYWEBSCRCPY_API_TOKEN', ''))
     parser.add_argument('--max-fps', type=float, default=5)
     parser.add_argument('--timeout', type=float, default=10)

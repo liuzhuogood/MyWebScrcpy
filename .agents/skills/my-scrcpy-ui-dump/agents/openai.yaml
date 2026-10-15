@@ -1,0 +1,3 @@
+interface:
+  display_name: "UI dump 分析"
+  short_description: "结合页面信息分析 UI XML，测试 XPath 并生成唯一定位表达式与脚本思路"

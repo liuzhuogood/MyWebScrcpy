@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readdirSync, mkdtempSync, mkdirSync, copyFileSync, rmSync } from 'node:fs'
+import { readdirSync, mkdtempSync, mkdirSync, copyFileSync, rmSync, existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 import os from 'node:os'
@@ -27,6 +27,7 @@ try {
   mounted = true
   const apps = readdirSync(mount).filter(name => name.endsWith('.app'))
   assert.equal(apps.length, 1, 'DMG 必须包含一个完整 App')
+  assert(existsSync(path.join(mount, '解决打开报错指引.txt')), 'DMG 必须包含解决打开报错指引文档')
   const app = path.join(mount, apps[0]), plist = path.join(app, 'Contents', 'Info.plist')
   const version = run('plutil', ['-extract', 'CFBundleShortVersionString', 'raw', '-o', '-', plist])
   assert.equal(version, tag.slice(1), 'App 版本必须与发布标签一致')

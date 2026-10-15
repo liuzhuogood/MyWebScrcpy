@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, copyFileSync, chmodSync, writeFileSync, readFileSync } from 'node:fs'
+import { mkdirSync, copyFileSync, chmodSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync, mkdtempSync } from 'node:fs'
 import path from 'node:path'
+import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -78,7 +79,43 @@ const tauriEnv = { ...process.env }
 for (const key of ['APPLE_CERTIFICATE','APPLE_CERTIFICATE_PASSWORD','APPLE_SIGNING_IDENTITY','APPLE_ID','APPLE_PASSWORD','APPLE_TEAM_ID']) {
  if (!tauriEnv[key]) delete tauriEnv[key]
 }
+function injectDmgDoc(dmgPath, sourceFile, targetFilename) {
+  const tempRw = dmgPath.replace(/\.dmg$/, '-rw.dmg')
+  const mountPoint = mkdtempSync(path.join(os.tmpdir(), 'dmg-inject-'))
+  let mounted = false
+  try {
+    run('hdiutil', ['convert', dmgPath, '-format', 'UDRW', '-o', tempRw])
+    run('hdiutil', ['resize', '-size', '+5m', tempRw])
+    run('hdiutil', ['attach', '-nobrowse', '-mountpoint', mountPoint, tempRw])
+    mounted = true
+    copyFileSync(sourceFile, path.join(mountPoint, targetFilename))
+    run('hdiutil', ['detach', mountPoint])
+    mounted = false
+    run('hdiutil', ['convert', tempRw, '-format', 'UDZO', '-ov', '-o', dmgPath])
+    console.log(`已向 DMG 添加指引文档: ${targetFilename} -> ${dmgPath}`)
+  } finally {
+    if (mounted) {
+      try { run('hdiutil', ['detach', mountPoint]) } catch {}
+    }
+    if (existsSync(mountPoint)) rmSync(mountPoint, { recursive: true, force: true })
+    if (existsSync(tempRw)) rmSync(tempRw, { force: true })
+  }
+}
 run(pnpm, buildArgs, { shell: process.platform === 'win32', env: tauriEnv })
+if (goos === 'darwin' && !noBundle) {
+  const dmgDoc = path.join(desktop, 'macos', '解决打开报错指引.txt')
+  if (existsSync(dmgDoc)) {
+    const bundleDir = path.join(desktop, 'target', 'release', 'bundle')
+    const findDmgs = dir => {
+      if (!existsSync(dir)) return []
+      return readdirSync(dir, { withFileTypes: true }).flatMap(item =>
+        item.isDirectory() ? findDmgs(path.join(dir, item.name)) : (item.name.endsWith('.dmg') ? [path.join(dir, item.name)] : []))
+    }
+    for (const dmg of findDmgs(bundleDir)) {
+      injectDmgDoc(dmg, dmgDoc, '解决打开报错指引.txt')
+    }
+  }
+}
 // Also deliver a portable folder with a Go entry point independent of GUI libs.
 const portable = path.join(desktop, 'target', 'portable', `${goos}-${goarch}`)
 mkdirSync(portable, { recursive: true })
