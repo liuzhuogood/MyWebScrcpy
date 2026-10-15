@@ -55,7 +55,7 @@
 | [v1.22.0-feature](v1.22.0-feature/version.md) | 已合入 main，部分验收待完成 | SDK 封装模板资产、Vision 与进程内匹配；接入 Pi sdk-v2，软件测试及只读真机通过，点击、浏览器与原生跨平台验收待完成。 |
 | [v1.24.0-feature](v1.24.0-feature/version.md) | 已合入本地 main；待桌面验收 | GUI 小窗透明度 0%～100% 与鼠标穿透，已实现快捷键、主窗口与托盘恢复入口。 |
 | [v1.25.0-feature](v1.25.0-feature/version.md) | 已发布 SDK；CI 补充修复转 v1.25.1 | 外部任务运行与上报、小窗透明度与鼠标穿透、移除 Pi/内置脚本并清理遗留模块。 |
-| [v1.25.1-fix](v1.25.1-fix/version.md) | 等待 Actions 发布 | 修复 Windows CI 下 OCR 测试中 Python shim 缺少可执行后缀及依赖问题，全平台回归测试并发布。 |
+| [v1.25.1-fix](v1.25.1-fix/version.md) | 已发布 v1.25.1 | 修复 Windows CI 下 OCR 测试夹具，全平台回归测试、Release 资产、Docker 镜像与 SDK 均成功发布。 |
 
 ## Vue 前端迁移版本
 
