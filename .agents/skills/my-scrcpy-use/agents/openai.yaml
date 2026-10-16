@@ -1,3 +1,0 @@
-interface:
-  display_name: "MyWebScrcpy API 使用"
-  short_description: "读取当前接口规范，通过统一请求客户端调用 API 并集中配置 Token"

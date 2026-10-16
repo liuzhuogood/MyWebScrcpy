@@ -1,8 +1,3 @@
----
-name: my-scrcpy-task-run
-description: 使用 MyWebScrcpy 公开 API 或 Python TaskReporter 上报外部任务状态、日志和结果；编排、定时及执行由外部工具负责。
----
-
 # 外部任务运行上报
 
 1. 使用用户已确定的服务地址，读取 `/api/openapi.json` 核对实际字段，不猜测接口或设备序列号。
@@ -24,4 +19,4 @@ with TaskReporter("http://127.0.0.1:8080", name="检查任务",
     run.finish("succeeded", exit_code=0, summary="检查通过")
 ```
 
-详细接口与容量限制见项目 `docs/task-runs.md` 和当前 OpenAPI。任务日志不写入密钥、令牌或完整敏感请求。
+详细接口与容量限制见[项目任务运行文档](../../../docs/task-runs.md) 和当前 OpenAPI。任务日志不写入密钥、令牌或完整敏感请求。

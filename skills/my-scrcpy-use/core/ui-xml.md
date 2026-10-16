@@ -1,43 +1,41 @@
----
-name: my-scrcpy-ui-dump
-description: 结合 MyWebScrcpy 的 /api/ui/xml 与 /api/ui/page-info 判断页面，分析 UIAutomator dump，测试 XPath 并生成唯一定位表达式，为后续设备脚本提供依据。
----
-
 # UI dump 分析
 
 获取当前设备的 UI 快照，分析可验证的定位条件与操作前后状态，为后续脚本提供思路。此技能默认只读取与分析；不会自动唤醒、解锁、打开应用、点击或运行脚本。
 
 ## 获取
 
-1. 使用 [my-scrcpy-use](../my-scrcpy-use/SKILL.md) 及其通用请求客户端。按该技能先读取当前 `/api/openapi.json` 和 `/api-docs.html`，核对 `/api/ui/xml` 与 `/api/ui/page-info` 的方法、参数、响应 schema 及引用。Token、TLS 和超时仍由同一客户端处理，不在此技能复制请求层。
+1. 遵循 [my-scrcpy-use](../SKILL.md) 的 API 规则，使用 curl。按该技能先读取当前 `/api/openapi.json` 和 `/api-docs.html`，核对 `/api/ui/xml` 与 `/api/ui/page-info` 的方法、参数、响应 schema 及引用。认证、TLS 与超时按当前服务定义和已确认配置设置。
 2. 从用户或当前会话确认服务地址与设备 serial；不要把下面的演示设备作为默认目标。当前两个接口都是 `GET`，query 为 `serial`，200 响应为 JSON。XML 接口字段为 `serial`、`captured_at`、`xml`，可选 `display_size`；page-info 字段为 `package_name`、`activity`、`component`、`window_name`、`fetched_at`，可选 `display`。后续接口定义发生变化时，先调整数据映射，不猜兼容字段。
-3. 按“page-info → XML → page-info”顺序采集同一设备，每次单独保存所有原始响应、提取的 XML 和分析结果；任一请求失败时停止，不分析旧文件。项目根目录下的示例：
+3. 按“page-info → XML → page-info”顺序采集同一设备，每次单独保存所有原始响应、提取的 XML 和分析结果；任一请求失败时停止，不分析旧文件。先按[环境规范](env.md)启动执行环境，`skill_dir` 为本技能绝对路径：
 
    ```bash
-   capture_dir="$(mktemp -d /tmp/my-scrcpy-ui-XXXXXX)"
-   python3 .agents/skills/my-scrcpy-use/scripts/request_client.py \
-     --base-url http://127.0.0.1:1989 /api/ui/page-info \
-     --query serial=10.0.0.30:5555 --output "$capture_dir/page-before.json" && \
-   python3 .agents/skills/my-scrcpy-use/scripts/request_client.py \
-     --base-url http://127.0.0.1:1989 /api/ui/xml \
-     --query serial=10.0.0.30:5555 --timeout 45 \
+   # 认证参数按当前 OpenAPI 设置。
+   base_url="${MYWEBSCRCPY_API_URL:?请先注册执行环境}"
+   serial="${MYWEBSCRCPY_SERIAL:?请先注册执行环境}"
+   capture_dir="${MYWEBSCRCPY_RUN_DIR:?请先注册执行环境}/ui-xml"
+   mkdir -p "$capture_dir" && \
+   curl --fail-with-body --silent --show-error --max-time 30 --get \
+     "${base_url%/}/api/ui/page-info" --data-urlencode "serial=$serial" \
+     --output "$capture_dir/page-before.json" && \
+   curl --fail-with-body --silent --show-error --max-time 45 --get \
+     "${base_url%/}/api/ui/xml" --data-urlencode "serial=$serial" \
      --output "$capture_dir/response.json" && \
-   python3 .agents/skills/my-scrcpy-use/scripts/request_client.py \
-     --base-url http://127.0.0.1:1989 /api/ui/page-info \
-     --query serial=10.0.0.30:5555 --output "$capture_dir/page-after.json" && \
-   python3 .agents/skills/my-scrcpy-ui-dump/scripts/analyze_dump.py \
-     "$capture_dir/response.json" --expected-serial 10.0.0.30:5555 \
+   curl --fail-with-body --silent --show-error --max-time 30 --get \
+     "${base_url%/}/api/ui/page-info" --data-urlencode "serial=$serial" \
+     --output "$capture_dir/page-after.json" && \
+   python3 "$skill_dir/scripts/analyze_dump.py" \
+     "$capture_dir/response.json" --expected-serial "$serial" \
      --page-info-before "$capture_dir/page-before.json" \
      --page-info-after "$capture_dir/page-after.json" \
      --xml-output "$capture_dir/dump.xml" --output "$capture_dir/analysis.json"
    ```
 
-   上述地址和设备来自创建技能时的会话，后续替换为已确认的目标。原始快照含页面数据，留在本地分析，不作为测试样本提交。
+   上述文件均保存在本次执行目录内；服务地址与设备必须先确认。原始快照含页面数据，留在本地分析，不作为测试样本提交。
 4. 检查实际 serial、抓取时间、XML 格式及节点数量。400、422、502 等错误按当前规范和实际响应解释。不要通过备用 ADB 命令掩盖接口失败；同一服务的认证与网络问题在请求层解决。
 
 ## 分析与定位
 
-[分析脚本](scripts/analyze_dump.py) 只解析本地 JSON 响应，返回节点层级、原始属性、标记为可操作的节点和定位候选。内部节点编号、树路径及匹配次数仅用于本次快照，不能当作跨页面稳定定位条件。
+[分析脚本](../scripts/analyze_dump.py) 只解析本地 JSON 响应，返回节点层级、原始属性、标记为可操作的节点和定位候选。内部节点编号、树路径及匹配次数仅用于本次快照，不能当作跨页面稳定定位条件。
 
 先读取 `page_context` 判断当前页面证据：
 
@@ -57,13 +55,13 @@ description: 结合 MyWebScrcpy 的 /api/ui/xml 与 /api/ui/page-info 判断页�
 
 ## XPath 生成与测试
 
-[XPath 工具](scripts/xpath_tools.py) 使用 lxml 的 XPath 1.0 引擎，在原始 XML 上执行表达式，不靠字符串计数判断唯一性。依赖见 [requirements.txt](scripts/requirements.txt)，在所选 Python 环境运行 `python3 -m pip install -r .agents/skills/my-scrcpy-ui-dump/scripts/requirements.txt`；已经安装时无需重复安装。
+[XPath 工具](../scripts/xpath_tools.py) 使用 lxml 的 XPath 1.0 引擎，在原始 XML 上执行表达式，不靠字符串计数判断唯一性。依赖见 [requirements.txt](../scripts/requirements.txt)，在所选 Python 环境运行 `python3 -m pip install -r "$skill_dir/scripts/requirements.txt"`；已经安装时无需重复安装。
 
 先从分析结果确定目标的本次 `node_id`，再生成表达式：
 
 ```bash
-python3 .agents/skills/my-scrcpy-ui-dump/scripts/xpath_tools.py \
-  "$capture_dir/response.json" --expected-serial 10.0.0.30:5555 --node-id 1 \
+python3 "$skill_dir/scripts/xpath_tools.py" \
+  "$capture_dir/response.json" --expected-serial "$serial" --node-id 1 \
   --page-info-before "$capture_dir/page-before.json" --page-info-after "$capture_dir/page-after.json"
 ```
 
@@ -74,8 +72,8 @@ python3 .agents/skills/my-scrcpy-ui-dump/scripts/xpath_tools.py \
 测试用户给定或手工优化的表达式，可重复传 `--xpath`：
 
 ```bash
-python3 .agents/skills/my-scrcpy-ui-dump/scripts/xpath_tools.py \
-  "$capture_dir/response.json" --expected-serial 10.0.0.30:5555 --node-id 1 \
+python3 "$skill_dir/scripts/xpath_tools.py" \
+  "$capture_dir/response.json" --expected-serial "$serial" --node-id 1 \
   --page-info-before "$capture_dir/page-before.json" --page-info-after "$capture_dir/page-after.json" \
   --xpath "//node[@resource-id='com.android.systemui:id/scrim_behind']"
 ```

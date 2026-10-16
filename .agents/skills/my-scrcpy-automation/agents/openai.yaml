@@ -1,3 +1,0 @@
-interface:
-  display_name: "设备自动化脚本编写与回归"
-  short_description: "结合实时页面与唯一定位编写设备脚本，验证锁屏起步、重复运行及快照失败"
