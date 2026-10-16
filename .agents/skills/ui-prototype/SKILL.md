@@ -1,6 +1,6 @@
 ---
 name: ui-prototype
-description: 在 MyWebScrcpy 中使用现有 Vue 组件和主题创建、修改可交互界面原型，保留方案版本，自动启动或复用本地预览并通过 cloudflared 交付临时公网预览。适用于先看原型或比较布局，不用于直接实现正式业务功能。
+description: 在 MyWebScrcpy 中使用现有 Vue 组件和主题创建、修改可交互界面原型，保留方案版本，自动启动或复用本地预览并通过 SSH 反向隧道交付临时公网预览。适用于先看原型或比较布局，不用于直接实现正式业务功能。
 ---
 
 # 项目界面原型
@@ -26,8 +26,8 @@ description: 在 MyWebScrcpy 中使用现有 Vue 组件和主题创建、修改�
 ## 验证与交付
 
 1. 检查依赖已安装，运行 `pnpm --dir frontend proto:check` 与 `pnpm --dir frontend proto:build`。
-2. 读取并执行 [临时公网预览交付](references/remote-preview.md)：确认实际命令和端口，复用或启动本地预览，用已安装的 cloudflared 创建临时隧道，保存日志与进程信息。当前默认命令为 `pnpm --dir frontend proto`、端口为 `5174`，每次须核对实际运行状态。
-3. 从公网地址 `https://<本次域名>.trycloudflare.com/#<目录名>` 实际验证页面、主要资源、交互、桌面与小屏、键盘和主题，检查控制台及请求边界。截图和网络验证记录放入 `prototypes/artifacts/`；生成链接或首页返回 200 均不足以证明交付成功。
+2. 使用 `lz-plugin/lz-dev/lz-demo` 完成公网映射：加载 `lz-dev` 的 `modules/lz-demo/MODULE.md`，传入 [本项目预览配置](references/remote-preview.md)，由该模块复用或启动本地预览、创建或复用 SSH 反向隧道并记录运行资料。插件不可用时报告缺失，不改用其他发布方式。
+3. 从公网地址 `https://demo.wskj.work/#<目录名>` 实际验证页面、主要资源、交互、桌面与小屏、键盘和主题，检查控制台及请求边界。截图和网络验证记录放入 `prototypes/artifacts/`；生成链接或首页返回 200 均不足以证明交付成功。
 4. 核对 Git 改动范围，确认进程在启动工具退出后仍存活、公网仍可访问。最终直接交付可点击的公网原型链接、验证结果、日志与进程记录位置，以及停止本次隧道和预览的方法；复用的服务注明归属，不自动停止。
 
 定稿接入正式页面属于后续实现任务，只有用户要求落地时才修改正式页面、路由和数据连接，并保留原型版本。
