@@ -64,3 +64,13 @@
 | `operationlog` | 操作日志 |
 | `dependencies` / `servicepython` / `serviceprefs` | ADB/Python 依赖管理、Python 服务进程管理、服务开关偏好持久化 |
 | `updater` / `desktop` / `db` / `debug` | 应用更新、桌面模式、数据库访问、调试 |
+
+## 原型设计中的页面
+
+以下入口属于独立原型，尚未接入正式业务路由。
+
+| 术语 | 别名(口语) | 指向 |
+|---|---|---|
+| AI 集成原型 | AI 集成菜单、与 AI 集成 | `prototypes/cases/ai-integration-v2/Prototype.vue`；独立预览 `#ai-integration-v2`，v1 保留用于对照 |
+| 技能市场原型 | 技能市场、APP 自动化技能 | v2 首页中的 `components/SkillMarket.vue`；搜索、分类、已安装过滤和技能入口 |
+| 技能详情原型页 | 查看详情、技能详情、技能二级页面 | `prototypes/cases/ai-integration-v2/components/SkillDetailPage.vue`；预览查询参数 `?skill=<SkillId>#ai-integration-v2`，支持返回市场 |
