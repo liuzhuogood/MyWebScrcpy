@@ -9,7 +9,7 @@ from .errors import (ActionError, ActionTimeout, CommandError, ConnectionError, 
                      HTTPError, MatchTimeout, MissingDependency, ProtocolError, SDKError,
                      TemplateDisabled, UnsupportedTemplateMethod)
 
-__version__ = "1.25.1"
+__version__ = "1.25.2"
 __all__ = ["Client", "Device", "Matcher", "TaskReporter", "ActionResult", "CommandResult", "DeviceInfo", "Frame",
            "ImportResult", "Match", "PageInfo", "Template", "OCRBox", "OCRResult",
            "ActionError", "ActionTimeout",
