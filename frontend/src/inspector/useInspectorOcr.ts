@@ -49,6 +49,7 @@ export function useInspectorOcr(
   let capturedFrame = 0
   let overlayValid = false
   let selectionSize: { width: number, height: number } | null = null
+  let continuousTarget: { width: number, height: number, pixels: Region } | null = null
 
   function stop() {
     revision++
@@ -58,6 +59,7 @@ export function useInspectorOcr(
     controller?.abort()
     controller = null
     loading.value = false
+    continuousTarget = null
   }
 
   function clear() {
@@ -150,6 +152,11 @@ export function useInspectorOcr(
     redraw()
   }
 
+  function panelHidden() {
+    pointerCancel()
+    if (!running.value) stop()
+  }
+
   async function run() {
     if (loading.value) return
     const canvas = getCanvas()
@@ -157,7 +164,11 @@ export function useInspectorOcr(
     if (!isSourceReady() || !canvas?.width || !canvas.height) { error.value = '投屏画面未就绪'; running.value = false; return }
     const width = canvas.width, height = canvas.height
     let pixels: Region = { x: 0, y: 0, w: width, h: height }
-    if (scope.value === 'element') {
+    if (running.value && continuousTarget) {
+      if (continuousTarget.width !== width || continuousTarget.height !== height) { invalidate(); return }
+      pixels = continuousTarget.pixels
+    }
+    else if (scope.value === 'element') {
       const box = elementBox()
       if (!box || ![box.x, box.y, box.w, box.h].every(Number.isFinite) || box.w <= 0 || box.h <= 0) { error.value = '无法确定选中元素的画面区域'; running.value = false; return }
       pixels = box
@@ -177,6 +188,7 @@ export function useInspectorOcr(
     controller = abort
     loading.value = true
     running.value = continuous.value
+    if (running.value) continuousTarget = { width, height, pixels: { x: left, y: top, w: right - left, h: bottom - top } }
     const started = Date.now(), frame = frameVersion()
     const requestEngine = engine.value
     let stage: 'capture' | 'recognition' = 'capture'
@@ -239,6 +251,7 @@ export function useInspectorOcr(
 
   function frameChanged() {
     const canvas = getCanvas()
+    if (continuousTarget && canvas && (continuousTarget.width !== canvas.width || continuousTarget.height !== canvas.height)) { invalidate(); return }
     if (selectionSize && canvas && (selectionSize.width !== canvas.width || selectionSize.height !== canvas.height)) { invalidate(); return }
     if (result.value && canvas && (sourceSize.value.width !== canvas.width || sourceSize.value.height !== canvas.height)) { invalidate(); return }
     if (overlayValid && frameVersion() !== capturedFrame && Date.now() - capturedAt >= 600) { overlayValid = false; redraw() }
@@ -267,8 +280,12 @@ export function useInspectorOcr(
   watch([engine, scope], () => { pointerCancel(); clear() }, { flush: 'sync' })
   watch(continuous, stop, { flush: 'sync' })
   watch([showBoxes, keyword], redraw, { flush: 'sync' })
-  watch(selectedNode, node => { if (node) scope.value = 'element'; else if (scope.value === 'element') scope.value = 'screen' }, { flush: 'sync' })
+  watch(selectedNode, node => {
+    if (running.value) return
+    if (node) scope.value = 'element'
+    else if (scope.value === 'element') scope.value = 'screen'
+  }, { flush: 'sync' })
   onUnmounted(() => { stop(); pointerCancel() })
   return { loading, running, continuous, engine, scope, region, selecting, result, error, showBoxes, keyword, selected, filtered, sourceSize,
-    stop, clear, invalidate, run, select, beginRegionSelection, coordinates, draw, frameChanged, pointerDown, pointerMove, pointerUp, pointerCancel }
+    stop, clear, invalidate, run, select, beginRegionSelection, panelHidden, coordinates, draw, frameChanged, pointerDown, pointerMove, pointerUp, pointerCancel }
 }

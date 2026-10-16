@@ -19,7 +19,7 @@ function copyText(text: string) {
     () => toast.error('复制失败'),
   )
 }
-onUnmounted(() => { ocr.stop(); ocr.pointerCancel() })
+onUnmounted(ocr.panelHidden)
 </script>
 
 <template>
@@ -28,7 +28,7 @@ onUnmounted(() => { ocr.stop(); ocr.pointerCancel() })
       <Select v-model="ocr.engine.value">
         <SelectTrigger class="w-full text-xs" aria-label="识别引擎"><SelectValue /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="auto">自动 · 优先 Indra OCR</SelectItem>
+          <SelectItem value="auto">自动</SelectItem>
           <SelectItem value="indraocr">Indra OCR</SelectItem>
           <SelectItem value="macocr">macOCR</SelectItem>
           <SelectItem value="paddleocr">PaddleOCR</SelectItem>

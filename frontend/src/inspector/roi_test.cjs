@@ -231,11 +231,41 @@ function load(file) {
   await new Promise(resolve => setTimeout(resolve, 40));
   assert.equal(calls, 2);
   assert.deepStrictEqual(continuousBoxes, [[.2, .2, .3, .4], [.2, .2, .3, .4]], 'Continuous OCR must retain the selected region across screen operations');
+  inspector.ocr.panelHidden();
+  inspector.closeInspector();
+  guard.setInspector(false);
+  assert.equal(inspector.ocr.running.value, true, 'Closing the inspector must not stop continuous OCR');
+  assert.equal(capturedSignal.aborted, false, 'Hidden panels must not abort continuous recognition');
+  finish(response);
+  await new Promise(resolve => setTimeout(resolve, 550));
+  assert.equal(calls, 3, 'Continuous OCR must schedule another request with the panel closed');
+  assert.deepStrictEqual(continuousBoxes[2], [.2, .2, .3, .4]);
   inspector.ocr.stop();
   finish(response);
   await new Promise(resolve => setTimeout(resolve, 550));
-  assert.equal(calls, 2, 'Stopping must cancel the next continuous request');
+  assert.equal(calls, 3, 'Stopping must cancel the next continuous request');
   assert.equal(inspector.ocr.running.value, false);
+
+  // A continuous element ROI belongs to the task, not the XML tab selection.
+  const elementLoop = inspectorModule.provideInspector('element-loop', () => canvas);
+  elementLoop.selectedNode.value = { getAttribute: name => name === 'bounds' ? '[10,10][50,30]' : '' };
+  elementLoop.ocr.continuous.value = true;
+  const elementBoxes = [];
+  uploadOverride = form => { elementBoxes.push(JSON.parse(form.get('bbox'))); return new Promise(resolve => { finish = resolve; }); };
+  const elementPending = elementLoop.runOcr();
+  await tick();
+  elementLoop.selectedNode.value = null;
+  elementLoop.ocr.panelHidden();
+  elementLoop.closeInspector();
+  finish(response);
+  await elementPending;
+  await new Promise(resolve => setTimeout(resolve, 550));
+  assert.deepStrictEqual(elementBoxes, [[.1, .2, .4, .4], [.1, .2, .4, .4]], 'Changing XML selection must not redirect an active continuous task');
+  elementLoop.ocr.invalidate();
+  assert.equal(capturedSignal.aborted, true, 'Disconnecting or destroying the player must abort background OCR');
+  finish(response);
+  await tick();
+  assert.equal(elementLoop.ocr.running.value, false);
 
   // A slow result from an advanced video frame cannot restore stale boxes.
   let frameVersion = 0;

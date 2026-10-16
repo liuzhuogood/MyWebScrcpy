@@ -281,7 +281,7 @@ function toggleInspector() {
   }
   closeSidePanels()
   inspectorVisible.value = true
-  setInspector(true)
+  setInspector(true, ins.ocr.running.value ? 'ocr' : 'color')
 }
 
 function openShell() {

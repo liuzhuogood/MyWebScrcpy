@@ -86,7 +86,7 @@ onMounted(() => {
 watch(() => inspectorTab.value, (tab) => {
   inspectionMode.value = false
   ins.ocr.pointerCancel()
-  if (tab !== 'ocr') { ins.ocr.stop(); ins.ocr.pointerCancel() }
+  if (tab !== 'ocr') ins.ocr.panelHidden()
   if (tab === 'xml' && !ins.xmlDoc.value && !ins.xmlLoading.value && !ins.xmlError.value)
     void ins.loadXml()
 })
@@ -96,8 +96,7 @@ onUnmounted(() => {
   const canvas = ins.getCanvas()
   canvas?.removeEventListener('mousemove', onCanvasMove)
   canvas?.removeEventListener('mouseleave', onCanvasLeave)
-  ins.ocr.stop()
-  ins.ocr.pointerCancel()
+  ins.ocr.panelHidden()
   canvas?.removeEventListener('click', onCanvasClick)
   canvas?.removeEventListener('pointerdown', onPointerDown)
   canvas?.removeEventListener('pointermove', onPointerMove)

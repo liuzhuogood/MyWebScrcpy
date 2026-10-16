@@ -430,6 +430,11 @@ export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElem
     xmlHitTest.fn = null
     colorPinned.value = false
     colorPoint.value = null
+    ocr.panelHidden()
+    if (ocr.running.value) {
+      clearOverlay()
+      return
+    }
     selectNode(null)
     clearXpath()
     clearOverlay()
@@ -437,6 +442,7 @@ export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElem
   }
 
   onUnmounted(() => {
+    ocr.invalidate()
     if (raf)
       cancelAnimationFrame(raf)
     closeInspector()
