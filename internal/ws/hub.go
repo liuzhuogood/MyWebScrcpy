@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -20,6 +21,7 @@ import (
 	"mywebscrcpy/internal/adbcommand"
 	debuglog "mywebscrcpy/internal/debug"
 	"mywebscrcpy/internal/devicegate"
+	"mywebscrcpy/internal/inputconfig"
 	"mywebscrcpy/internal/scrcpy"
 	"mywebscrcpy/internal/vision"
 
@@ -71,6 +73,30 @@ type Hub struct {
 	frameConsumer   VideoFrameConsumer
 	deviceConfigsMu sync.Mutex
 	deviceConfigs   map[string]deviceStreamConfig
+	inputConfig     *inputconfig.Store
+}
+
+// SetInputConfig 挂载系统设置的默认注入模式存储（main 启动时注入）。
+func (h *Hub) SetInputConfig(store *inputconfig.Store) { h.inputConfig = store }
+
+// defaultMode 返回全局默认注入模式；未挂载存储或为空时返回 ""，由调用方回落 sdk。
+func (h *Hub) defaultMode() string {
+	if h.inputConfig == nil {
+		return ""
+	}
+	return h.inputConfig.Mode()
+}
+
+// resolveActionMode 把请求携带的 mode 与全局默认合成生效模式：
+// 显式指定优先（含显式 sdk 覆盖全局 hid/adb），否则用全局默认，最后回落 sdk。
+func (h *Hub) resolveActionMode(requested string) string {
+	if requested != "" {
+		return requested
+	}
+	if mode := h.defaultMode(); mode != "" {
+		return mode
+	}
+	return action.ModeSDK
 }
 
 type deviceStreamConfig struct {
@@ -118,15 +144,15 @@ func NewHub(adbPath, jarPath string) *Hub {
 		}
 	}
 	h := &Hub{
-		adbPath:    adbPath,
-		jarPath:    jarPath,
-		jarSize:    jarSize,
-		nextPort:   27183,
-		results:    make(map[string]map[chan vision.Message]string),
-		lastResult: make(map[string]vision.Message),
-		sessions:   make(map[string]*managedSession),
-		inflight:   make(map[string]*inflightSession),
-		deviceEnvs: make(map[string]deviceEnv),
+		adbPath:       adbPath,
+		jarPath:       jarPath,
+		jarSize:       jarSize,
+		nextPort:      27183,
+		results:       make(map[string]map[chan vision.Message]string),
+		lastResult:    make(map[string]vision.Message),
+		sessions:      make(map[string]*managedSession),
+		inflight:      make(map[string]*inflightSession),
+		deviceEnvs:    make(map[string]deviceEnv),
 		idleTTL:       defaultSessionIdleTTL,
 		gates:         make(map[string]*devicegate.Gate),
 		events:        debuglog.New(512),
@@ -542,6 +568,8 @@ func (h *Hub) pumpVideo(c *websocket.Conn, sess *session, done <-chan struct{}) 
 }
 
 // pumpControl 读浏览器发来的控制消息并写入 control socket。
+// 二进制消息为 scrcpy 控制指令透传；JSON 消息仅支持 input.pointer /
+// input.hid 两种手动触摸提交（tap / swipe），经动作队列按注入模式执行。
 func (h *Hub) pumpControl(c *websocket.Conn, ms *managedSession) {
 	for {
 		_, data, err := c.ReadMessage()
@@ -555,12 +583,58 @@ func (h *Hub) pumpControl(c *websocket.Conn, ms *managedSession) {
 		if len(data) == 0 {
 			continue
 		}
+		if data[0] == '{' {
+			if handled := h.submitPointerAction(ms, data); handled {
+				continue
+			}
+			log.Printf("[ws] 未知 JSON 控制消息，已忽略 (%d 字节)", len(data))
+			continue
+		}
 		result := <-ms.actions.Submit(context.Background(), action.Request{DeviceID: ms.meta.Serial, Source: "browser", Action: "raw", Raw: append([]byte(nil), data...), ExpiresMS: 3000})
 		if !result.Executed && result.ErrorCode != "" {
 			log.Printf("[ws] 写 control 失败: %s", result.ErrorCode)
 			return
 		}
 	}
+}
+
+// pointerAction 浏览器手动触摸的 tap / swipe 提交。
+type pointerAction struct {
+	Type   string  `json:"type"`
+	Action string  `json:"action"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	X2     float64 `json:"x2"`
+	Y2     float64 `json:"y2"`
+}
+
+// submitPointerAction 处理 input.pointer（按全局/请求模式分发）与
+// input.hid（强制 HID 通道）两类消息；非这两类返回 false 由调用方忽略。
+func (h *Hub) submitPointerAction(ms *managedSession, data []byte) bool {
+	var msg pointerAction
+	if json.Unmarshal(data, &msg) != nil {
+		return false
+	}
+	var req action.Request
+	switch msg.Type {
+	case "input.pointer":
+		req = action.Request{DeviceID: ms.meta.Serial, Source: "browser", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, ExpiresMS: 3000}
+	case "input.hid":
+		if msg.Action != "tap" && msg.Action != "swipe" {
+			return false
+		}
+		req = action.Request{DeviceID: ms.meta.Serial, Source: "browser", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, Mode: action.ModeHID, ExpiresMS: 3000}
+	default:
+		return false
+	}
+	if req.Action != "tap" && req.Action != "swipe" {
+		return false
+	}
+	result := <-ms.actions.Submit(context.Background(), req)
+	if !result.Executed && result.ErrorCode != "" {
+		log.Printf("[ws] %s 执行失败: %s", msg.Type, result.ErrorCode)
+	}
+	return true
 }
 
 var _ = errors.New

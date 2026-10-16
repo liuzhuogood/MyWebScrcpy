@@ -32,6 +32,22 @@ type Request struct {
 	DurationMS int64  `json:"duration_ms,omitempty"`
 }
 
+// 注入模式：sdk = scrcpy 控制 socket 注入（默认）；
+// adb = adb shell input；hid = UHID 虚拟触摸屏硬件事件注入。
+const (
+	ModeSDK = "sdk"
+	ModeADB = "adb"
+	ModeHID = "hid"
+)
+
+// ErrInvalidMode 注入了未知模式时返回。
+var ErrInvalidMode = errors.New("unsupported_mode")
+
+// ValidMode 校验注入模式取值。空值合法，表示沿用全局默认。
+func ValidMode(mode string) bool {
+	return mode == "" || mode == ModeSDK || mode == ModeADB || mode == ModeHID
+}
+
 type Result struct {
 	RequestID string `json:"request_id"`
 	Accepted  bool   `json:"accepted"`
@@ -155,7 +171,7 @@ func validate(r Request) error {
 	if r.DeviceID == "" {
 		return errors.New("missing_device_id")
 	}
-	if r.Mode != "" && r.Mode != "sdk" && r.Mode != "adb" {
+	if !ValidMode(r.Mode) {
 		return errors.New("unsupported_mode")
 	}
 	switch r.Action {

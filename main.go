@@ -18,6 +18,7 @@ import (
 	"mywebscrcpy/internal/desktop"
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
+	"mywebscrcpy/internal/inputconfig"
 	"mywebscrcpy/internal/matchingservice"
 	"mywebscrcpy/internal/operationlog"
 	"mywebscrcpy/internal/taskrun"
@@ -115,6 +116,11 @@ func main() {
 	uiPage := uipage.New(adbPath)
 
 	mux := http.NewServeMux()
+
+	inputConfig := inputconfig.New(database)
+	hub.SetInputConfig(inputConfig)
+	hub.RegisterInputConfigRoutes(mux)
+
 	operationLogs := operationlog.New(database)
 	defer operationLogs.Close()
 	operationLogs.RegisterRoutes(mux)

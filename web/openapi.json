@@ -3619,6 +3619,76 @@
           }
         }
       }
+    },
+    "/api/input-config": {
+      "get": {
+        "tags": [
+          "ADB 与按键"
+        ],
+        "summary": "读取默认注入模式",
+        "description": "读取系统设置中的默认点击/滑动注入模式。对所有未显式指定 mode 的动作（投屏手动触摸、Vision action.request、sendkey 之外的自动化调用）生效；请求显式携带 mode 时仍以请求为准。",
+        "responses": {
+          "200": {
+            "description": "当前默认注入模式",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputConfigView"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ADB 与按键"
+        ],
+        "summary": "修改默认注入模式",
+        "description": "修改系统设置中的默认注入模式，保存后即时生效，无需重启；持久化于 SQLite，重启后保持。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InputConfigView"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "已保存的注入模式",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InputConfigView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "mode 非法（必须为 sdk、adb 或 hid）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "配置存储不可用（无持久化模式）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5460,10 +5530,11 @@
             "type": "string",
             "enum": [
               "sdk",
-              "adb"
+              "adb",
+              "hid"
             ],
             "default": "sdk",
-            "description": "点击/滑动执行通道。sdk（默认）：复用 scrcpy 控制 Socket 极速注入；adb：调用系统 adb shell input tap/swipe，支持拟人化物理手指微偏移与按压时长。"
+            "description": "点击/滑动执行通道。sdk（默认）：复用 scrcpy 控制 Socket 极速注入；adb：调用系统 adb shell input tap/swipe，支持拟人化物理手指微偏移与按压时长；hid：经 scrcpy UHID 在设备端创建虚拟触摸屏 digitizer，以 HID 硬件事件注入，事件源为 /dev/uhid 虚拟硬件而非 InputManager 注入通道，更不易被反自动化检测识别。省略时使用系统设置中的默认注入模式（/api/input-config）。"
           },
           "duration_ms": {
             "type": "integer",
@@ -5953,6 +6024,24 @@
           "error",
           "elapsed_ms"
         ]
+      },
+      "InputConfigView": {
+        "type": "object",
+        "description": "系统设置默认注入模式",
+        "required": [
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "sdk",
+              "adb",
+              "hid"
+            ],
+            "description": "默认点击/滑动注入模式。sdk：scrcpy 控制 Socket 注入；adb：adb shell input；hid：UHID 虚拟触摸屏硬件事件注入。"
+          }
+        }
       }
     },
     "securitySchemes": {

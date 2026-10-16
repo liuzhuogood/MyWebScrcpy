@@ -35,6 +35,14 @@ const (
 	DeviceMsgUhidOutput   = 2
 )
 
+// UHID 控制消息类型 (client -> device)：在设备端 /dev/uhid 创建虚拟 HID 设备，
+// 注入的触摸经 Linux input 子系统进入 Android，绕过 InputManager 注入通道。
+const (
+	TypeUhidCreate  = 12
+	TypeUhidInput   = 13
+	TypeUhidDestroy = 14
+)
+
 // GetClipboard 的 copyKey 参数枚举
 const (
 	CopyKeyNone = 0
@@ -95,3 +103,7 @@ const (
 	PointerIDMouse  = 0xFFFFFFFFFFFFFFFF // -1 鼠标
 	PointerIDFinger = 0xFFFFFFFFFFFFFFFE // -2 通用手指
 )
+
+// HIDIDTouch 是触摸 digitizer 的 UHID 设备 id（scrcpy 约定 keyboard=1/mouse=2，
+// 这里用 3 避免冲突）。UHID_CREATE / UHID_INPUT / UHID_DESTROY 都按它寻址。
+const HIDIDTouch = 3
