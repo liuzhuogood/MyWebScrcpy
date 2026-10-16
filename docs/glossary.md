@@ -58,7 +58,7 @@
 | `framehub` | 有界"最新帧"扇出,向视觉消费方(OCR / 模板匹配)分发帧 |
 | `adbcommand` / `adbshell` / `action` | ADB 命令、交互式 Shell、动作执行 |
 | `uipage` / `uixml` | 页面信息、UI XML 快照 |
-| `vision` / `ocr` / `template` / `matchingservice` | 视觉接口、OCR 引擎调度、模板管理、模板匹配服务进程 |
+| `vision` / `ocr` / `template` / `matchingservice` / `automation` | 视觉接口、OCR 引擎调度、模板管理、模板匹配服务进程、Go 原生自动化与视觉条件判断 |
 | `files` | 文件管理后端 |
 | `taskrun` | 任务运行后端 |
 | `operationlog` | 操作日志 |

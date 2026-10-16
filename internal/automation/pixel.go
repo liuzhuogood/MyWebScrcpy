@@ -64,7 +64,7 @@ func EvaluatePixelPoints(img image.Image, points []PixelPoint, mode string) (boo
 			Name:     pt.Name,
 			X:        pt.X,
 			Y:        pt.Y,
-			Pixel:    [2]int{px, py},
+			Pixel:    PixelCoord{X: px, Y: py},
 			RGB:      [3]int{r8, g8, b8},
 			ColorMin: pt.ColorMin,
 			ColorMax: pt.ColorMax,

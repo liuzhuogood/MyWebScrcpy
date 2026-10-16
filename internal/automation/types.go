@@ -1,5 +1,9 @@
 package automation
 
+import (
+	"encoding/json"
+	"strings"
+)
 
 // Kind 表示匹配目标的类型
 type Kind string
@@ -18,20 +22,61 @@ const (
 	MatchModeAll MatchMode = "all"
 )
 
+// StringList 兼容字符串或字符串数组反序列化
+type StringList []string
+
+func (s *StringList) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		*s = nil
+		return nil
+	}
+	if data[0] == '"' {
+		var str string
+		if err := json.Unmarshal(data, &str); err != nil {
+			return err
+		}
+		parts := strings.Split(str, ",")
+		var list []string
+		for _, p := range parts {
+			if trimmed := strings.TrimSpace(p); trimmed != "" {
+				list = append(list, trimmed)
+			}
+		}
+		*s = list
+		return nil
+	}
+	var arr []string
+	if err := json.Unmarshal(data, &arr); err != nil {
+		return err
+	}
+	*s = arr
+	return nil
+}
+
 // Point 归一化点击坐标点
 type Point struct {
 	X float64 `json:"x"`
 	Y float64 `json:"y"`
 }
 
+// PixelCoord 像素绝对坐标点
+type PixelCoord struct {
+	X int `json:"x"`
+	Y int `json:"y"`
+}
+
 // ConnectionRequest 基础请求参数
 type ConnectionRequest struct {
-	Serial string `json:"serial"`
+	Serial    string `json:"serial"`
+	VisionURL string `json:"vision_url,omitempty"`
+	Insecure  bool   `json:"insecure,omitempty"`
 }
 
 // TapRequest 点击请求
 type TapRequest struct {
 	Serial    string  `json:"serial"`
+	VisionURL string  `json:"vision_url,omitempty"`
+	Insecure  bool    `json:"insecure,omitempty"`
 	X         float64 `json:"x"`
 	Y         float64 `json:"y"`
 	ExpiresMS int64   `json:"expires_ms,omitempty"`
@@ -43,6 +88,8 @@ type TapRequest struct {
 // SwipeRequest 滑动请求
 type SwipeRequest struct {
 	Serial     string   `json:"serial"`
+	VisionURL  string   `json:"vision_url,omitempty"`
+	Insecure   bool     `json:"insecure,omitempty"`
 	X          *float64 `json:"x,omitempty"`
 	Y          *float64 `json:"y,omitempty"`
 	X1         *float64 `json:"x1,omitempty"`
@@ -85,7 +132,7 @@ type SendKeyRequest struct {
 
 // PixelPoint 像素颜色检测点定义
 type PixelPoint struct {
-	Name     string `json:"name,omitempty"`
+	Name     string  `json:"name,omitempty"`
 	X        float64 `json:"x"`
 	Y        float64 `json:"y"`
 	ColorMin [3]int  `json:"color_min"` // RGB 下限 0~255
@@ -94,15 +141,15 @@ type PixelPoint struct {
 
 // PixelPointResult 像素检测结果
 type PixelPointResult struct {
-	Index    int     `json:"index"`
-	Name     string  `json:"name,omitempty"`
-	X        float64 `json:"x"`
-	Y        float64 `json:"y"`
-	Pixel    [2]int  `json:"pixel"` // [px, py]
-	RGB      [3]int  `json:"rgb"`
-	ColorMin [3]int  `json:"color_min"`
-	ColorMax [3]int  `json:"color_max"`
-	Matched  bool    `json:"matched"`
+	Index    int        `json:"index"`
+	Name     string     `json:"name,omitempty"`
+	X        float64    `json:"x"`
+	Y        float64    `json:"y"`
+	Pixel    PixelCoord `json:"pixel"` // {"x": px, "y": py}
+	RGB      [3]int     `json:"rgb"`
+	ColorMin [3]int     `json:"color_min"`
+	ColorMax [3]int     `json:"color_max"`
+	Matched  bool       `json:"matched"`
 }
 
 // MatchedObject 匹配到的对象（文字或模板）
@@ -119,15 +166,15 @@ type MatchedObject struct {
 // Condition 视觉判断条件
 type Condition struct {
 	// Template 条件
-	TemplateNames []string  `json:"template_names,omitempty"`
-	TemplateName  string    `json:"template_name,omitempty"`
-	Threshold     float64   `json:"threshold,omitempty"`
+	TemplateNames StringList `json:"template_names,omitempty"`
+	TemplateName  string     `json:"template_name,omitempty"`
+	Threshold     float64    `json:"threshold,omitempty"`
 
 	// Text (OCR) 条件
-	Keywords       []string  `json:"keywords,omitempty"`
-	Engine         string    `json:"engine,omitempty"` // auto, macocr, paddleocr, indraocr
-	BBox           []float64 `json:"bbox,omitempty"`   // [x, y, w, h]
-	OCRIntervalMS  int64     `json:"ocr_interval_ms,omitempty"`
+	Keywords      StringList `json:"keywords,omitempty"`
+	Engine        string     `json:"engine,omitempty"` // auto, macocr, paddleocr, indraocr
+	BBox          []float64  `json:"bbox,omitempty"`   // [x, y, w, h]
+	OCRIntervalMS int64      `json:"ocr_interval_ms,omitempty"`
 
 	// Pixel 条件
 	Points    []PixelPoint `json:"points,omitempty"`
@@ -140,6 +187,8 @@ type Condition struct {
 // ConditionRequest 状态检查请求
 type ConditionRequest struct {
 	Serial    string    `json:"serial"`
+	VisionURL string    `json:"vision_url,omitempty"`
+	Insecure  bool      `json:"insecure,omitempty"`
 	Kind      Kind      `json:"kind"`
 	Condition Condition `json:"condition"`
 }
@@ -147,6 +196,8 @@ type ConditionRequest struct {
 // CheckRequest 即时检查请求
 type CheckRequest struct {
 	Serial    string    `json:"serial"`
+	VisionURL string    `json:"vision_url,omitempty"`
+	Insecure  bool      `json:"insecure,omitempty"`
 	Kind      Kind      `json:"kind"`
 	Condition Condition `json:"condition"`
 }
@@ -154,6 +205,8 @@ type CheckRequest struct {
 // WaitRequest 超时等待请求
 type WaitRequest struct {
 	Serial         string    `json:"serial"`
+	VisionURL      string    `json:"vision_url,omitempty"`
+	Insecure       bool      `json:"insecure,omitempty"`
 	Kind           Kind      `json:"kind"`
 	Condition      Condition `json:"condition"`
 	TimeoutMS      int64     `json:"timeout_ms,omitempty"`       // 默认 10000ms
@@ -163,6 +216,8 @@ type WaitRequest struct {
 // TapWhenRequest 命中后自动点击请求
 type TapWhenRequest struct {
 	Serial         string    `json:"serial"`
+	VisionURL      string    `json:"vision_url,omitempty"`
+	Insecure       bool      `json:"insecure,omitempty"`
 	Kind           Kind      `json:"kind"`
 	Condition      Condition `json:"condition"`
 	TimeoutMS      int64     `json:"timeout_ms,omitempty"`
@@ -170,7 +225,7 @@ type TapWhenRequest struct {
 	TargetIndex    int       `json:"target_index,omitempty"` // 多目标时取第几个（从0开始按置信度排序）
 	Tap            *Point    `json:"tap,omitempty"`          // pixel 模式时必须显式指定 tap 点
 	ExpiresMS      int64     `json:"expires_ms,omitempty"`
-	Mode           string    `json:"mode,omitempty"`         // 注入模式，不传自动继承系统设置
+	Mode           string    `json:"mode,omitempty"` // 注入模式，不传自动继承系统设置
 	Humanize       bool      `json:"humanize,omitempty"`
 }
 
@@ -192,13 +247,14 @@ type CheckResponse struct {
 	Result    EvaluationResult `json:"result"`
 }
 
-// WaitResponse 等待响应
+// WaitResponse 等待响应（超时时提供 last_result 与 result 保证调用端双向兼容）
 type WaitResponse struct {
-	Status    string           `json:"status"` // matched | timeout
-	Matched   bool             `json:"matched"`
-	Kind      Kind             `json:"kind"`
-	ElapsedMS int64            `json:"elapsed_ms"`
-	Result    EvaluationResult `json:"result"`
+	Status     string            `json:"status"` // matched | timeout
+	Matched    bool              `json:"matched"`
+	Kind       Kind              `json:"kind"`
+	ElapsedMS  int64             `json:"elapsed_ms"`
+	Result     EvaluationResult  `json:"result"`
+	LastResult *EvaluationResult `json:"last_result,omitempty"`
 }
 
 // ActionResult 动作执行统一结果
@@ -211,12 +267,13 @@ type ActionResult struct {
 	ElapsedMS int64  `json:"elapsed_ms"`
 }
 
-// TapWhenResponse 条件点击响应
+// TapWhenResponse 条件点击响应（同时提供 tap 与 tap_point 字段）
 type TapWhenResponse struct {
 	Status    string           `json:"status"` // matched | timeout
 	Matched   bool             `json:"matched"`
 	Kind      Kind             `json:"kind"`
 	ElapsedMS int64            `json:"elapsed_ms"`
+	Tap       *Point           `json:"tap,omitempty"`
 	TapPoint  *Point           `json:"tap_point,omitempty"`
 	Action    *ActionResult    `json:"action,omitempty"`
 	Result    EvaluationResult `json:"result"`
@@ -233,12 +290,15 @@ type RegionScreenshotRequest struct {
 
 // DeviceStatusResponse 设备状态响应
 type DeviceStatusResponse struct {
-	Status       string `json:"status"` // ready | offline
-	Serial       string `json:"serial"`
-	Width        int    `json:"width"`
-	Height       int    `json:"height"`
-	TouchMode    string `json:"touch_mode"` // 当前系统生效的点击模式：sdk / hid / adb
-	StreamActive bool   `json:"stream_active"`
+	Status          string `json:"status"` // ready | offline
+	Serial          string `json:"serial"`
+	SessionID       string `json:"session_id,omitempty"`
+	Codec           string `json:"codec,omitempty"`
+	ProtocolVersion string `json:"protocol_version,omitempty"`
+	Width           int    `json:"width"`
+	Height          int    `json:"height"`
+	TouchMode       string `json:"touch_mode"` // 当前系统生效的点击模式：sdk / hid / adb
+	StreamActive    bool   `json:"stream_active"`
 }
 
 // 常量按键映射

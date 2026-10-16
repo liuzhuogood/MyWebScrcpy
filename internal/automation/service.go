@@ -537,11 +537,12 @@ func (s *Service) Wait(ctx context.Context, req WaitRequest) (WaitResponse, erro
 	}
 
 	return WaitResponse{
-		Status:    "timeout",
-		Matched:   false,
-		Kind:      req.Kind,
-		ElapsedMS: time.Since(started).Milliseconds(),
-		Result:    lastEval,
+		Status:     "timeout",
+		Matched:    false,
+		Kind:       req.Kind,
+		ElapsedMS:  time.Since(started).Milliseconds(),
+		Result:     lastEval,
+		LastResult: &lastEval,
 	}, nil
 }
 
@@ -613,6 +614,7 @@ func (s *Service) TapWhen(ctx context.Context, req TapWhenRequest) (TapWhenRespo
 		Matched:   true,
 		Kind:      req.Kind,
 		ElapsedMS: waitRes.ElapsedMS + actionRes.ElapsedMS,
+		Tap:       &clickPoint,
 		TapPoint:  &clickPoint,
 		Action:    &actionRes,
 		Result:    waitRes.Result,

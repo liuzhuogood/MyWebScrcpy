@@ -3689,6 +3689,559 @@
           }
         }
       }
+    },
+    "/api/v1/actions/tap": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "设备点击",
+        "description": "通过归一化坐标向指定设备发送单次点击。若未显式指定 mode，自动继承系统当前配置的点击模式（SDK、HID 或 ADB）。支持拟人化微抖动和随机按压延时。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "serial",
+                  "x",
+                  "y"
+                ],
+                "properties": {
+                  "serial": {
+                    "type": "string",
+                    "description": "设备序列号"
+                  },
+                  "x": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "归一化横坐标 (0~1)"
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "归一化纵坐标 (0~1)"
+                  },
+                  "expires_ms": {
+                    "type": "integer",
+                    "default": 3000,
+                    "description": "动作超时时间 (ms)"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "sdk",
+                      "adb",
+                      "hid"
+                    ],
+                    "description": "注入模式，不传自动继承系统设置"
+                  },
+                  "humanize": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "是否启用拟人化点击"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "执行结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions/swipe": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "设备滑动",
+        "description": "向设备发送带终点的拖动/滑动动作。支持起点 x/y 或 x1/y1，终点 x2/y2。启用 humanize 时走带法线抖动的正弦变速曲线，模拟人手滑动节奏。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "serial",
+                  "x2",
+                  "y2"
+                ],
+                "properties": {
+                  "serial": {
+                    "type": "string",
+                    "description": "设备序列号"
+                  },
+                  "x": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "起点归一化横坐标"
+                  },
+                  "y": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "起点归一化纵坐标"
+                  },
+                  "x1": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "起点别名 x1"
+                  },
+                  "y1": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "起点别名 y1"
+                  },
+                  "x2": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "终点归一化横坐标"
+                  },
+                  "y2": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "终点归一化纵坐标"
+                  },
+                  "duration_ms": {
+                    "type": "integer",
+                    "default": 300,
+                    "description": "滑动时长 (ms)"
+                  },
+                  "expires_ms": {
+                    "type": "integer",
+                    "default": 3000,
+                    "description": "超时时间 (ms)"
+                  },
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "sdk",
+                      "adb",
+                      "hid"
+                    ],
+                    "description": "注入模式，不传自动继承系统设置"
+                  },
+                  "humanize": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "是否启用拟人化轨迹"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "执行结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions/events": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "系统按键事件",
+        "description": "发送常用系统按键：home, back, app_switch, power, volume_up, volume_down, enter, delete。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "serial",
+                  "event"
+                ],
+                "properties": {
+                  "serial": {
+                    "type": "string",
+                    "description": "设备序列号"
+                  },
+                  "event": {
+                    "type": "string",
+                    "enum": [
+                      "home",
+                      "back",
+                      "app_switch",
+                      "power",
+                      "volume_up",
+                      "volume_down",
+                      "enter",
+                      "delete"
+                    ],
+                    "description": "事件名称"
+                  },
+                  "expires_ms": {
+                    "type": "integer",
+                    "default": 3000,
+                    "description": "超时时间 (ms)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "执行结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/actions/send-key": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "键盘文本与键码序列",
+        "description": "向设备注入指定文本、单个物理按键码带修饰符，或多个键码序列。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "serial"
+                ],
+                "properties": {
+                  "serial": {
+                    "type": "string",
+                    "description": "设备序列号"
+                  },
+                  "text": {
+                    "type": "string",
+                    "description": "待输入的文本字符串"
+                  },
+                  "keycode": {
+                    "type": "integer",
+                    "description": "Android Keycode 整数"
+                  },
+                  "keycodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    },
+                    "description": "批量键码序列"
+                  },
+                  "modifiers": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "修饰键 (shift, ctrl, alt, meta)"
+                  },
+                  "expires_ms": {
+                    "type": "integer",
+                    "default": 3000,
+                    "description": "超时时间 (ms)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "执行结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/device-status": {
+      "get": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "设备状态与系统点击类型",
+        "description": "获取设备在线状态、屏幕物理尺寸分辨率，以及当前系统生效的点击模式（touch_mode: sdk/hid/adb）。",
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "设备序列号"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "设备状态与注入模式",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ready"
+                    },
+                    "serial": {
+                      "type": "string"
+                    },
+                    "width": {
+                      "type": "integer",
+                      "example": 1080
+                    },
+                    "height": {
+                      "type": "integer",
+                      "example": 2400
+                    },
+                    "touch_mode": {
+                      "type": "string",
+                      "enum": [
+                        "sdk",
+                        "hid",
+                        "adb"
+                      ],
+                      "example": "sdk"
+                    },
+                    "stream_active": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vision/check": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "视觉单帧即时检查 (判断是否存在)",
+        "description": "立即截取最新一帧画面，评估指定的目标是否存在（支持 kind: text 文字、template 模板、pixel 像素颜色），不阻塞等待。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConditionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "检查结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vision/wait": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "视觉持续轮询等待 (判断是否存在)",
+        "description": "在 timeout_ms 内持续轮询屏幕画面，直到目标出现或超时。支持 text、template 或 pixel。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WaitRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "等待结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vision/actions/tap-when": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "视觉条件点击 (OCR点击 / 模板点击)",
+        "description": "持续等待指定文字或模板出现，一旦命中自动计算包围盒中心点并触发点击；若为像素模式则点击指定的 tap 坐标。自动联动系统点击模式与拟人化参数。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TapWhenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "条件点击结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TapWhenResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vision/region-screenshot": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "局部区域截图",
+        "description": "截取设备屏幕中指定像素区域的画面，直接返回 PNG 图片二进制流。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "serial",
+                  "x",
+                  "y",
+                  "width",
+                  "height"
+                ],
+                "properties": {
+                  "serial": {
+                    "type": "string"
+                  },
+                  "x": {
+                    "type": "integer"
+                  },
+                  "y": {
+                    "type": "integer"
+                  },
+                  "width": {
+                    "type": "integer"
+                  },
+                  "height": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PNG 图片流",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6040,6 +6593,277 @@
               "hid"
             ],
             "description": "默认点击/滑动注入模式。sdk：scrcpy 控制 Socket 注入；adb：adb shell input；hid：UHID 虚拟触摸屏硬件事件注入。"
+          }
+        }
+      },
+      "ActionResult": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "executed",
+              "failed"
+            ]
+          },
+          "executed": {
+            "type": "boolean"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "sdk",
+              "hid",
+              "adb"
+            ]
+          },
+          "error_code": {
+            "type": "string"
+          },
+          "elapsed_ms": {
+            "type": "integer"
+          }
+        }
+      },
+      "ConditionRequest": {
+        "type": "object",
+        "required": [
+          "serial",
+          "kind",
+          "condition"
+        ],
+        "properties": {
+          "serial": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "template",
+              "pixel"
+            ]
+          },
+          "condition": {
+            "type": "object",
+            "properties": {
+              "keywords": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "OCR 待匹配的关键词"
+              },
+              "engine": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "macocr",
+                  "paddleocr",
+                  "indraocr"
+                ]
+              },
+              "bbox": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "description": "归一化区域裁剪 [x, y, w, h]"
+              },
+              "template_names": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "模板名称列表"
+              },
+              "template_name": {
+                "type": "string",
+                "description": "单个模板名称"
+              },
+              "threshold": {
+                "type": "number",
+                "default": 0.88,
+                "description": "模板匹配阈值 (0~1)"
+              },
+              "points": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "description": "像素点定义列表"
+              },
+              "pixel_mode": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "any"
+                ]
+              },
+              "match_mode": {
+                "type": "string",
+                "enum": [
+                  "any",
+                  "all"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "WaitRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ConditionRequest"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "timeout_ms": {
+                "type": "integer",
+                "default": 10000,
+                "description": "超时等待时间 (ms)"
+              },
+              "poll_interval_ms": {
+                "type": "integer",
+                "default": 100,
+                "description": "轮询间隔 (ms)"
+              }
+            }
+          }
+        ]
+      },
+      "TapWhenRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WaitRequest"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "target_index": {
+                "type": "integer",
+                "default": 0,
+                "description": "多目标时命中的索引"
+              },
+              "tap": {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  }
+                },
+                "description": "像素匹配时指定的显式点击坐标"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "sdk",
+                  "adb",
+                  "hid"
+                ]
+              },
+              "humanize": {
+                "type": "boolean",
+                "default": true
+              },
+              "expires_ms": {
+                "type": "integer",
+                "default": 3000
+              }
+            }
+          }
+        ]
+      },
+      "CheckResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "matched",
+              "not_matched"
+            ]
+          },
+          "matched": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "elapsed_ms": {
+            "type": "integer"
+          },
+          "result": {
+            "type": "object"
+          }
+        }
+      },
+      "WaitResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "matched",
+              "timeout"
+            ]
+          },
+          "matched": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "elapsed_ms": {
+            "type": "integer"
+          },
+          "result": {
+            "type": "object"
+          }
+        }
+      },
+      "TapWhenResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "matched",
+              "timeout"
+            ]
+          },
+          "matched": {
+            "type": "boolean"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "elapsed_ms": {
+            "type": "integer"
+          },
+          "tap_point": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number"
+              },
+              "y": {
+                "type": "number"
+              }
+            }
+          },
+          "action": {
+            "$ref": "#/components/schemas/ActionResult"
+          },
+          "result": {
+            "type": "object"
           }
         }
       }
