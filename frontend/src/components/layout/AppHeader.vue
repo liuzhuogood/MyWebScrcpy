@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Ellipsis, Github, LayoutGrid, ListTodo, Settings, Sparkles } from 'lucide-vue-next'
+import { Bot, Ellipsis, Github, LayoutGrid, ListTodo, Settings, Sparkles } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -65,6 +65,12 @@ onMounted(() => {
         </Button>
 
         <Button variant="outline" size="sm" as-child>
+          <RouterLink to="/ai-integration">
+            <Bot class="h-4 w-4" />
+            AI 集成
+          </RouterLink>
+        </Button>
+        <Button variant="outline" size="sm" as-child>
           <RouterLink to="/tasks">
             <ListTodo class="h-4 w-4" />
             任务
@@ -98,6 +104,9 @@ onMounted(() => {
             <Sparkles class="h-4 w-4" />发现新版本 {{ updater.checkResult.latest_version }}
           </DropdownMenuItem>
           <DropdownMenuSeparator v-if="updater.checkResult?.has_update" />
+          <DropdownMenuItem as-child>
+            <RouterLink to="/ai-integration"><Bot class="h-4 w-4" />AI 集成</RouterLink>
+          </DropdownMenuItem>
           <DropdownMenuItem as-child>
             <RouterLink to="/tasks"><ListTodo class="h-4 w-4" />任务</RouterLink>
           </DropdownMenuItem>

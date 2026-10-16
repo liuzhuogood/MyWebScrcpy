@@ -19,6 +19,8 @@
 | 文件管理页 | 文件页、文件管理器 | 路由 `/files?serial=<序列号>` · `frontend/src/views/FilesView.vue`;亦内嵌于投屏详情页抽屉(`DevicePlayer.vue`,embedded) |
 | 任务运行页 | 任务面板、任务页、Task Runs | 路由 `/tasks` · `frontend/src/views/TasksView.vue` |
 | 依赖管理页 | 依赖页 | 路由 `/dependencies` · `frontend/src/views/DependenciesView.vue` |
+| AI 集成页 | 与 AI 集成、AI 集成、接入指南 | 路由 `/ai-integration` · `frontend/src/views/AiIntegrationView.vue` |
+| 技能详情页 | 技能详情、技能二级页面 | 路由 `/ai-integration/skills/:id` · `frontend/src/views/SkillDetailView.vue` |
 
 ## 界面区域与面板
 
@@ -36,6 +38,7 @@
 | ADB 终端 | Web Shell、交互式终端 | 右侧抽屉内 xterm.js 终端,真实 PTY 分配 |
 | 系统配置 | 设置、系统设置、系统配置弹窗 | 首页入口弹窗 `frontend/src/components/system/SystemConfigDialog.vue`,页签:主题 / ADB / Python / 模板匹配 / OCR 服务 |
 | 大屏磁贴 | 磁贴、tile | `frontend/src/components/dashboard/DashTile.vue` |
+| 技能市场 | 技能列表、APP 自动化技能 | `frontend/src/components/ai-integration/SkillMarket.vue` |
 
 ## 核心概念
 
@@ -64,3 +67,14 @@
 | `operationlog` | 操作日志 |
 | `dependencies` / `servicepython` / `serviceprefs` | ADB/Python 依赖管理、Python 服务进程管理、服务开关偏好持久化 |
 | `updater` / `desktop` / `db` / `debug` | 应用更新、桌面模式、数据库访问、调试 |
+| `skillsmarket` | AI 集成元数据、技能市场列表与详情、ZIP 包生成、多助手安全原子安装 |
+
+## 原型设计中的页面
+
+以下为保留的历史独立原型；正式页面和面板以上文对应条目为准。
+
+| 术语 | 别名(口语) | 指向 |
+|---|---|---|
+| AI 集成原型 | AI 集成历史原型、接入指南原型 | `prototypes/cases/ai-integration-v2/Prototype.vue`；独立预览 `#ai-integration-v2`，v1 保留用于对照 |
+| 技能市场原型 | 技能列表原型、APP 自动化技能原型 | v2 首页中的 `components/SkillMarket.vue`；搜索、分类、已安装过滤和技能入口 |
+| 技能详情原型页 | 技能详情原型、技能二级原型页面 | `prototypes/cases/ai-integration-v2/components/SkillDetailPage.vue`；预览查询参数 `?skill=<SkillId>#ai-integration-v2`，支持返回市场 |
