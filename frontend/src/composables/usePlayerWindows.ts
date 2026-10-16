@@ -7,6 +7,8 @@ export interface PlayerWindowState {
   serial: string
   opacity: number
   clickThrough: boolean
+  borderless: boolean
+  toolbarVisible: boolean
   revision: number
 }
 
@@ -46,7 +48,7 @@ export function usePlayerWindows(serial: Ref<string>) {
   const native = isTauri()
   const busy = ref(false)
   const player = computed(() => snapshot.value.windows.find(item => item.serial === serial.value))
-  const needsRecovery = computed(() => Boolean(player.value && (player.value.opacity < 100 || player.value.clickThrough)))
+  const needsRecovery = computed(() => Boolean(player.value && (player.value.opacity < 100 || player.value.clickThrough || player.value.borderless || !player.value.toolbarVisible)))
   const shortcut = computed(() => snapshot.value.recoveryShortcut)
   let pendingOpacity: { opacity: number, expectedRevision: number } | undefined
 
@@ -69,17 +71,21 @@ export function usePlayerWindows(serial: Ref<string>) {
 
   let pendingClickThrough: { enabled: boolean, expectedRevision: number } | undefined
   let pendingRestore = false
+  let pendingBorderless: { enabled: boolean, expectedRevision: number } | undefined
+  let pendingToolbar: { visible: boolean, expectedRevision: number } | undefined
 
   async function drain() {
     if (!native || busy.value) return
     busy.value = true
     ++revision
     try {
-      while (pendingRestore || pendingOpacity !== undefined || pendingClickThrough !== undefined) {
+      while (pendingRestore || pendingOpacity !== undefined || pendingClickThrough !== undefined || pendingBorderless !== undefined || pendingToolbar !== undefined) {
         if (pendingRestore) {
           pendingRestore = false
           pendingOpacity = undefined
           pendingClickThrough = undefined
+          pendingBorderless = undefined
+          pendingToolbar = undefined
           await invoke('restore_player_window', { serial: serial.value })
           await refresh()
         }
@@ -93,12 +99,24 @@ export function usePlayerWindows(serial: Ref<string>) {
           pendingClickThrough = undefined
           await invoke('set_player_click_through', args)
         }
+        else if (pendingBorderless !== undefined) {
+          const args = pendingBorderless
+          pendingBorderless = undefined
+          await invoke('set_player_borderless', args)
+        }
+        else if (pendingToolbar !== undefined) {
+          const args = pendingToolbar
+          pendingToolbar = undefined
+          await invoke('set_player_toolbar_visible', args)
+        }
       }
       await refresh()
     }
     catch (error) {
       pendingOpacity = undefined
       pendingClickThrough = undefined
+      pendingBorderless = undefined
+      pendingToolbar = undefined
       console.error('[Desktop] 小窗操作失败', error)
       toast.error(String(error))
       await poll()
@@ -106,7 +124,7 @@ export function usePlayerWindows(serial: Ref<string>) {
     finally {
       busy.value = false
       // A recovery requested during an in-flight call must not be dropped.
-      if (pendingRestore || pendingOpacity !== undefined || pendingClickThrough !== undefined)
+      if (pendingRestore || pendingOpacity !== undefined || pendingClickThrough !== undefined || pendingBorderless !== undefined || pendingToolbar !== undefined)
         void drain()
     }
   }
@@ -128,9 +146,21 @@ export function usePlayerWindows(serial: Ref<string>) {
     return drain()
   }
 
+  function setBorderless(enabled: boolean) {
+    if (!player.value) return
+    pendingBorderless = { enabled, expectedRevision: player.value.revision }
+    return drain()
+  }
+
+  function setToolbarVisible(visible: boolean) {
+    if (!player.value) return
+    pendingToolbar = { visible, expectedRevision: player.value.revision }
+    return drain()
+  }
+
   return {
     native, player, needsRecovery, shortcut, busy,
     setOpacity,
-    setClickThrough, restore,
+    setClickThrough, setBorderless, setToolbarVisible, restore,
   }
 }

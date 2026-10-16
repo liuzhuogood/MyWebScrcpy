@@ -1,6 +1,6 @@
 # MyWebScrcpy 桌面版
 
-Tauri 管理原生窗口、菜单、托盘和单实例，配套 Go 程序承载现有 Vue 与 HTTP/WebSocket。Pi、ADB 与搜索工具不捆绑，scrcpy-server 保留内置配套版本。首页系统配置支持内置依赖按需安装与卸载，也可选择系统程序；Python 沿用已有配置。
+Tauri 管理原生窗口、菜单、托盘和单实例，配套 Go 程序承载现有 Vue 与 HTTP/WebSocket。ADB 与 Python 在依赖管理中按需配置或安装，scrcpy-server 保留内置配套版本。首页系统配置支持内置依赖按需安装与卸载，也可选择系统程序。
 
 ## 构建
 
@@ -49,7 +49,7 @@ Linux 自动检测 Wayland/X11 socket，包括 SSH X11 转发；环境变量存�
 MYWEBSCRCPY_ADB=/absolute/path/adb MYWEBSCRCPY_PYTHON=/absolute/path/python3 ./mywebscrcpy
 ```
 
-macOS Finder 启动不会继承终端临时环境变量。首页“系统配置 → 依赖”可按需安装 Pi/ADB，或配置系统 Pi、ADB 的绝对路径；fd/rg 自动识别 Pi 工具缓存和 PATH；保存后新操作生效，ADB 忙时拒绝切换。配置保存在桌面数据目录的 dependencies/config.json。既有桌面“依赖管理”入口及 Python 路径设置保留；MYWEBSCRCPY_ADB 在系统来源下仍优先，之后按明确路径、ANDROID_HOME、PATH 查找。Python 脚本库按脚本要求安装。
+macOS Finder 启动不会继承终端临时环境变量。首页“系统配置 → 依赖”可按需安装内置 ADB/Python，或配置系统 ADB、Python 的绝对路径；保存后新操作生效，ADB 忙时拒绝切换。配置保存在桌面数据目录的 dependencies/config.json。既有桌面“依赖管理”入口及 Python 路径设置保留；MYWEBSCRCPY_ADB 在系统来源下仍优先，之后按明确路径、ANDROID_HOME、PATH 查找。Python 脚本库按脚本要求安装。
 
 桌面 App 使用完整安装包更新，不允许沿用服务端单文件替换升级。系统签名、公证和三平台真机视频/音频验证不因本机编译成功而完成。
 
@@ -71,7 +71,7 @@ Release 保留 9 个程序与 `desktop-latest.json` 自动更新索引。macOS G
 
 Windows GUI 安装版使用索引自动更新；独立 GUI exe 使用完整安装包更新，避免安装器更新后仍重新打开旧便携文件。
 
-macOS 使用 DMG 手动更新；本次未增加 `.app.tar.gz` 自动更新资产，索引仍只包含 Windows。DMG 构建包含配套 Go 服务和 scrcpy-server，Pi/ADB 在系统配置中按需安装。Apple 正式签名与公证取决于仓库 Apple 凭据，缺少凭据时使用 ad-hoc 签名。
+macOS 使用 DMG 手动更新；本次未增加 `.app.tar.gz` 自动更新资产，索引仍只包含 Windows。DMG 构建包含配套 Go 服务和 scrcpy-server，ADB/Python 在系统配置中按需安装。Apple 正式签名与公证取决于仓库 Apple 凭据，缺少凭据时使用 ad-hoc 签名。
 
 标签发布会自动调用 `macOS DMG` 工作流构建两种 DMG，Release 和 Docker 等待两个 macOS 架构均验证成功。所有产物使用同一发布标签源码。
 

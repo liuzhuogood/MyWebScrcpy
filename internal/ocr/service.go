@@ -24,6 +24,7 @@ import (
 
 	"mywebscrcpy/internal/db"
 	"mywebscrcpy/internal/dependencies"
+	"mywebscrcpy/internal/servicepython"
 	"mywebscrcpy/internal/vision"
 	"mywebscrcpy/internal/ws"
 )
@@ -32,6 +33,8 @@ const (
 	DefaultMacOCRURL    = "http://10.0.0.11:8000/upload"
 	DefaultPaddleOCRURL = "http://127.0.0.1:8031/upload"
 	DefaultPaddlePort   = 8031
+	DefaultIndraPort    = 8032
+	DefaultIndraOCRURL  = "http://127.0.0.1:8032/upload"
 )
 
 type Box struct {
@@ -53,7 +56,7 @@ type DetectRequest struct {
 	Mark           bool      `json:"mark"`
 	MarkDurationMS int64     `json:"mark_duration_ms"`
 	Keywords       []string  `json:"keywords"`
-	Engine         string    `json:"engine"` // auto, macocr, paddleocr
+	Engine         string    `json:"engine"` // auto, indraocr, macocr, paddleocr
 }
 
 type DetectResponse struct {
@@ -67,6 +70,14 @@ type DetectResponse struct {
 }
 
 type StatusResponse struct {
+	IndraInstalled  bool   `json:"indra_installed"`
+	IndraRunning    bool   `json:"indra_running"`
+	IndraReady      bool   `json:"indra_ready"`
+	IndraPID        int    `json:"indra_pid"`
+	IndraPort       int    `json:"indra_port"`
+	IndraOCRURL     string `json:"indraocr_url"`
+	IndraStatus     string `json:"indra_status,omitempty"`
+	IndraError      string `json:"indra_error,omitempty"`
 	PaddleInstalled bool   `json:"paddle_installed"`
 	PaddleRunning   bool   `json:"paddle_running"`
 	PaddleReady     bool   `json:"paddle_ready"`
@@ -81,6 +92,9 @@ type StatusResponse struct {
 }
 
 type Service struct {
+	// Each local engine owns its process, preparation state and runtime lease.
+	profile          string
+	indra            *Service
 	mu               sync.RWMutex
 	db               *db.DB
 	hub              *ws.Hub
@@ -96,13 +110,25 @@ type Service struct {
 	installedPy      string
 	installedAt      time.Time
 	lastStartErr     string
+	runtime          pythonRuntime
+	prepareCancel    context.CancelFunc
+	prepareDone      chan struct{}
+	preparePhase     string
+	control          func(bool, func() error) error
 }
 
 func NewService(database *db.DB, hub *ws.Hub) *Service {
+	s := newLocalService(database, hub, servicepython.PaddleOCR, DefaultPaddlePort)
+	s.indra = newLocalService(database, hub, servicepython.IndraOCR, DefaultIndraPort)
+	return s
+}
+
+func newLocalService(database *db.DB, hub *ws.Hub, profile string, port int) *Service {
 	return &Service{
+		profile:    profile,
 		db:         database,
 		hub:        hub,
-		paddlePort: DefaultPaddlePort,
+		paddlePort: port,
 		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
 }
@@ -137,8 +163,21 @@ func (s *Service) checkInstalled(running bool) (bool, string) {
 	if running {
 		return true, ""
 	}
+	s.mu.RLock()
+	preparing := s.preparePhase != ""
+	s.mu.RUnlock()
+	if preparing {
+		return false, ""
+	}
 
 	pyPath, err := dependencies.PythonPath()
+	if s.runtime != nil {
+		var release func()
+		pyPath, release, err = s.runtime.Acquire(s.profile)
+		if err == nil {
+			defer release()
+		}
+	}
 	if err != nil || pyPath == "" {
 		return false, "未找到 Python 运行时"
 	}
@@ -152,7 +191,22 @@ func (s *Service) checkInstalled(running bool) (bool, string) {
 	}
 	s.mu.RUnlock()
 
-	installed, missing := probePaddleDependencies(context.Background(), pyPath)
+	var installed bool
+	var missing string
+	if s.runtime != nil {
+		err := s.runtime.Check(context.Background(), s.profile, pyPath)
+		installed = err == nil
+		missing = ""
+		if err != nil {
+			missing = err.Error()
+		}
+	} else {
+		if s.profile == servicepython.IndraOCR {
+			installed, missing = false, "请通过应用管理的 Python 环境启动 Indra OCR"
+		} else {
+			installed, missing = probePaddleDependencies(context.Background(), pyPath)
+		}
+	}
 
 	s.mu.Lock()
 	s.installed = installed
@@ -206,6 +260,7 @@ func (s *Service) Status() StatusResponse {
 	}
 	port := s.paddlePort
 	lastErr := s.lastStartErr
+	phase := s.preparePhase
 	s.mu.RUnlock()
 
 	macURL := s.getConfig("MACOCR_URL", DefaultMacOCRURL)
@@ -226,13 +281,16 @@ func (s *Service) Status() StatusResponse {
 	} else if lastErr != "" {
 		paddleStatus = "failed"
 	}
+	if phase != "" {
+		paddleStatus = phase
+	}
 
 	displayErr := lastErr
-	if !running && !installed && displayErr == "" {
+	if !running && !installed && displayErr == "" && phase == "" {
 		displayErr = fmt.Sprintf("缺少依赖: %s", missing)
 	}
 
-	return StatusResponse{
+	status := StatusResponse{
 		PaddleInstalled: installed,
 		PaddleRunning:   running,
 		PaddleReady:     ready,
@@ -245,6 +303,14 @@ func (s *Service) Status() StatusResponse {
 		PaddleStatus:    paddleStatus,
 		PaddleError:     displayErr,
 	}
+	if s.indra != nil {
+		i := s.indra.Status()
+		status.IndraInstalled, status.IndraRunning, status.IndraReady = i.PaddleInstalled, i.PaddleRunning, i.PaddleReady
+		status.IndraPID, status.IndraPort = i.PaddlePID, i.PaddlePort
+		status.IndraStatus, status.IndraError = i.PaddleStatus, i.PaddleError
+		status.IndraOCRURL = s.getConfig("INDRAOCR_URL", fmt.Sprintf("http://127.0.0.1:%d/upload", i.PaddlePort))
+	}
+	return status
 }
 
 func (s *Service) StartPaddle(ctx context.Context) error {
@@ -260,6 +326,13 @@ func (s *Service) StartPaddle(ctx context.Context) error {
 	}
 	s.mu.RUnlock()
 
+	if s.runtime != nil {
+		return s.startManagedPaddle(ctx)
+	}
+
+	if s.profile == servicepython.IndraOCR {
+		return errors.New("Indra OCR 需要应用管理的 Python 环境")
+	}
 	pyPath, err := dependencies.PythonPath()
 	if err != nil {
 		s.mu.Lock()
@@ -286,6 +359,16 @@ func (s *Service) StartPaddle(ctx context.Context) error {
 		return err
 	}
 
+	return s.startPaddleProcess(ctx, pyPath, serverScript, func() {})
+}
+
+func (s *Service) startPaddleProcess(ctx context.Context, pyPath, serverScript string, release func()) error {
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			release()
+		}
+	}()
 	s.mu.Lock()
 	if s.paddleCmd != nil && s.paddleRunning {
 		if s.paddleReady {
@@ -323,12 +406,14 @@ func (s *Service) StartPaddle(ctx context.Context) error {
 		return fmt.Errorf("启动 paddleocr-server 失败: %w", err)
 	}
 	s.paddleRunning = true
+	handedOff = true
 	s.mu.Unlock()
 
-	log.Printf("[OCR] 已启动 paddleocr-server (PID: %d, Port: %d)", cmd.Process.Pid, port)
+	log.Printf("[OCR] 已启动 service=%s PID=%d port=%d", s.profile, cmd.Process.Pid, port)
 
 	go func() {
 		_ = cmd.Wait()
+		release()
 		s.mu.Lock()
 		if s.paddleCmd == cmd {
 			s.paddleCmd = nil
@@ -339,14 +424,18 @@ func (s *Service) StartPaddle(ctx context.Context) error {
 		}
 		s.mu.Unlock()
 		close(done)
-		log.Printf("[OCR] paddleocr-server 进程已退出")
+		log.Printf("[OCR] 服务进程已退出 service=%s", s.profile)
 	}()
 
 	return s.waitForPaddleReady(ctx, cmd, done, ready, port)
 }
 
 func (s *Service) waitForPaddleReady(ctx context.Context, cmd *exec.Cmd, done <-chan struct{}, ready <-chan struct{}, port int) error {
-	readyCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	startupTimeout := 120 * time.Second
+	if s.profile == servicepython.IndraOCR {
+		startupTimeout = 300 * time.Second
+	}
+	readyCtx, cancel := context.WithTimeout(ctx, startupTimeout)
 	defer cancel()
 	url := fmt.Sprintf("http://127.0.0.1:%d/health", port)
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -368,7 +457,7 @@ func (s *Service) waitForPaddleReady(ctx context.Context, cmd *exec.Cmd, done <-
 		case <-ready:
 			return nil
 		case <-done:
-			err := errors.New("paddleocr-server 进程在模型就绪前退出，请检查服务日志")
+			err := errors.New("OCR 服务进程在模型就绪前退出，请检查服务日志")
 			s.mu.Lock()
 			if s.paddleCmd == nil {
 				s.lastStartErr = err.Error()
@@ -376,7 +465,7 @@ func (s *Service) waitForPaddleReady(ctx context.Context, cmd *exec.Cmd, done <-
 			s.mu.Unlock()
 			return err
 		case <-readyCtx.Done():
-			return fail(fmt.Errorf("等待 paddleocr-server 模型就绪失败: %w", readyCtx.Err()))
+			return fail(fmt.Errorf("等待 OCR 服务模型就绪失败: %w", readyCtx.Err()))
 		case <-ticker.C:
 			req, err := http.NewRequestWithContext(readyCtx, http.MethodGet, url, nil)
 			if err != nil {
@@ -389,6 +478,8 @@ func (s *Service) waitForPaddleReady(ctx context.Context, cmd *exec.Cmd, done <-
 			var body struct {
 				Ready  bool   `json:"ready"`
 				Detail string `json:"detail"`
+				Engine string `json:"engine"`
+				PID    int    `json:"pid"`
 			}
 			_ = json.NewDecoder(resp.Body).Decode(&body)
 			resp.Body.Close()
@@ -396,6 +487,9 @@ func (s *Service) waitForPaddleReady(ctx context.Context, cmd *exec.Cmd, done <-
 				return fail(errors.New(body.Detail))
 			}
 			if resp.StatusCode != http.StatusOK || !body.Ready {
+				continue
+			}
+			if s.profile == servicepython.IndraOCR && (body.Engine != servicepython.IndraOCR || body.PID != cmd.Process.Pid) {
 				continue
 			}
 
@@ -410,16 +504,27 @@ func (s *Service) waitForPaddleReady(ctx context.Context, cmd *exec.Cmd, done <-
 				return nil
 			}
 			s.mu.Unlock()
-			return errors.New("paddleocr-server 在就绪确认时已退出")
+			return errors.New("OCR 服务在就绪确认时已退出")
 		}
 	}
 }
 
 func (s *Service) StopPaddle() error {
 	s.mu.Lock()
+	cancel, preparing := s.prepareCancel, s.prepareDone
 	cmd := s.paddleCmd
 	done := s.paddleDone
 	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+		<-preparing
+		s.mu.RLock()
+		cmd, done = s.paddleCmd, s.paddleDone
+		s.mu.RUnlock()
+		s.mu.Lock()
+		s.lastStartErr = ""
+		s.mu.Unlock()
+	}
 
 	if cmd == nil || cmd.Process == nil {
 		return nil
@@ -445,11 +550,11 @@ func stopProcess(cmd *exec.Cmd, done <-chan struct{}) error {
 	case <-done:
 		return nil
 	case <-time.After(2 * time.Second):
-		return errors.New("等待 paddleocr-server 退出超时")
+		return errors.New("等待 OCR 服务退出超时")
 	}
 }
 
-func (s *Service) SaveConfig(macURL, macAuth, paddleURL, engine string) error {
+func (s *Service) SaveConfig(macURL, macAuth, paddleURL, indraURL, engine string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -465,6 +570,11 @@ func (s *Service) SaveConfig(macURL, macAuth, paddleURL, engine string) error {
 	}
 	if paddleURL != "" {
 		if err := s.setConfig("PADDLEOCR_URL", paddleURL); err != nil {
+			return err
+		}
+	}
+	if indraURL != "" {
+		if err := s.setConfig("INDRAOCR_URL", indraURL); err != nil {
 			return err
 		}
 	}
@@ -551,6 +661,10 @@ func (s *Service) Detect(ctx context.Context, imgBytes []byte, req DetectRequest
 	macURL := s.getConfig("MACOCR_URL", DefaultMacOCRURL)
 	macAuth := s.getConfig("MACOCR_AUTH", "")
 	paddleURL := s.getConfig("PADDLEOCR_URL", fmt.Sprintf("http://127.0.0.1:%d/upload", s.paddlePort))
+	s.indra.mu.RLock()
+	indraPort := s.indra.paddlePort
+	s.indra.mu.RUnlock()
+	indraURL := s.getConfig("INDRAOCR_URL", fmt.Sprintf("http://127.0.0.1:%d/upload", indraPort))
 	defaultEngine := s.getConfig("OCR_ENGINE", "auto")
 	s.mu.RUnlock()
 
@@ -558,7 +672,7 @@ func (s *Service) Detect(ctx context.Context, imgBytes []byte, req DetectRequest
 	if engine == "" {
 		engine = defaultEngine
 	}
-	if engine != "auto" && engine != "macocr" && engine != "paddleocr" {
+	if engine != "auto" && engine != "indraocr" && engine != "macocr" && engine != "paddleocr" {
 		engine = "auto"
 	}
 
@@ -566,7 +680,25 @@ func (s *Service) Detect(ctx context.Context, imgBytes []byte, req DetectRequest
 	var engineUsed string
 	var errorsList []string
 
-	if engine == "auto" || engine == "macocr" {
+	if engine == "auto" || engine == "indraocr" {
+		res, err := s.uploadToOCR(ctx, imgBytes, indraURL, "")
+		if err == nil {
+			err = validateIndraResult(res)
+		}
+		if err == nil {
+			result, engineUsed = res, "indraocr"
+		} else {
+			errorsList = append(errorsList, fmt.Sprintf("Indra OCR: %v", err))
+			if engine == "indraocr" {
+				return nil, fmt.Errorf("Indra OCR 识别失败: %w", err)
+			}
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			log.Printf("[OCR] Indra OCR 不可用，继续尝试下一引擎: %v", err)
+		}
+	}
+	if result == nil && (engine == "auto" || engine == "macocr") {
 		res, err := s.uploadToOCR(ctx, imgBytes, macURL, macAuth)
 		if err == nil {
 			result = res
@@ -639,7 +771,7 @@ func (s *Service) Detect(ctx context.Context, imgBytes []byte, req DetectRequest
 
 		var nx, ny, nw, nh float64
 		var px, py, pw, ph int
-		if rx > 1.0 || ry > 1.0 || rw > 1.0 || rh > 1.0 {
+		if engineUsed == "indraocr" || rx > 1.0 || ry > 1.0 || rw > 1.0 || rh > 1.0 {
 			nx = rx / float64(imgW)
 			ny = ry / float64(imgH)
 			nw = rw / float64(imgW)

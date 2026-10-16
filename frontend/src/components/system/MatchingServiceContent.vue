@@ -9,7 +9,7 @@ const props = defineProps<{ status?: MatchingStatus; busy: boolean; error: strin
 const emit = defineEmits<{ action: [operation: 'check' | 'start' | 'stop'] }>()
 
 const isRunning = computed(() => props.status?.state === 'running')
-const labels = { stopped: '未启动', checking: '检测中', starting: '启动中', running: '运行中', stopping: '停止中', failed: '服务异常' }
+const labels = { stopped: '未启动', checking: '检测中', installing: '准备依赖中', starting: '启动中', running: '运行中', stopping: '停止中', failed: '服务异常' }
 const deviceLabels = { waiting: '等待画面', matching: '匹配中', failed: '匹配异常' }
 
 function onToggle(enabled: boolean) {

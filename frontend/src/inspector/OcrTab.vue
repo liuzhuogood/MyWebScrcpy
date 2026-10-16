@@ -1,21 +1,17 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { Copy, Loader2, ScanText } from 'lucide-vue-next'
+import { onUnmounted } from 'vue'
+import { Copy, Crop, Loader2, ScanText, Square } from 'lucide-vue-next'
 import { toast } from 'vue-sonner'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { useInspector } from './useInspector'
 
 const ins = useInspector()
-
-const scopeText = computed(() => {
-  if (ins.selectedNode.value) {
-    const tag = ins.selectedNode.value.tagName || '选中元素'
-    return `${tag} (局部区域)`
-  }
-  return '整个屏幕 (全屏)'
-})
+const ocr = ins.ocr
+const engineNames: Record<string, string> = { indraocr: 'Indra OCR', macocr: 'macOCR', paddleocr: 'PaddleOCR' }
 
 function copyText(text: string) {
   navigator.clipboard.writeText(text).then(
@@ -23,99 +19,56 @@ function copyText(text: string) {
     () => toast.error('复制失败'),
   )
 }
+onUnmounted(ocr.panelHidden)
 </script>
 
 <template>
-  <div class="flex h-full flex-col gap-2 p-3">
-    <!-- 检测范围与执行操作 -->
-    <div class="space-y-2 rounded-lg border bg-muted/30 p-2.5">
-      <div class="flex items-center justify-between text-xs">
-        <span class="text-muted-foreground">检测范围:</span>
-        <span class="font-medium truncate max-w-[180px]">{{ scopeText }}</span>
+  <div class="flex h-full min-h-0 flex-col gap-3 overflow-auto p-3">
+    <div class="shrink-0 space-y-3">
+      <Select v-model="ocr.engine.value">
+        <SelectTrigger class="w-full text-xs" aria-label="识别引擎"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="auto">自动</SelectItem>
+          <SelectItem value="indraocr">Indra OCR</SelectItem>
+          <SelectItem value="macocr">macOCR</SelectItem>
+          <SelectItem value="paddleocr">PaddleOCR</SelectItem>
+        </SelectContent>
+      </Select>
+      <div class="grid gap-1 rounded-lg bg-muted p-1" :class="ins.selectedNode.value ? 'grid-cols-3' : 'grid-cols-2'">
+        <Button size="sm" :variant="ocr.scope.value === 'screen' ? 'default' : 'ghost'" :aria-pressed="ocr.scope.value === 'screen'" class="h-7 text-xs" @click="ocr.scope.value = 'screen'"><ScanText class="size-3.5" />全屏</Button>
+        <Button size="sm" :variant="ocr.scope.value === 'region' ? 'default' : 'ghost'" :aria-pressed="ocr.scope.value === 'region'" class="h-7 text-xs" @click="ocr.beginRegionSelection"><Crop class="size-3.5" />框选区域</Button>
+        <Button v-if="ins.selectedNode.value" size="sm" :variant="ocr.scope.value === 'element' ? 'default' : 'ghost'" :aria-pressed="ocr.scope.value === 'element'" class="h-7 text-xs" @click="ocr.scope.value = 'element'">选中元素</Button>
       </div>
-
-      <div class="flex gap-2">
-        <Button
-          size="sm"
-          class="flex-1 text-xs"
-          :disabled="ins.ocrLoading.value"
-          @click="ins.runOcr()"
-        >
-          <Loader2 v-if="ins.ocrLoading.value" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
-          <ScanText v-else class="mr-1.5 h-3.5 w-3.5" />
-          {{ ins.selectedNode.value ? '识别选中元素' : '全屏 OCR 检测' }}
-        </Button>
-        <Button
-          v-if="ins.selectedNode.value"
-          size="sm"
-          variant="outline"
-          class="text-xs"
-          @click="ins.selectNode(null)"
-        >
-          取消选择
-        </Button>
-      </div>
+      <p v-if="ocr.selecting.value" class="text-xs text-muted-foreground">在画面上拖动框选识别区域</p>
+      <div class="flex items-center justify-between text-xs"><label for="inspector-continuous-ocr">连续识别</label><Switch id="inspector-continuous-ocr" v-model="ocr.continuous.value" /></div>
+      <Button v-if="ocr.running.value" size="sm" variant="destructive" class="w-full" @click="ocr.stop"><Square class="size-3.5" />停止识别</Button>
+      <Button v-else size="sm" class="w-full" :disabled="ocr.loading.value || ocr.selecting.value" @click="ocr.run"><Loader2 v-if="ocr.loading.value" class="size-4 animate-spin" /><ScanText v-else class="size-4" />{{ ocr.loading.value ? '识别中…' : ocr.result.value ? '重新识别' : '开始识别' }}</Button>
     </div>
-
-    <!-- 错误提示 -->
-    <p v-if="ins.ocrError.value" class="text-xs text-destructive">
-      {{ ins.ocrError.value }}
-    </p>
-
-    <!-- 识别结果展示 -->
-    <template v-if="ins.ocrResult.value">
-      <div class="flex items-center justify-between">
-        <span class="text-xs text-muted-foreground">
-          识别文字 ({{ ins.ocrResult.value.boxes?.length || 0 }} 处 · {{ ins.ocrResult.value.elapsed_ms }}ms)
-        </span>
-        <Button
-          v-if="ins.ocrResult.value.text"
-          size="sm"
-          variant="ghost"
-          class="h-6 px-1.5 text-xs"
-          @click="copyText(ins.ocrResult.value.text)"
-        >
-          <Copy class="mr-1 h-3 w-3" />复制全部
-        </Button>
+    <p v-if="ocr.error.value" role="alert" class="shrink-0 text-xs text-destructive [overflow-wrap:anywhere]">{{ ocr.error.value }}</p>
+    <template v-if="ocr.result.value">
+      <div class="shrink-0 space-y-3 border-t pt-3">
+        <div class="flex flex-wrap items-center justify-between gap-1 text-xs">
+          <span class="text-muted-foreground">{{ engineNames[ocr.result.value.engine] }} · {{ ocr.result.value.elapsed_ms }} ms · {{ ocr.result.value.boxes.length }} 处</span>
+          <Button size="sm" variant="ghost" class="h-6 px-1.5 text-xs" :disabled="!ocr.result.value.text" @click="copyText(ocr.result.value.text)"><Copy class="size-3" />复制全部</Button>
+        </div>
+        <div class="flex items-center justify-between text-xs"><label for="inspector-ocr-boxes">显示文字框</label><Switch id="inspector-ocr-boxes" v-model="ocr.showBoxes.value" /></div>
+        <Input v-if="ocr.result.value.boxes.length" v-model="ocr.keyword.value" aria-label="筛选识别文字" placeholder="筛选文字" class="h-8 text-xs" />
       </div>
-
-      <ScrollArea class="min-h-0 flex-1 rounded-md border">
-        <div v-if="ins.ocrResult.value.boxes?.length" class="space-y-1.5 p-2">
-          <div
-            v-for="(box, i) in ins.ocrResult.value.boxes"
-            :key="i"
-            class="rounded border bg-card p-2 text-xs transition-colors hover:bg-muted/50"
-          >
-            <div class="flex items-center justify-between gap-1">
-              <span class="font-medium text-foreground select-text">{{ box.text }}</span>
-              <Badge variant="outline" class="font-mono text-[10px] text-emerald-500 border-emerald-500/30">
-                {{ Math.round(box.confidence * 100) }}%
-              </Badge>
-            </div>
-            <div class="mt-1 flex items-center justify-between text-[11px] text-muted-foreground font-mono">
-              <span>x: {{ Math.round(box.x * 100) }}% y: {{ Math.round(box.y * 100) }}%</span>
-              <Button
-                size="sm"
-                variant="ghost"
-                class="h-5 px-1 text-[11px]"
-                @click="copyText(box.text)"
-              >
-                复制
-              </Button>
-            </div>
+      <ScrollArea class="min-h-24 flex-1">
+        <div v-if="ocr.filtered.value.length" class="space-y-1 pr-2">
+          <div v-for="({ box, index }) in ocr.filtered.value" :key="index" class="flex items-center gap-1 rounded-lg border p-2.5 transition-colors" :class="ocr.selected.value === index ? 'border-primary bg-primary/5' : 'border-transparent hover:bg-muted/60'">
+            <Button variant="ghost" class="h-auto min-w-0 flex-1 flex-col items-start gap-0 whitespace-normal p-0 text-left hover:bg-transparent" :aria-label="`选中 ${box.text}`" :aria-pressed="ocr.selected.value === index" @click="ocr.select(index)">
+              <span class="w-full break-words text-sm font-normal">{{ box.text }}</span>
+              <span class="text-[10px] font-normal text-muted-foreground">{{ (box.confidence * 100).toFixed(1) }}%</span>
+              <span class="break-words font-mono text-[10px] font-normal leading-4 text-muted-foreground">{{ ocr.coordinates(box) }}</span>
+            </Button>
+            <Button size="icon" variant="ghost" class="size-7 shrink-0" :aria-label="`复制 ${box.text}`" @click="copyText(box.text)"><Copy class="size-3.5" /></Button>
           </div>
         </div>
-        <div v-else class="p-6 text-center text-xs text-muted-foreground">
-          范围内未识别到文字
-        </div>
+        <div v-else class="p-6 text-center text-xs text-muted-foreground">{{ ocr.result.value.boxes.length ? '没有匹配的文字' : '未识别到文字' }}</div>
       </ScrollArea>
+      <div class="flex shrink-0 justify-end"><Button size="sm" variant="ghost" class="text-xs text-muted-foreground" @click="ocr.clear">清空结果</Button></div>
     </template>
-
-    <!-- 空状态 -->
-    <div v-else-if="!ins.ocrLoading.value && !ins.ocrError.value" class="flex flex-1 flex-col items-center justify-center p-6 text-center text-xs text-muted-foreground border rounded-md border-dashed">
-      <ScanText class="h-8 w-8 text-muted-foreground/40 mb-2" />
-      <p>点击「{{ ins.selectedNode.value ? '识别选中元素' : '全屏 OCR 检测' }}」</p>
-      <p class="text-[11px] text-muted-foreground/70 mt-1">识别文本将在屏幕上自动渲染绿色外框</p>
-    </div>
+    <div v-else class="flex min-h-24 flex-1 flex-col items-center justify-center gap-2 py-6 text-muted-foreground"><ScanText class="size-8 opacity-40" /><p class="text-xs">{{ ocr.loading.value ? '正在识别画面文字' : '识别结果将显示在这里' }}</p></div>
   </div>
 </template>

@@ -68,6 +68,13 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"/api/vision/results",
 		"/api/vision/stats",
 		"/api/vision/debug",
+		// OCR
+		"/api/vision/ocr",
+		"/api/ocr/status",
+		"/api/ocr/start",
+		"/api/ocr/stop",
+		"/api/ocr/config",
+		"/api/ocr/test",
 		// 模板管理
 		"/api/templates",
 		"/api/templates/export",

@@ -9,7 +9,7 @@ const vue = localRequire('vue');
 
 function fixture(native = true) {
   const mounts = [], unmounts = [], calls = [], errors = [];
-  const state = { windows: [{ serial: 'a', opacity: 100, clickThrough: false, revision: 0 }], recoveryShortcut: 'Alt + P' };
+  const state = { windows: [{ serial: 'a', opacity: 100, clickThrough: false, borderless: false, toolbarVisible: true, revision: 0 }], recoveryShortcut: 'Alt + P' };
   let intervalCount = 0, clearCount = 0, release, holdNext = false;
   const module = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, 'usePlayerWindows.ts'), 'utf8'), {
@@ -31,11 +31,13 @@ function fixture(native = true) {
             holdNext = false;
             await new Promise(resolve => { release = resolve; });
           }
-          if ((command === 'set_player_opacity' || command === 'set_player_click_through') && args.expectedRevision !== state.windows[0].revision)
+          if (['set_player_opacity', 'set_player_click_through', 'set_player_borderless', 'set_player_toolbar_visible'].includes(command) && args.expectedRevision !== state.windows[0].revision)
             throw new Error('小窗已恢复，请重新调整');
           if (command === 'set_player_opacity') state.windows[0].opacity = args.opacity;
           if (command === 'set_player_click_through') state.windows[0].clickThrough = args.enabled;
-          if (command === 'restore_player_window') Object.assign(state.windows[0], { opacity: 100, clickThrough: false, revision: state.windows[0].revision + 1 });
+          if (command === 'set_player_borderless') state.windows[0].borderless = args.enabled;
+          if (command === 'set_player_toolbar_visible') state.windows[0].toolbarVisible = args.visible;
+          if (command === 'restore_player_window') Object.assign(state.windows[0], { opacity: 100, clickThrough: false, borderless: false, toolbarVisible: true, revision: state.windows[0].revision + 1 });
           if (command === 'list_player_windows') return JSON.parse(JSON.stringify(state));
         },
       };
@@ -66,6 +68,18 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(app.intervals(), 1, 'device cards share one poller');
   assert.equal(first.needsRecovery.value, false);
 
+  await first.setBorderless(true);
+  assert.equal(second.player.value.borderless, true);
+  assert.equal(first.needsRecovery.value, true, 'borderless window must offer recovery');
+  await first.restore();
+  await first.setToolbarVisible(false);
+  assert.equal(second.player.value.toolbarVisible, false);
+  assert.equal(first.needsRecovery.value, true, 'hidden toolbar must offer recovery');
+  await first.restore();
+  assert.equal(second.player.value.toolbarVisible, true, 'restore must show the toolbar');
+  assert.equal(second.player.value.borderless, false);
+  assert.equal(first.needsRecovery.value, false);
+
   app.hold();
   const dragging = first.setOpacity(50);
   void first.setOpacity(80);
@@ -80,11 +94,15 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   const changing = first.setOpacity(20);
   void first.setOpacity(10);
   void first.setClickThrough(true);
+  void first.setBorderless(true);
+  void first.setToolbarVisible(false);
   void first.restore();
   app.release();
   await changing;
   assert.equal(app.state.windows[0].opacity, 100, 'recovery during a drag must not be dropped');
   assert.equal(app.state.windows[0].clickThrough, false, 'recovery cancels pending click-through');
+  assert.equal(app.state.windows[0].borderless, false, 'recovery cancels pending borderless');
+  assert.equal(app.state.windows[0].toolbarVisible, true, 'recovery cancels pending toolbar hide');
   assert.equal(first.needsRecovery.value, false);
   assert.equal(app.errors.length, 0);
 
@@ -101,5 +119,5 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
   assert.equal(app.cleared(), 0, 'remaining card still needs polling');
   app.unmounts[1]();
   assert.equal(app.cleared(), 1);
-  console.log('PASS: desktop-only IPC, shared polling, latest drag value, queued recovery and lifecycle cleanup');
+  console.log('PASS: desktop-only IPC, shared polling, borderless/toolbar recovery, latest drag value, queued recovery and lifecycle cleanup');
 })().catch(error => { console.error(error); process.exitCode = 1; });

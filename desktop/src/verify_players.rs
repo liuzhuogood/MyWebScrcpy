@@ -30,6 +30,17 @@ pub fn start(app: &AppHandle) {
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok());
             if let Some(value) = &progress {
+                if value["player_windows"]["stage"] == "check_frames" {
+                    if let Some(expected) = value["player_windows"]["expected"].as_object() {
+                        let valid = expected.iter().all(|(label, borderless)| {
+                            app.get_webview_window(label)
+                                .and_then(|window| window.is_decorated().ok())
+                                .is_some_and(|decorated| Some(!decorated) == borderless.as_bool())
+                        });
+                        let id = &value["player_windows"]["id"];
+                        let _ = main.eval(format!("window.__nativeFramesResult = {{id:{id},valid:{valid}}}"));
+                    }
+                }
                 if value["player_windows"]["stage"] == "close_a" && !closed_player {
                     closed_player = true;
                     if let Some(window) = app.get_webview_window("player-verify_a") {

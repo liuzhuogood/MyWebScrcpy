@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-player-toolbar-visible"
+description = "Enables the set_player_toolbar_visible command without any pre-configured scope."
+commands.allow = ["set_player_toolbar_visible"]
+
+[[permission]]
+identifier = "deny-set-player-toolbar-visible"
+description = "Denies the set_player_toolbar_visible command without any pre-configured scope."
+commands.deny = ["set_player_toolbar_visible"]

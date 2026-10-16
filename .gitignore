@@ -19,6 +19,7 @@ Thumbs.db
 # Temp
 *.tmp
 *.log
+session.md
 *-endpoint.json
 recordings/
 data/

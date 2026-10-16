@@ -14,6 +14,8 @@ pub struct PlayerWindow {
     pub serial: String,
     pub opacity: u8,
     pub click_through: bool,
+    pub borderless: bool,
+    pub toolbar_visible: bool,
     pub revision: u64,
 }
 
@@ -95,7 +97,7 @@ pub fn install(app: &AppHandle) {
     }
 }
 
-pub fn track(app: &AppHandle, label: &str, serial: &str) -> Result<(), String> {
+pub fn track(app: &AppHandle, label: &str, serial: &str, borderless: bool) -> Result<(), String> {
     app.state::<PlayerWindows>()
         .windows
         .lock()
@@ -106,6 +108,8 @@ pub fn track(app: &AppHandle, label: &str, serial: &str) -> Result<(), String> {
                 serial: serial.into(),
                 opacity: 100,
                 click_through: false,
+                borderless,
+                toolbar_visible: true,
                 revision: 0,
             },
         );
@@ -185,7 +189,51 @@ pub async fn set_player_click_through(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn set_player_borderless(
+    window: WebviewWindow,
+    enabled: bool,
+    expected_revision: u64,
+) -> Result<(), String> {
+    let state = window.state::<PlayerWindows>();
+    let mut windows = state.windows.lock().map_err(|e| e.to_string())?;
+    let player = windows.get_mut(window.label()).ok_or("仅设备小窗支持无边框")?;
+    if player.revision != expected_revision {
+        return Err("小窗已恢复，请重新调整".into());
+    }
+    window.set_decorations(!enabled).map_err(|e| e.to_string())?;
+    player.borderless = enabled;
+    eprintln!("[Desktop] 小窗 {} 无边框: {enabled}", window.label());
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_player_toolbar_visible(
+    window: WebviewWindow,
+    visible: bool,
+    expected_revision: u64,
+) -> Result<(), String> {
+    let state = window.state::<PlayerWindows>();
+    let mut windows = state.windows.lock().map_err(|e| e.to_string())?;
+    let player = windows.get_mut(window.label()).ok_or("仅设备小窗支持顶栏控制")?;
+    if player.revision != expected_revision {
+        return Err("小窗已恢复，请重新调整".into());
+    }
+    player.toolbar_visible = visible;
+    eprintln!("[Desktop] 小窗 {} 顶栏显示: {visible}", window.label());
+    Ok(())
+}
+
 pub fn restore(app: &AppHandle, label: &str) -> Result<(), String> {
+    recover(app, label, true)
+}
+
+pub fn restore_after_navigation(app: &AppHandle, label: &str) -> Result<(), String> {
+    // Keep the chosen frame style, including the initial default, across page loads.
+    recover(app, label, false)
+}
+
+fn recover(app: &AppHandle, label: &str, restore_frame: bool) -> Result<(), String> {
     let state = app.state::<PlayerWindows>();
     let mut windows = state.windows.lock().map_err(|e| e.to_string())?;
     let player = windows.get_mut(label).ok_or("设备小窗已关闭")?;
@@ -197,8 +245,13 @@ pub fn restore(app: &AppHandle, label: &str) -> Result<(), String> {
         .set_ignore_cursor_events(false)
         .map_err(|e| e.to_string())?;
     player.click_through = false;
+    player.toolbar_visible = true;
     render_opacity(&window, 100)?;
     player.opacity = 100;
+    if restore_frame {
+        window.set_decorations(true).map_err(|e| e.to_string())?;
+        player.borderless = false;
+    }
     eprintln!("[Desktop] 小窗 {label} 已恢复");
     Ok(())
 }

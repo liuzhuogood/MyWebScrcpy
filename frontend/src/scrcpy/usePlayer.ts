@@ -1,5 +1,5 @@
 import { onMounted, onUnmounted, ref } from 'vue'
-import { inspectorOpen, inspectorTab, xmlHitTest } from '@/inspector/guard'
+import { inspectorConsumesInput } from '@/inspector/guard'
 import { type OpPayload, type OpType } from '@/inspector/opLog'
 import { DeviceAudio, type AudioStatus } from './audio'
 import { ScrcpyDecoder } from './decoder'
@@ -66,7 +66,7 @@ interface WsMeta {
 export interface TouchVisualEvent { kind: 'down' | 'move' | 'up' | 'tap' | 'swipe', x: number, y: number, x2?: number, y2?: number }
 
 /** 投屏连接：WS 生命周期 + 解码 + 输入 + 工具栏动作，视图只做渲染 */
-export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: OpPayload) => void, onTouch?: (event: TouchVisualEvent) => void, onDisconnect?: () => void } = {}) {
+export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: OpPayload) => void, onTouch?: (event: TouchVisualEvent) => void, onDisconnect?: () => void, onFrame?: () => void } = {}) {
   const playerSettings = usePlayerSettings()
   const op = (type: OpType, data: OpPayload) => opts.onOp?.(type, data)
   const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -79,6 +79,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   const fps = ref('')
   const showFps = ref(false)
   const videoSize = ref({ w: 0, h: 0 })
+  let decodedFrameVersion = 0
   const screenOff = ref(false)
   const displayScale = ref<number | null>(null)
   const displayLabel = ref('适应窗口')
@@ -108,7 +109,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     send: b => send(b),
     packer,
     onOp: op,
-    isInputBlocked: isInteractiveTarget,
+    isInputBlocked: target => inspectorConsumesInput() || isInteractiveTarget(target),
   })
   let decoder: ScrcpyDecoder | null = null
   let audio: DeviceAudio | null = null
@@ -229,6 +230,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
       return
     if (connected) opts.onDisconnect?.()
     connected = false
+    decodedFrameVersion = 0
     clearWatchdog()
     closeWebSocket()
     setStatus(message || '视频流已中断，正在重连', false)
@@ -267,6 +269,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
       clearConnectTimer()
       if (connected) opts.onDisconnect?.()
       connected = false
+      decodedFrameVersion = 0
       clearWatchdog()
       if (reconnectAttempts < MAX_RECONNECT) {
         reconnect()
@@ -408,17 +411,6 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   }
 
   // ---------- 输入事件 ----------
-  function inspectorConsumes(e: MouseEvent | Touch): boolean {
-    if (!inspectorOpen.value)
-      return false
-    // 取色 Tab：点击只固定十字线；XML Tab：点中绿框只选中节点
-    if (inspectorTab.value === 'color')
-      return true
-    if (inspectorTab.value === 'xml' && xmlHitTest.fn?.(e.clientX, e.clientY))
-      return true
-    return false
-  }
-
   let mouseDownPos: { x: number, y: number } | null = null
   let mouseDownTime = 0
   let lastMousePoint: { x: number, y: number } | null = null
@@ -474,7 +466,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
 
   function onMouseDown(e: MouseEvent) {
     e.preventDefault()
-    if (inspectorConsumes(e))
+    if (inspectorConsumesInput())
       return
     if (e.button === 2) {
       send(packer.back(KEY_UP)) // 右键 = 返回
@@ -580,10 +572,10 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
 
   function onWheel(e: WheelEvent) {
     e.preventDefault()
+    if (inspectorConsumesInput()) return
     const { x, y } = toDevice(e.clientX, e.clientY)
     send(packer.scroll(x, y, e.deltaX, e.deltaY))
   }
-
   function onContextMenu(e: Event) {
     e.preventDefault()
   }
@@ -596,7 +588,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   function onTouchStart(e: TouchEvent) {
     e.preventDefault()
     const t = e.touches[0]
-    if (inspectorConsumes(t))
+    if (inspectorConsumesInput())
       return
     touchActive = true
     const { x, y } = toDevice(t.clientX, t.clientY)
@@ -703,12 +695,11 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     }
     return false
   }
-
   function isInteractiveTarget(target: EventTarget | null): boolean {
     return isInteractiveField(target instanceof Element ? target : null) || isInteractiveField(document.activeElement)
   }
-
   function shouldIgnoreKey(e: KeyboardEvent): boolean {
+    if (inspectorConsumesInput()) return true
     if (e.key === 'Escape' && stageRef.value?.closest('[data-player-dialog]'))
       return true
     if (e.key === 'Shift' || e.key === 'Control' || e.key === 'Alt' || e.key === 'Meta')
@@ -979,6 +970,8 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
 
     decoder = new ScrcpyDecoder(canvas)
     decoder.onDecodedFrame = () => {
+      decodedFrameVersion++
+      opts.onFrame?.()
       lastActivityAt = Date.now()
     }
     decoder.onFps = v => (fps.value = v)
@@ -1063,6 +1056,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   })
 
   return {
+    frameVersion: () => decodedFrameVersion,
     canvasRef,
     stageRef,
     loading,

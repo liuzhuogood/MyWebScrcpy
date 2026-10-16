@@ -14,8 +14,25 @@ import (
 func (m *Manager) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/matching-service/status", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, m.Status()) })
 	mux.HandleFunc("POST /api/matching-service/check", func(w http.ResponseWriter, r *http.Request) { _, err := m.Check(r.Context()); m.respond(w, err) })
-	mux.HandleFunc("POST /api/matching-service/start", func(w http.ResponseWriter, r *http.Request) { err := m.Start(r.Context()); m.respond(w, err) })
-	mux.HandleFunc("POST /api/matching-service/stop", func(w http.ResponseWriter, r *http.Request) { err := m.Stop(); m.respond(w, err) })
+	mux.HandleFunc("POST /api/matching-service/start", func(w http.ResponseWriter, r *http.Request) {
+		action := func() error { return m.Start(r.Context()) }
+		var err error
+		if m.options.Control != nil {
+			err = m.options.Control(true, action)
+		} else {
+			err = action()
+		}
+		m.respond(w, err)
+	})
+	mux.HandleFunc("POST /api/matching-service/stop", func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		if m.options.Control != nil {
+			err = m.options.Control(false, m.Stop)
+		} else {
+			err = m.Stop()
+		}
+		m.respond(w, err)
+	})
 }
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")

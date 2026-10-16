@@ -9,6 +9,16 @@ import (
 	"time"
 )
 
+func serveOpenAPISpec(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.Header().Set("Allow", http.MethodGet)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	_, _ = w.Write(openAPISpec)
+}
+
 // Only Vue routes receive the shell. Missing assets and API paths must stay 404.
 func newAppHandler(appRoot fs.FS) http.Handler {
 	index, indexErr := fs.ReadFile(appRoot, "index.html")

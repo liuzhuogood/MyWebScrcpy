@@ -1,0 +1,4 @@
+indra-ocr==0.3.2
+fastapi>=0.110,<1
+uvicorn>=0.28,<1
+python-multipart>=0.0.9,<1

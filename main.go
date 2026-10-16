@@ -20,10 +20,8 @@ import (
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/inputconfig"
 	"mywebscrcpy/internal/matchingservice"
-	"mywebscrcpy/internal/ocr"
 	"mywebscrcpy/internal/operationlog"
 	"mywebscrcpy/internal/taskrun"
-	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/uipage"
 	"mywebscrcpy/internal/uixml"
 	"mywebscrcpy/internal/updater"
@@ -130,15 +128,7 @@ func main() {
 	if *readyFlag == "" {
 		dependencies.RegisterSettings(mux, func(next http.HandlerFunc) http.HandlerFunc { return next })
 	}
-	mux.HandleFunc("/api/openapi.json", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", http.MethodGet)
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.Write(openAPISpec)
-	})
+	mux.HandleFunc("/api/openapi.json", serveOpenAPISpec)
 
 	// 文件管理 API：每个请求都携带当前投屏页面选定的设备 serial，操作手机共享存储。
 	files.RegisterRoutes(mux, fileManager)
@@ -223,44 +213,9 @@ func main() {
 	}
 
 	// 模板管理与匹配 API
-	templateStorage, err := template.NewStorage("")
-	if err != nil {
-		log.Printf("警告: 初始化模板存储失败: %v，尝试回退到临时目录", err)
-		fallbackDir := filepath.Join(os.TempDir(), "mywebscrcpy-templates")
-		templateStorage, err = template.NewStorage(fallbackDir)
-		if err != nil {
-			log.Fatalf("致命错误: 模板存储完全无法初始化: %v", err)
-		}
-	}
-	log.Printf("模板存储目录: %s", templateStorage.BaseDir())
-	templateService := template.NewService(templateStorage)
-	defer templateService.Stop()
-	template.RegisterRoutes(mux, templateService)
-	ocrService := ocr.NewService(database, hub)
-	defer ocrService.StopPaddle()
-	ocrService.RegisterRoutes(mux)
-	matchingManager = matchingservice.New(matchingservice.Options{
-		Python: dependencies.AcquirePython,
-		Devices: func() []string {
-			devices := []string{}
-			for _, serial := range hub.MatchingDevices() {
-				for _, asset := range templateStorage.ListTemplates(serial) {
-					if asset.Enabled {
-						devices = append(devices, serial)
-						break
-					}
-				}
-			}
-			return devices
-		},
-		TemplateReadable: func(id, serial string) bool {
-			asset, err := templateStorage.GetTemplate(id)
-			return err == nil && (asset.Serial == serial || asset.Serial == template.GlobalSerial)
-		},
-		API: mux, Vision: http.HandlerFunc(hub.ServeMatchingVisionWS),
-	})
-	matchingManager.RegisterRoutes(mux)
-	defer matchingManager.Close()
+	auxiliary := configureAuxiliaryServices(dataDir, database, hub, mux)
+	matchingManager = auxiliary.matching
+	defer auxiliary.Close()
 
 	if database == nil {
 		registerUnavailableTaskRoutes(mux)
@@ -488,6 +443,7 @@ func main() {
 	mux.Handle("/api-docs.html", http.FileServer(http.FS(webRoot)))
 	mux.Handle("/", newAppHandler(appRoot))
 
+	auxiliary.restore()
 	serveApplication(addr, httpsFlag, readyFlag, mux, adbPath)
 }
 

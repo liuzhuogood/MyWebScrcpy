@@ -13,16 +13,15 @@ import (
 )
 
 type Tool struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Purpose     string            `json:"purpose"`
-	Installed   bool              `json:"installed"`
-	Path        string            `json:"path"`
-	Version     string            `json:"version"`
-	Error       string            `json:"error"`
-	DownloadURL string            `json:"download_url"`
-	SearchPaths map[string]string `json:"search_paths,omitempty"`
-	Python      *PythonModules    `json:"python,omitempty"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Purpose     string         `json:"purpose"`
+	Installed   bool           `json:"installed"`
+	Path        string         `json:"path"`
+	Version     string         `json:"version"`
+	Error       string         `json:"error"`
+	DownloadURL string         `json:"download_url"`
+	Python      *PythonModules `json:"python,omitempty"`
 }
 
 func PythonPath() (string, error) {

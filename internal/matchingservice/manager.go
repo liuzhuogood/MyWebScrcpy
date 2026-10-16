@@ -39,6 +39,8 @@ type Status struct {
 }
 type Options struct {
 	Python           func() (string, func(), error)
+	PreparePython    func(context.Context, func(string)) (string, func(), error)
+	Control          func(bool, func() error) error
 	Devices          func() []string
 	TemplateReadable func(string, string) bool
 	API              http.Handler
@@ -127,7 +129,21 @@ func (m *Manager) Start(ctx context.Context) error {
 	m.state = "starting"
 	m.error = ""
 	m.mu.Unlock()
-	path, release, err := m.options.Python()
+	prepare := m.options.PreparePython
+	var path string
+	var release func()
+	var err error
+	if prepare != nil {
+		path, release, err = prepare(op, func(state string) {
+			m.mu.Lock()
+			if m.state != "stopping" {
+				m.state = state
+			}
+			m.mu.Unlock()
+		})
+	} else {
+		path, release, err = m.options.Python()
+	}
 	if err != nil {
 		return m.failStart(err)
 	}

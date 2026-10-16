@@ -105,3 +105,15 @@ GitHub Actions 的 `Publish Python SDK` 工作流在主分支的版本、SDK 或
 ## 外部任务上报
 
 `TaskReporter(base_url, name=..., device_serial=..., source="codex")` 支持状态、心跳、实时日志和结果上报，无需专用上报令牌。完整示例与失败处理见 [任务运行集成](../../docs/task-runs.md) 和 `examples/report_task_run.py`。本版发布前请从本仓库安装 SDK。
+
+### OCR 引擎
+
+`device.ocr()` 自动按 Indra OCR、macOCR、PaddleOCR 顺序尝试；服务识别成功但没有文字时不会降级。使用前在 MyWebScrcpy 系统配置中启动本地 Indra OCR。显式指定引擎时只调用该服务。
+
+```python
+result = device.ocr(engine="indraocr", mark=True)
+# 远程脚本可指定可访问的服务地址：
+result = device.ocr(indraocr_url="http://your-host:8032/upload")
+```
+
+`INDRAOCR_URL` 环境变量也可设置 Indra 地址，默认 `http://127.0.0.1:8032/upload`。已有 `MACOCR_URL`、`MACOCR_AUTH`、`PADDLEOCR_URL` 及其关键字参数继续有效。

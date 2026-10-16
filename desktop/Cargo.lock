@@ -2237,7 +2237,7 @@ dependencies = [
 
 [[package]]
 name = "mywebscrcpy-gui"
-version = "1.23.1"
+version = "1.25.2"
 dependencies = [
  "serde",
  "serde_json",

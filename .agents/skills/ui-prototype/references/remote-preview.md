@@ -1,44 +1,17 @@
-# 临时公网预览交付
+# 本项目预览配置
 
-原型完成后执行本流程。使用电脑上已安装的 cloudflared Quick Tunnel，无需注册账号、配置域名或安装开机启动服务。电脑、本地服务和隧道需保持运行；关闭隧道后链接失效。
+公网映射使用 `lz-plugin/lz-dev/lz-demo`：加载已安装的 `lz-dev` 技能，再读取其 `modules/lz-demo/MODULE.md`。SSH 创建、复用、验证、记录和停止流程由该模块维护，本文件只提供项目参数。
 
-## 确认并启动本地预览
+| 参数 | 已确认值 |
+| --- | --- |
+| 项目根目录 | 包含 `frontend/package.json` 和 `prototypes/` 的 MyWebScrcpy 仓库 |
+| 开发预览命令 | 项目根目录运行 `pnpm --dir frontend proto` |
+| 本机预览地址 | `http://127.0.0.1:5174`，每次核对实际监听；复用已确认的本项目实例 |
+| SSH 目标 | `root@wskj.work`，使用已有免密认证 |
+| 服务器绑定 | `127.0.0.1:15173`，固定端口与网站上游一致 |
+| 网站反向代理 | 1Panel 网站 `demo.wskj.work` → `http://127.0.0.1:15173`，由用户维护 HTTPS 与 WebSocket 配置 |
+| 公网原型入口 | `https://demo.wskj.work/#<原型目录名>` |
+| 具体放行域名 | `demo.wskj.work`，配置在 `frontend/vite.prototype.config.ts` |
+| 运行资料目录 | `prototypes/artifacts/remote-preview/<本次会话>/` |
 
-- 读取 `frontend/package.json`、`frontend/vite.prototype.config.ts` 与 `prototypes/README.md`，确认预览命令、监听地址、端口及目标原型目录。当前是 `pnpm --dir frontend proto`，配置为 `127.0.0.1:5174`、`strictPort: true`；用户给出的 `5173` 只是示例。
-- 用监听信息、进程命令及工作目录核对现有服务，并实际访问页面确认它属于当前项目的原型入口。已运行且可用则复用，记录 PID、实际地址及已有日志位置；已有日志不可获取时如实记录，不为获取日志重启服务。
-- 端口被其他项目或未知进程占用时，不终止它；为本次原型选择已确认空闲的端口，以原型命令的 `--port <实际端口>` 启动并记录。不能只从配置推断运行端口，须结合启动日志、监听和 HTTP 响应确认。
-- 在 `prototypes/artifacts/remote-preview/<时间戳>/` 保存本次运行资料，避免覆盖旧记录。新启动服务使用脱离工具会话的进程方式，例如 Python `subprocess.Popen` 的 `start_new_session=True`、`stdin=DEVNULL`，将 stdout/stderr 重定向到日志文件；不能只依赖前台工具会话或裸 `&` 保活。
-- 启动命令用参数数组、明确的项目工作目录和文件日志执行。记录启动 PID、进程组 PGID、命令、工作目录与启动时间，确认实际监听进程；退出启动工具后再次检查存活和本地页面，成功后再创建隧道。
-
-## 创建隧道和放行具体域名
-
-1. 用 `command -v cloudflared` 和 `cloudflared --version` 确认安装。以同样的独立进程方式启动以下命令，将地址换成已验证的实际本地地址，输出保存到 `tunnel.log`：
-
-   ```sh
-   cloudflared tunnel --url http://127.0.0.1:5174
-   ```
-
-2. 从本次隧道日志提取 `https://*.trycloudflare.com` 地址，确认进程仍存活且隧道连接已建立，再访问公网地址。将完整网址和用于放行的 hostname 分开记录；hostname 不含协议、端口、路径或 `#`。
-3. 若 Vite 拒绝公网域名，只将本次生成的具体 hostname 加入原型预览的 `allowedHosts`，保留已有明确名单。开发服务使用 `server.allowedHosts`；使用构建预览时检查 `preview.allowedHosts`。禁止设为 `true`、放行 `.trycloudflare.com` 或通过改写 Host 规避检查。
-4. 优先使用已存在的原型本地配置入口。没有入口时，可最小修改 `frontend/vite.prototype.config.ts`；观察 Vite 配置自动重载并重新验证。若需重启，仅重启本次自行启动的预览进程并更新记录，复用服务不擅自终止。重启预览时保持隧道运行，以保留本次域名。
-5. 对本次新启动的开发预览，也可用 Vite 支持的 `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=<具体域名>` 环境变量添加域名；必须在进程启动时传入，不能认为修改父进程环境就会更新已运行的 Vite。
-
-## 请求与公网验证
-
-- 原型默认继续使用本地模拟数据，不因开通隧道连接真实后端、设备或正式 Store。发现组件意外发出真实请求，应修正模拟依赖。
-- 若当前任务已要求接口联调，按已确认的接口和后端地址提供同源相对路径，由原型服务代理至实际后端；只代理本次需要的路径。也可使用已确认、可公网访问的 HTTPS 接口地址。浏览器中的 API、图片、下载和 WebSocket 地址不能指向访问者的 `localhost`、`127.0.0.1`、`::1` 或仅本机可达的地址，不能产生 HTTPS 混合内容。验证实际业务请求及响应，不能把 SPA 返回的 HTML 当作接口成功。
-- 先通过公网 HTTPS 检查首页响应，再用浏览器打开带 `#<目录名>` 的完整公网地址。验证目标原型确实渲染，主要 JS/CSS、动态模块、图片与字体正常加载，检查控制台和网络失败，并操作主要按钮、表单、筛选或弹窗。
-- 使用公网地址完成桌面、小屏、键盘和明暗主题验证。开发预览还需检查 HMR WebSocket 是否通过公网连接；若错误回退到本地地址，只调整当前 Vite 版本支持的原型 WebSocket 配置，再复验。
-- 将截图、失败请求、关键资源状态及接口结果写入本次资料目录。结束前，在启动工具已退出后间隔至少 10 秒复查两个进程、监听、本地页面及公网资源，确认持续可用。
-- 失败时结合预览日志、隧道日志、DNS/TLS、HTTP 响应和浏览器请求定位，在任务范围内修复并复验；多次尝试同一问题仍无进展时交付实际阻塞原因和证据，不把已生成的网址标为验证成功。缺少浏览器验证条件时明确标注未验证部分。
-
-## 记录、停止与交付
-
-在本次资料目录保存 `session.json`、新启动服务的 `preview.log`、`tunnel.log`、验证记录和可执行的 `stop.sh`：
-
-- `session.json` 记录项目与原型目录、本地/公网 URL、具体 hostname、启动时间、两个服务的 PID/PGID、命令、工作目录、日志路径，以及预览是本次创建还是复用。复用服务只记录已核实的信息。
-- `stop.sh` 先核对 PID/PGID、启动时间与命令是否仍属于记录的进程，再停止本次隧道及本次新建的预览进程组，避免 PID 重用或仅停掉 pnpm 父进程而留下 Vite。进程已退出则跳过，身份不符则拒绝停止，不使用 `pkill -f` 等宽泛匹配。
-- 复用的预览服务不纳入自动停止脚本；另给出经过核实的停止方式并注明其为已有服务。公网验证失败时也保留日志和停止方法，如实记录尚在运行的进程。
-- 正常交付后保留两个服务，不在任务结束时清理它们。最终答复直接给出可点击的完整公网原型链接、已验证结果与未验证边界、日志/进程记录位置，以及运行本次 `stop.sh` 的准确命令；简短说明电脑与服务需保持运行、停止隧道后链接失效。
-
-需要核对工具行为时查阅 [Cloudflare Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/) 和 [Vite 服务选项](https://vite.dev/config/server-options.html)。
+原型继续使用本地模拟数据，不连接真实业务接口、设备或正式 Store。页面、主要交互、桌面与小屏、键盘和主题验收按项目原型技能执行。`proto:preview` 是构建预览，不提供开发热更新；需要修改即时同步时使用 `proto`。

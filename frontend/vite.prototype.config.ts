@@ -31,9 +31,7 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
     allowedHosts: [
-      'yen-motorcycles-investigations-league.trycloudflare.com',
-      'sellers-farm-modified-cubic.trycloudflare.com',
-      'imposed-stop-entrance-cuisine.trycloudflare.com',
+      'demo.wskj.work',
     ],
     fs: { allow: [prototypeDir, frontendDir] },
   },
@@ -42,9 +40,7 @@ export default defineConfig({
     port: 5174,
     strictPort: true,
     allowedHosts: [
-      'yen-motorcycles-investigations-league.trycloudflare.com',
-      'examining-remedy-layer-auditor.trycloudflare.com',
-      'imposed-stop-entrance-cuisine.trycloudflare.com',
+      'demo.wskj.work',
     ],
   },
   build: { outDir: path.join(prototypeDir, 'dist'), emptyOutDir: true },

@@ -34,6 +34,7 @@ import {
 import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { toast } from 'vue-sonner'
 import { useElementSize } from '@vueuse/core'
 import { RouterLink } from 'vue-router'
 import {
@@ -61,7 +62,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
-import { setInspector } from '@/inspector/guard'
+import { inspectionMode, setInspector } from '@/inspector/guard'
 import CaptureLayer from '@/capture/CaptureLayer.vue'
 import InspectorPanel from '@/inspector/InspectorPanel.vue'
 import { provideInspector } from '@/inspector/useInspector'
@@ -107,13 +108,15 @@ const p = usePlayer(serial.value, {
     recordOp(serial.value, type, data)
   },
   onTouch: event => touchVisualizerRef.value?.handle(event),
+  onFrame: () => ins.ocr.frameChanged(),
   onDisconnect: () => {
+    ins.ocr.invalidate()
     if (props.embedded && nativePlayerWindow)
       void windowEffects.restore()
   },
 })
 const showPip = computed(() => !isGui.value && p.pipSupported.value)
-const ins = provideInspector(serial.value, () => p.canvasRef.value)
+const ins = provideInspector(serial.value, () => p.canvasRef.value, p.frameVersion, () => p.live.value && p.frameVersion() > 0)
 const inspectorVisible = ref(false)
 const templateOpen = ref(false)
 const tm = useTemplateMatches(serial.value, () => p.canvasRef.value)
@@ -136,8 +139,27 @@ const compactToolbar = computed(() => stageWidth.value < 1280)
 const isVeryNarrow = computed(() => stageWidth.value < 270)
 const sidePanel = computed(() => captureOpen.value ? 'capture' : filesOpen.value || shellOpen.value || inspectorVisible.value || replayOpen.value || templateOpen.value || settingsOpen.value ? 'tools' : null)
 
-const toolbarVisible = ref(true)
+const localToolbarVisible = ref(true)
+const toolbarVisible = computed(() => nativePlayerWindow ? (windowEffects.player.value?.toolbarVisible ?? true) : localToolbarVisible.value)
 const isAlwaysOnTop = ref(false)
+
+async function dragBorderlessWindow(event: MouseEvent) {
+  if (!nativePlayerWindow || !windowEffects.player.value?.borderless || event.button !== 0) return
+  if ((event.target as HTMLElement).closest('button, a, input, [role="slider"]')) return
+  try {
+    await getCurrentWindow().startDragging()
+  }
+  catch (error) {
+    console.warn('[Desktop] 拖动无边框小窗失败', error)
+  }
+}
+
+async function setToolbarVisible(visible: boolean) {
+  if (nativePlayerWindow)
+    await windowEffects.setToolbarVisible(visible)
+  else
+    localToolbarVisible.value = visible
+}
 
 async function initAlwaysOnTop() {
   if (isGui.value && isTauri()) {
@@ -163,7 +185,16 @@ async function toggleAlwaysOnTop() {
   }
 }
 
-watch(toolbarVisible, async () => {
+watch(toolbarVisible, async visible => {
+  if (!visible) {
+    const shortcut = windowEffects.shortcut.value
+    toast.info('顶栏已隐藏', {
+      description: nativePlayerWindow
+        ? `${shortcut ? `按 ${shortcut}，或` : ''}在菜单“视图 → 恢复所有小窗”中恢复；也可点击窗口顶部把手。`
+        : '点击窗口顶部把手可重新显示。',
+      duration: 8000,
+    })
+  }
   await nextTick()
   window.dispatchEvent(new Event('resize'))
 })
@@ -250,7 +281,7 @@ function toggleInspector() {
   }
   closeSidePanels()
   inspectorVisible.value = true
-  setInspector(true)
+  setInspector(true, ins.ocr.running.value ? 'ocr' : 'color')
 }
 
 function openShell() {
@@ -341,14 +372,14 @@ defineExpose({ handleEscape })
         class="flex h-4 items-center justify-center rounded-b bg-muted/80 px-4 text-muted-foreground shadow-sm backdrop-blur transition-all hover:h-5 hover:bg-muted hover:text-foreground cursor-pointer opacity-40 hover:opacity-100"
         aria-label="展开工具条"
         title="展开工具条"
-        @click="toolbarVisible = true"
+        @click="setToolbarVisible(true)"
       >
         <ChevronDown class="h-3 w-3" />
       </button>
     </div>
 
     <!-- 工具栏 -->
-    <header v-if="toolbarVisible" class="flex h-14 shrink-0 items-center gap-1 border-b px-3" :class="{ 'toolbar-compact': compactToolbar, 'cursor-move select-none': embedded }">
+    <header v-if="toolbarVisible" class="flex h-14 shrink-0 items-center gap-1 border-b px-3" :class="{ 'toolbar-compact': compactToolbar, 'cursor-move select-none': embedded }" @mousedown="dragBorderlessWindow">
       <Button
         v-if="embedded"
         variant="ghost"
@@ -356,7 +387,7 @@ defineExpose({ handleEscape })
         :aria-label="isGui ? '隐藏工具条' : '关闭小窗'"
         :title="isGui ? '隐藏工具条' : '关闭小窗'"
         class="cursor-pointer"
-        @click="isGui ? (toolbarVisible = false) : emit('close')"
+        @click="isGui ? setToolbarVisible(false) : emit('close')"
       >
         <X class="h-4 w-4" />
       </Button>
@@ -373,10 +404,12 @@ defineExpose({ handleEscape })
           v-if="nativePlayerWindow"
           :opacity="windowEffects.player.value?.opacity ?? 100"
           :click-through="windowEffects.player.value?.clickThrough ?? false"
+          :borderless="windowEffects.player.value?.borderless ?? false"
           :shortcut="windowEffects.shortcut.value"
           :busy="windowEffects.busy.value"
           @opacity="windowEffects.setOpacity"
           @click-through="windowEffects.setClickThrough"
+          @borderless="windowEffects.setBorderless"
           @restore="windowEffects.restore"
         />
         <Button
@@ -433,6 +466,7 @@ defineExpose({ handleEscape })
             <DropdownMenuItem v-if="showPip" :disabled="!p.pipSupported.value" @select="p.togglePip()">
               <PictureInPicture2 class="h-4 w-4" />{{ p.pipActive.value ? '退出画中画' : '画中画' }}
             </DropdownMenuItem>
+            <DropdownMenuItem @select="openSettings()"><Settings class="h-4 w-4" />设置</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -648,7 +682,7 @@ defineExpose({ handleEscape })
       <template #main><div class="flex h-full min-h-0 flex-col overflow-hidden p-0" :class="embedded ? 'bg-black' : 'bg-muted/40 gap-3 overflow-auto'">
       <main class="relative flex min-w-0 flex-1 items-center justify-center" :class="embedded ? 'min-h-0 bg-black' : 'min-h-80'">
         <div class="relative">
-          <canvas :ref="p.canvasRef" tabindex="0" class="block touch-none bg-black select-none" :class="{ 'rounded-sm': !embedded }" aria-label="设备投屏画面" @pointerdown="embedded && p.canvasRef.value?.focus({ preventScroll: true })" />
+          <canvas :ref="p.canvasRef" tabindex="0" class="block touch-none bg-black select-none" :class="{ 'rounded-sm': !embedded, 'cursor-crosshair': inspectorVisible && inspectionMode }" aria-label="设备投屏画面" @pointerdown="p.canvasRef.value?.focus({ preventScroll: true })" />
           <canvas
             :ref="ins.overlayRef"
             class="pointer-events-none absolute inset-0 h-full w-full"
@@ -726,10 +760,13 @@ defineExpose({ handleEscape })
         :touch-visible="touchVisible" :boxes-visible="tm.showBoxes.value"
         :auto-unlock-on-wake="p.autoUnlockOnWake.value"
         :clipboard-sync="p.clipboardSync.value"
+        :borderless="nativePlayerWindow ? windowEffects.player.value?.borderless : undefined"
+        :window-busy="windowEffects.busy.value"
         @update:touch-visible="setTouchVisible"
         @update:boxes-visible="tm.setShow"
         @update:auto-unlock-on-wake="p.autoUnlockOnWake.value = $event"
         @update:clipboard-sync="p.clipboardSync.value = $event"
+        @update:borderless="windowEffects.setBorderless"
         @close="settingsOpen = false"
       />
       </div>

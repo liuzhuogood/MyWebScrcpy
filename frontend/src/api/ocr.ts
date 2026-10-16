@@ -22,6 +22,14 @@ export interface OCRDetectResponse {
 }
 
 export interface OCRStatusResponse {
+  indra_installed: boolean
+  indra_running: boolean
+  indra_ready: boolean
+  indra_pid: number
+  indra_port: number
+  indraocr_url: string
+  indra_status?: 'uninstalled' | 'installed' | 'installing' | 'starting' | 'running' | 'failed'
+  indra_error?: string
   paddle_installed: boolean
   paddle_running: boolean
   paddle_ready: boolean
@@ -31,7 +39,7 @@ export interface OCRStatusResponse {
   macocr_url: string
   macocr_auth_set: boolean
   engine: string
-  paddle_status?: 'uninstalled' | 'installed' | 'starting' | 'running' | 'failed'
+  paddle_status?: 'uninstalled' | 'installed' | 'installing' | 'starting' | 'running' | 'failed'
   paddle_error?: string
 }
 
@@ -49,10 +57,11 @@ async function request<T>(input: string, init: RequestInit = {}): Promise<T> {
   return data as T
 }
 
-export function detectOCR(formData: FormData): Promise<OCRDetectResponse> {
+export function detectOCR(formData: FormData, signal?: AbortSignal): Promise<OCRDetectResponse> {
   return request('/api/vision/ocr', {
     method: 'POST',
     body: formData,
+    signal,
   })
 }
 
@@ -61,7 +70,15 @@ export function getOCRStatus(): Promise<OCRStatusResponse> {
 }
 
 export function startPaddleOCR(): Promise<OCRStatusResponse> {
-  return request('/api/ocr/start', { method: 'POST' })
+  return request('/api/ocr/start', { method: 'POST', signal: AbortSignal.timeout(17 * 60 * 1000) })
+}
+
+export function startIndraOCR(): Promise<OCRStatusResponse> {
+  return request('/api/ocr/indra/start', { method: 'POST', signal: AbortSignal.timeout(17 * 60 * 1000) })
+}
+
+export function stopIndraOCR(): Promise<OCRStatusResponse> {
+  return request('/api/ocr/indra/stop', { method: 'POST' })
 }
 
 export function stopPaddleOCR(): Promise<OCRStatusResponse> {
@@ -72,6 +89,7 @@ export function saveOCRConfig(payload: {
   macocr_url?: string
   macocr_auth?: string
   paddleocr_url?: string
+  indraocr_url?: string
   engine?: string
 }): Promise<OCRStatusResponse> {
   return request('/api/ocr/config', {
