@@ -55,6 +55,38 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "设备与控制"
+        ],
+        "summary": "手动添加网络或局域网设备",
+        "description": "手动登记一台网络 ADB 设备（如 192.168.1.100:5555），保存至持久化数据库并异步触发首次 adb connect 连接",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualDeviceRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "设备添加成功并已排队连接",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Device"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "设备参数错误或数据库未初始化"
+          }
+        }
       }
     },
     "/api/rotate": {
@@ -2318,24 +2350,24 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "description": "模板批量导入结果",
                   "properties": {
                     "success": {
-                      "type": "boolean"
-                    },
-                    "imported": {
-                      "type": "integer",
-                      "description": "成功导入的模板数量"
+                      "type": "boolean",
+                      "description": "导入是否成功",
+                      "example": true
                     },
                     "templates": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/Template"
-                      }
+                      },
+                      "description": "成功导入的模板列表"
                     }
                   },
                   "required": [
                     "success",
-                    "imported"
+                    "templates"
                   ]
                 }
               }
@@ -2562,7 +2594,8 @@
             "required": true,
             "schema": {
               "type": "string"
-            }
+            },
+            "description": "模板唯一标识 ID"
           }
         ],
         "requestBody": {
@@ -2571,15 +2604,17 @@
             "multipart/form-data": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "image"
-                ],
+                "description": "上传模板附加图片文件",
                 "properties": {
                   "image": {
                     "type": "string",
-                    "format": "binary"
+                    "format": "binary",
+                    "description": "PNG/JPEG 模板图片二进制文件"
                   }
-                }
+                },
+                "required": [
+                  "image"
+                ]
               }
             }
           }
@@ -2715,20 +2750,19 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "items"
-                ],
+                "description": "批量保存审计日志",
                 "properties": {
                   "items": {
                     "type": "array",
-                    "minItems": 1,
-                    "maxItems": 50,
                     "items": {
                       "$ref": "#/components/schemas/OperationLog"
-                    }
+                    },
+                    "description": "需要记录的操作日志数组"
                   }
-                }
+                },
+                "required": [
+                  "items"
+                ]
               }
             }
           }
@@ -2740,14 +2774,16 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "saved"
-                  ],
                   "properties": {
                     "saved": {
-                      "type": "integer"
+                      "type": "integer",
+                      "description": "实际成功保存的日志条数",
+                      "example": 1
                     }
-                  }
+                  },
+                  "required": [
+                    "saved"
+                  ]
                 }
               }
             }
@@ -2758,14 +2794,16 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "message"
-                  ],
                   "properties": {
                     "message": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "错误或失败原因说明",
+                      "example": "invalid parameters"
                     }
-                  }
+                  },
+                  "required": [
+                    "message"
+                  ]
                 }
               }
             }
@@ -2776,14 +2814,16 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "message"
-                  ],
                   "properties": {
                     "message": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "错误或失败原因说明",
+                      "example": "invalid parameters"
                     }
-                  }
+                  },
+                  "required": [
+                    "message"
+                  ]
                 }
               }
             }
@@ -2814,7 +2854,8 @@
               "minimum": 1,
               "maximum": 500,
               "default": 100
-            }
+            },
+            "description": "限制返回的日志条数（默认 50，最大 200）"
           },
           {
             "name": "before",
@@ -2844,14 +2885,16 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "message"
-                  ],
                   "properties": {
                     "message": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "错误或失败原因说明",
+                      "example": "invalid parameters"
                     }
-                  }
+                  },
+                  "required": [
+                    "message"
+                  ]
                 }
               }
             }
@@ -2862,14 +2905,16 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "message"
-                  ],
                   "properties": {
                     "message": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "错误或失败原因说明",
+                      "example": "invalid parameters"
                     }
-                  }
+                  },
+                  "required": [
+                    "message"
+                  ]
                 }
               }
             }
@@ -2900,15 +2945,16 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "deleted"
-                  ],
                   "properties": {
                     "deleted": {
                       "type": "integer",
-                      "format": "int64"
+                      "description": "成功清空或删除的日志记录条数",
+                      "example": 50
                     }
-                  }
+                  },
+                  "required": [
+                    "deleted"
+                  ]
                 }
               }
             }
@@ -2919,14 +2965,16 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": [
-                    "message"
-                  ],
                   "properties": {
                     "message": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "错误或失败原因说明",
+                      "example": "invalid parameters"
                     }
-                  }
+                  },
+                  "required": [
+                    "message"
+                  ]
                 }
               }
             }
@@ -2947,24 +2995,29 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "description": "任务运行记录分页结果",
                   "properties": {
                     "items": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/TaskRun"
-                      }
+                      },
+                      "description": "任务记录列表"
                     },
                     "total": {
                       "type": "integer",
-                      "format": "int64"
+                      "description": "符合条件的总记录数",
+                      "example": 20
                     },
                     "page": {
                       "type": "integer",
-                      "format": "int64"
+                      "description": "当前返回的分页页码",
+                      "example": 1
                     },
                     "limit": {
                       "type": "integer",
-                      "format": "int64"
+                      "description": "每页返回的最大记录行数",
+                      "example": 20
                     }
                   },
                   "required": [
@@ -3294,25 +3347,29 @@
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "description": "任务日志拉取结果",
                   "properties": {
                     "items": {
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/TaskRunLog"
-                      }
+                      },
+                      "description": "日志条目列表"
                     },
                     "acknowledged_seq": {
                       "type": "integer",
-                      "format": "int64"
+                      "description": "当前已拉取确认的最大日志序列号",
+                      "example": 42
                     },
                     "truncated": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "日志是否由于超长而被系统截断",
+                      "example": false
                     }
                   },
                   "required": [
                     "items",
-                    "acknowledged_seq",
-                    "truncated"
+                    "acknowledged_seq"
                   ]
                 }
               },
@@ -3411,20 +3468,24 @@
                   "type": "object",
                   "properties": {
                     "id": {
-                      "type": "string"
+                      "type": "string",
+                      "description": "任务 ID",
+                      "example": "run_9f2c8d1e"
                     },
                     "acknowledged_seq": {
                       "type": "integer",
-                      "format": "int64"
+                      "description": "已成功写入并确认的最大日志序列号",
+                      "example": 50
                     },
                     "truncated": {
-                      "type": "boolean"
+                      "type": "boolean",
+                      "description": "日志存储是否已满并截断",
+                      "example": false
                     }
                   },
                   "required": [
                     "id",
-                    "acknowledged_seq",
-                    "truncated"
+                    "acknowledged_seq"
                   ]
                 }
               }
@@ -3467,19 +3528,40 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "description": "批量追加日志条目请求体",
                 "properties": {
                   "entries": {
                     "type": "array",
+                    "description": "日志项数组",
                     "items": {
-                      "$ref": "#/components/schemas/TaskRunLog"
-                    },
-                    "minItems": 1
+                      "type": "object",
+                      "properties": {
+                        "stream": {
+                          "type": "string",
+                          "description": "日志输出流（stdout / stderr）",
+                          "example": "stdout"
+                        },
+                        "message": {
+                          "type": "string",
+                          "description": "日志文本行内容",
+                          "example": "执行命令成功"
+                        },
+                        "timestamp": {
+                          "type": "string",
+                          "description": "可选。时间戳（RFC 3339）",
+                          "example": "2026-10-16T10:00:00Z"
+                        }
+                      },
+                      "required": [
+                        "stream",
+                        "message"
+                      ]
+                    }
                   }
                 },
                 "required": [
                   "entries"
-                ],
-                "additionalProperties": false
+                ]
               }
             }
           }
@@ -4056,37 +4138,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string",
-                      "example": "ready"
-                    },
-                    "serial": {
-                      "type": "string"
-                    },
-                    "width": {
-                      "type": "integer",
-                      "example": 1080
-                    },
-                    "height": {
-                      "type": "integer",
-                      "example": 2400
-                    },
-                    "touch_mode": {
-                      "type": "string",
-                      "enum": [
-                        "sdk",
-                        "hid",
-                        "adb"
-                      ],
-                      "example": "sdk"
-                    },
-                    "stream_active": {
-                      "type": "boolean",
-                      "example": true
-                    }
-                  }
+                  "$ref": "#/components/schemas/DeviceStatusResponse"
                 }
               }
             }
@@ -4200,30 +4252,41 @@
             "application/json": {
               "schema": {
                 "type": "object",
+                "description": "区域截图裁剪参数",
+                "properties": {
+                  "serial": {
+                    "type": "string",
+                    "description": "设备序列号",
+                    "example": "10.0.0.30:5555"
+                  },
+                  "x": {
+                    "type": "integer",
+                    "description": "区域矩形左上角绝对 X 坐标（像素）",
+                    "example": 100
+                  },
+                  "y": {
+                    "type": "integer",
+                    "description": "区域矩形左上角绝对 Y 坐标（像素）",
+                    "example": 200
+                  },
+                  "width": {
+                    "type": "integer",
+                    "description": "区域宽度（像素）",
+                    "example": 400
+                  },
+                  "height": {
+                    "type": "integer",
+                    "description": "区域高度（像素）",
+                    "example": 300
+                  }
+                },
                 "required": [
                   "serial",
                   "x",
                   "y",
                   "width",
                   "height"
-                ],
-                "properties": {
-                  "serial": {
-                    "type": "string"
-                  },
-                  "x": {
-                    "type": "integer"
-                  },
-                  "y": {
-                    "type": "integer"
-                  },
-                  "width": {
-                    "type": "integer"
-                  },
-                  "height": {
-                    "type": "integer"
-                  }
-                }
+                ]
               }
             }
           }
@@ -4239,6 +4302,738 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/devices/{serial}": {
+      "parameters": [
+        {
+          "name": "serial",
+          "in": "path",
+          "required": true,
+          "description": "目标设备序列号（如 192.168.1.100:5555）",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "tags": [
+          "设备与控制"
+        ],
+        "summary": "修改设备别名",
+        "description": "更新指定设备的自定义备注别名（保存在系统数据库中）",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateDeviceAliasRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "别名更新成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求格式错误"
+          },
+          "500": {
+            "description": "数据库更新失败"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "设备与控制"
+        ],
+        "summary": "移除手动添加的设备",
+        "description": "从系统数据库与设备列表中彻底移除指定的手动登记设备",
+        "responses": {
+          "200": {
+            "description": "移除成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "无法移除自动发现的物理设备或数据库未初始化"
+          }
+        }
+      }
+    },
+    "/api/devices/{serial}/connect": {
+      "parameters": [
+        {
+          "name": "serial",
+          "in": "path",
+          "required": true,
+          "description": "目标设备序列号（如 192.168.1.100:5555）",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "设备与控制"
+        ],
+        "summary": "主动连接网络设备",
+        "description": "调用底层 ADB 对指定网络地址执行 adb connect，刷新设备状态",
+        "responses": {
+          "200": {
+            "description": "连接成功或已连上",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleOkResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "连接失败（超时或网络不可达）"
+          }
+        }
+      }
+    },
+    "/ws/adb-shell": {
+      "get": {
+        "tags": [
+          "Web 终端"
+        ],
+        "summary": "ADB Shell PTY 网页交互式终端 WebSocket",
+        "description": "通过 WebSocket 桥接真实 PTY 运行 `adb -s <serial> shell`。支持双向数据流通讯（上行 JSON 编码输入与尺寸窗口变更，下行原始终端二进制字节流直接送入 xterm.js）",
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "query",
+            "required": true,
+            "description": "目标设备序列号",
+            "schema": {
+              "type": "string"
+            },
+            "example": "10.0.0.30:5555"
+          }
+        ],
+        "responses": {
+          "101": {
+            "description": "成功切换协议为 WebSocket PTY 数据通道"
+          },
+          "400": {
+            "description": "缺少设备 serial 或设备离线"
+          }
+        }
+      }
+    },
+    "/api/dependencies": {
+      "get": {
+        "tags": [
+          "依赖管理"
+        ],
+        "summary": "查询系统依赖状态与配置",
+        "description": "获取当前 ADB、Python 解释器及视觉模块的安装就绪情况、版本号、有效解析路径与托管设置",
+        "responses": {
+          "200": {
+            "description": "系统依赖完整运行状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependenciesStatusResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dependencies/config": {
+      "put": {
+        "tags": [
+          "依赖管理"
+        ],
+        "summary": "保存系统依赖配置",
+        "description": "配置 ADB 与 Python 来源（managed 内置下载、system 系统 PATH、custom 自定义路径）",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencySettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "配置保存成功并已生效"
+          },
+          "400": {
+            "description": "配置参数校验失败"
+          },
+          "409": {
+            "description": "正在更新或有前序任务运行中冲突"
+          }
+        }
+      }
+    },
+    "/api/dependencies/paths": {
+      "put": {
+        "tags": [
+          "依赖管理"
+        ],
+        "summary": "设置自定义依赖二进制路径",
+        "description": "直接指定 ADB 与 Python 可执行文件的物理绝对路径",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DependencyPaths"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "路径保存成功"
+          },
+          "400": {
+            "description": "路径格式非法或指定程序不可执行"
+          },
+          "409": {
+            "description": "投屏或任务进行中暂不允许修改"
+          }
+        }
+      }
+    },
+    "/api/dependencies/detect": {
+      "post": {
+        "tags": [
+          "依赖管理"
+        ],
+        "summary": "检测指定环境依赖可用性",
+        "description": "测试指定的依赖来源是否能正常找到程序并成功返回版本号",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetectDependencyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "探测结果详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DependencyTool"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "检测参数错误"
+          },
+          "409": {
+            "description": "依赖正在变更"
+          }
+        }
+      }
+    },
+    "/api/dependencies/install": {
+      "post": {
+        "tags": [
+          "依赖管理"
+        ],
+        "summary": "安装受控系统依赖",
+        "description": "异步触发官方托管依赖包（如内置 ADB 或 Python 运行环境）的自动化下载与解压安装",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallDependencyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "安装任务已在后台启动"
+          },
+          "400": {
+            "description": "参数错误或未同意许可协议"
+          },
+          "409": {
+            "description": "已有任务正在进行或系统冲突"
+          }
+        }
+      }
+    },
+    "/api/dependencies/install/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "受控依赖组件标识（adb / python）",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "依赖管理"
+        ],
+        "summary": "查询依赖安装进度",
+        "description": "查询指定组件当前下载与解压安装的百分比进度与阶段状态",
+        "responses": {
+          "200": {
+            "description": "当前安装进度快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallTask"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "未找到对应的依赖组件"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "依赖管理"
+        ],
+        "summary": "取消依赖安装任务",
+        "description": "中断并取消正在执行的依赖下载或安装进程",
+        "responses": {
+          "204": {
+            "description": "已成功取消安装任务"
+          },
+          "409": {
+            "description": "取消操作失败或任务已进入不可取消阶段"
+          }
+        }
+      }
+    },
+    "/api/dependencies/installed/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "description": "受控依赖组件标识（adb / python）",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "tags": [
+          "依赖管理"
+        ],
+        "summary": "卸载已安装的内置受控依赖",
+        "description": "清理内置目录中已安装的依赖二进制文件及解压残留",
+        "responses": {
+          "204": {
+            "description": "卸载清理完成"
+          },
+          "409": {
+            "description": "依赖正在使用中无法清理"
+          }
+        }
+      }
+    },
+    "/api/dependencies/python/modules": {
+      "post": {
+        "tags": [
+          "依赖管理"
+        ],
+        "summary": "安装 Python 视觉依赖模块",
+        "description": "在指定的 Python 环境中异步安装 PaddleOCR、OpenCV 等必需依赖模块",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "selection": {
+                    "$ref": "#/components/schemas/DependencySelection",
+                    "description": "待安装模块的 Python 解释器配置"
+                  }
+                },
+                "required": [
+                  "selection"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Python 模块安装任务已启动"
+          },
+          "400": {
+            "description": "参数错误"
+          },
+          "409": {
+            "description": "模块安装冲突或已有任务进行中"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "依赖管理"
+        ],
+        "summary": "取消 Python 模块安装",
+        "description": "中断正在执行的 Python 依赖模块安装任务",
+        "responses": {
+          "204": {
+            "description": "已成功取消安装"
+          },
+          "409": {
+            "description": "取消失败"
+          }
+        }
+      }
+    },
+    "/api/version/check": {
+      "get": {
+        "tags": [
+          "系统版本与更新"
+        ],
+        "summary": "检查应用版本更新",
+        "description": "联网查询 GitHub Release 检查是否有新版本，获取更新日志、下载链接及更新包哈希摘要",
+        "responses": {
+          "200": {
+            "description": "版本检测结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionCheckResult"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "检查更新网络失败"
+          }
+        }
+      }
+    },
+    "/api/version/health": {
+      "get": {
+        "tags": [
+          "系统版本与更新"
+        ],
+        "summary": "版本服务健康检查",
+        "description": "返回当前应用服务的编译运行版本号",
+        "responses": {
+          "200": {
+            "description": "健康检查响应",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "version": {
+                      "type": "string",
+                      "description": "当前服务运行版本号",
+                      "example": "1.26.1"
+                    }
+                  },
+                  "required": [
+                    "version"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/version/upgrade": {
+      "post": {
+        "tags": [
+          "系统版本与更新"
+        ],
+        "summary": "触发在线自动升级",
+        "description": "在二进制独立启动模式下，自动下载官方 Release 更新包并执行热替换升级重启流程",
+        "responses": {
+          "202": {
+            "description": "更新升级任务已启动",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "description": "启动状态",
+                      "example": "started"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "没有可验证的有效新版安装包"
+          },
+          "409": {
+            "description": "当前启动模式不支持自动升级或更新正在进行中"
+          }
+        }
+      }
+    },
+    "/api/version/upgrade-stream": {
+      "get": {
+        "tags": [
+          "系统版本与更新"
+        ],
+        "summary": "实时更新进度 SSE 数据流",
+        "description": "通过 Server-Sent Events (SSE) 实时推送新版本下载与升级进度",
+        "responses": {
+          "200": {
+            "description": "SSE 事件流，不断输出 ProgressInfo JSON 字符串",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/version/status": {
+      "get": {
+        "tags": [
+          "系统版本与更新"
+        ],
+        "summary": "获取当前更新下载状态",
+        "description": "查询当前更新下载进度、瞬时速率及阶段状态快照",
+        "responses": {
+          "200": {
+            "description": "更新进度状态快照",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionProgressInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vision/actions/tap": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "点击动作 (视觉别名)",
+        "description": "POST /api/v1/actions/tap 的兼容别名路径",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionTapRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "动作执行成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数不完整或格式错误"
+          },
+          "500": {
+            "description": "动作执行失败或设备无响应"
+          }
+        }
+      }
+    },
+    "/api/v1/vision/actions/swipe": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "滑动动作 (视觉别名)",
+        "description": "POST /api/v1/actions/swipe 的兼容别名路径",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionSwipeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "动作执行成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数不完整或格式错误"
+          },
+          "500": {
+            "description": "动作执行失败或设备无响应"
+          }
+        }
+      }
+    },
+    "/api/v1/vision/actions/events": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "复合触控事件 (视觉别名)",
+        "description": "POST /api/v1/actions/events 的兼容别名路径",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionEventsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "动作执行成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数不完整或格式错误"
+          },
+          "500": {
+            "description": "动作执行失败或设备无响应"
+          }
+        }
+      }
+    },
+    "/api/v1/vision/actions/send-key": {
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "发送按键动作 (视觉别名)",
+        "description": "POST /api/v1/actions/send-key 的兼容别名路径",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionSendKeyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "动作执行成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数不完整或格式错误"
+          },
+          "500": {
+            "description": "动作执行失败或设备无响应"
+          }
+        }
+      }
+    },
+    "/api/v1/vision/device-status": {
+      "get": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "获取设备分辨率与触控状态 (视觉别名)",
+        "description": "GET /api/v1/device-status 的兼容别名路径",
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "query",
+            "required": true,
+            "description": "目标设备序列号",
+            "schema": {
+              "type": "string"
+            },
+            "example": "10.0.0.30:5555"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "查询成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "缺少 serial 参数"
+          },
+          "500": {
+            "description": "获取失败"
           }
         }
       }
@@ -4285,26 +5080,6 @@
         },
         "description": "ADB 命令任务唯一标识",
         "example": "cmd_1710400000_1"
-      },
-      "cat": {
-        "name": "cat",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "type": "string"
-        },
-        "description": "脚本分类名称",
-        "example": "自动化测试"
-      },
-      "name": {
-        "name": "name",
-        "in": "path",
-        "required": true,
-        "schema": {
-          "type": "string"
-        },
-        "description": "脚本文件名称",
-        "example": "unlock_device.sh"
       }
     },
     "schemas": {
@@ -4402,11 +5177,11 @@
       },
       "SimpleOkResponse": {
         "type": "object",
-        "description": "通用成功操作响应",
+        "description": "通用操作成功响应",
         "properties": {
           "ok": {
             "type": "boolean",
-            "description": "是否操作成功",
+            "description": "操作是否执行成功",
             "example": true
           }
         },
@@ -4530,13 +5305,14 @@
       },
       "RecordingsListResponse": {
         "type": "object",
-        "description": "录像列表响应",
+        "description": "屏幕录像文件记录列表响应",
         "properties": {
           "recordings": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/RecordingView"
-            }
+              "$ref": "#/components/schemas/RecordingItem"
+            },
+            "description": "录像记录对象数组"
           }
         },
         "required": [
@@ -4590,13 +5366,14 @@
       },
       "ScreenshotsListResponse": {
         "type": "object",
-        "description": "截图列表响应",
+        "description": "静态屏幕截图文件列表响应",
         "properties": {
           "screenshots": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/ScreenshotEntry"
-            }
+              "$ref": "#/components/schemas/ScreenshotItem"
+            },
+            "description": "截图记录对象数组"
           }
         },
         "required": [
@@ -4928,69 +5705,57 @@
       },
       "FileItem": {
         "type": "object",
-        "description": "文件/目录项模型",
+        "description": "设备共享存储文件或目录项",
         "properties": {
+          "path": {
+            "type": "string",
+            "description": "文件或目录在设备上的绝对路径",
+            "example": "/sdcard/Download"
+          },
           "name": {
             "type": "string",
             "description": "文件或目录名称",
-            "example": "Download"
+            "example": "report.pdf"
           },
-          "path": {
-            "type": "string",
-            "description": "相对根目录路径",
-            "example": "Download"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "file",
-              "folder"
-            ],
-            "description": "类型：文件或文件夹",
-            "example": "folder"
-          },
-          "mime": {
-            "type": "string",
-            "description": "MIME 类型",
-            "example": "inode/directory"
+          "is_dir": {
+            "type": "boolean",
+            "description": "是否为目录",
+            "example": false
           },
           "size": {
             "type": "integer",
-            "description": "大小字节数",
-            "example": 4096
+            "description": "文件字节大小（目录通常为 0）",
+            "example": 1048576
           },
-          "modified": {
+          "modified_time": {
             "type": "string",
-            "description": "修改时间格式化字符串",
-            "example": "2026-09-14 13:00:00"
+            "description": "文件最后修改时间",
+            "example": "2026-10-16 12:00:00"
+          },
+          "permissions": {
+            "type": "string",
+            "description": "POSIX 权限字符串",
+            "example": "rw-rw----"
           },
           "actions": {
-            "type": "object",
-            "properties": {
-              "download": {
-                "type": "boolean",
-                "example": false
-              },
-              "move": {
-                "type": "boolean",
-                "example": true
-              },
-              "rename": {
-                "type": "boolean",
-                "example": true
-              },
-              "delete": {
-                "type": "boolean",
-                "example": true
-              }
-            }
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "当前项支持的操作动作列表（如 download, delete, rename, move）",
+            "example": [
+              "download",
+              "delete",
+              "rename"
+            ]
           }
         },
         "required": [
-          "name",
           "path",
-          "kind",
-          "size"
+          "name",
+          "is_dir",
+          "size",
+          "modified_time"
         ]
       },
       "FileListResponse": {
@@ -5075,19 +5840,20 @@
       },
       "FileActionResponse": {
         "type": "object",
-        "description": "文件单项操作响应",
+        "description": "文件管理写操作统一响应体",
         "properties": {
           "ok": {
             "type": "boolean",
+            "description": "文件操作是否成功",
             "example": true
           },
           "item": {
-            "$ref": "#/components/schemas/FileItem"
+            "$ref": "#/components/schemas/FileItem",
+            "description": "变更后的文件对象信息"
           }
         },
         "required": [
-          "ok",
-          "item"
+          "ok"
         ]
       },
       "CreateFolderRequest": {
@@ -5192,21 +5958,21 @@
       },
       "DeleteFilesResponse": {
         "type": "object",
-        "description": "删除文件响应",
+        "description": "删除文件操作响应体",
         "properties": {
           "ok": {
             "type": "boolean",
+            "description": "删除是否成功",
             "example": true
           },
-          "undo_token": {
+          "token": {
             "type": "string",
-            "description": "撤销删除凭据 token",
-            "example": "undo_1710400000"
+            "description": "撤销删除 Token，在过期前可用 POST /api/files/undo 恢复",
+            "example": "del_undo_7a8b9c"
           }
         },
         "required": [
-          "ok",
-          "undo_token"
+          "ok"
         ]
       },
       "UndoFilesRequest": {
@@ -5449,90 +6215,107 @@
       },
       "Template": {
         "type": "object",
-        "description": "模板定义与配置元数据",
+        "description": "匹配图像模板元数据",
         "properties": {
           "id": {
             "type": "string",
-            "example": "tpl_1710400000_abcd1234"
+            "description": "模板唯一标识 ID (UUID)",
+            "example": "tpl_home_btn_01"
           },
           "name": {
             "type": "string",
-            "example": "确认按钮"
+            "description": "模板显示名称",
+            "example": "首页按钮"
           },
           "serial": {
             "type": "string",
-            "description": "所属设备序列号或 'global'",
-            "example": "emulator-5554"
+            "description": "绑定的目标设备序列号（若为 global 则代表全局通用模板）",
+            "example": "global"
           },
           "method": {
             "type": "string",
-            "example": "sqdiff_normed"
+            "description": "模板匹配算法（如 TM_CCOEFF_NORMED）",
+            "example": "TM_CCOEFF_NORMED"
           },
           "threshold": {
             "type": "number",
-            "minimum": 0,
-            "maximum": 1,
-            "example": 0.8
+            "description": "匹配相似度阈值（0.0 ~ 1.0）",
+            "example": 0.85
           },
           "grayscale": {
             "type": "boolean",
-            "example": true
+            "description": "比对时是否先转灰度图",
+            "example": false
           },
           "scales": {
             "type": "array",
             "items": {
               "type": "number"
             },
+            "description": "多尺度金字塔缩放比例列表",
             "example": [
-              1
+              1.0
             ]
           },
           "enabled": {
             "type": "boolean",
+            "description": "模板是否启用",
             "example": true
           },
           "image_path": {
             "type": "string",
-            "example": "data/templates/emulator-5554/tpl_1710400000_abcd1234/template.png"
+            "description": "模板图像在服务端存储的相对路径",
+            "example": "templates/global/tpl_home_btn_01.png"
           },
           "width": {
             "type": "integer",
-            "example": 120
+            "description": "模板图像原始宽度（像素）",
+            "example": 64
           },
           "height": {
             "type": "integer",
-            "example": 48
+            "description": "模板图像原始高度（像素）",
+            "example": 64
           },
           "created_at": {
-            "type": "integer",
-            "example": 1710400000000
+            "type": "string",
+            "format": "date-time",
+            "description": "模板创建时间",
+            "example": "2026-10-16T10:00:00Z"
           },
           "updated_at": {
-            "type": "integer",
-            "example": 1710400000000
+            "type": "string",
+            "format": "date-time",
+            "description": "模板最后更新时间",
+            "example": "2026-10-16T10:00:00Z"
           }
         },
         "required": [
           "id",
           "name",
           "serial",
+          "method",
           "threshold",
-          "enabled"
+          "enabled",
+          "created_at",
+          "updated_at"
         ]
       },
       "TemplatesListResponse": {
         "type": "object",
-        "description": "模板列表查询响应",
+        "description": "模板列表响应数据",
         "properties": {
           "templates": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/Template"
-            }
+            },
+            "description": "匹配模板对象列表"
           },
           "total": {
             "type": "integer",
-            "example": 5
+            "description": "模板记录总数量",
+            "example": 12
           }
         },
         "required": [
@@ -5542,386 +6325,375 @@
       },
       "CreateTemplateRequest": {
         "type": "object",
-        "description": "创建模板请求参数",
+        "description": "创建新图像模板请求体",
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "自定义模板唯一 ID（留空时服务端自动生成）",
+            "example": "btn_confirm"
           },
           "name": {
             "type": "string",
+            "description": "模板显示名称",
             "example": "确认按钮"
           },
           "serial": {
             "type": "string",
-            "example": "emulator-5554"
+            "description": "绑定的设备序列号（留空或填 global 代表全局模板）",
+            "example": "global"
           },
           "method": {
             "type": "string",
-            "example": "sqdiff_normed"
+            "description": "匹配算法，默认 TM_CCOEFF_NORMED",
+            "example": "TM_CCOEFF_NORMED"
           },
           "threshold": {
             "type": "number",
+            "description": "匹配阈值（0.0 ~ 1.0，默认 0.8）",
             "example": 0.8
           },
           "grayscale": {
             "type": "boolean",
-            "example": true
+            "description": "比对时是否转灰度图处理",
+            "example": false
           },
           "scales": {
             "type": "array",
             "items": {
               "type": "number"
-            }
+            },
+            "description": "多尺度缩放列表（如 [0.8, 1.0, 1.2]）",
+            "example": [
+              1.0
+            ]
           },
           "enabled": {
             "type": "boolean",
+            "description": "创建后是否立即启用",
             "example": true
           },
           "image_base64": {
-            "type": "string"
+            "type": "string",
+            "description": "模板图像数据的 Base64 编码字符串",
+            "example": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
           }
         },
         "required": [
           "name",
-          "serial"
+          "image_base64"
         ]
       },
       "UpdateTemplateRequest": {
         "type": "object",
-        "description": "更新模板请求参数",
+        "description": "更新图像模板参数请求体",
         "properties": {
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "更新后的模板名称",
+            "example": "新确认按钮"
           },
           "serial": {
-            "type": "string"
+            "type": "string",
+            "description": "绑定的设备序列号",
+            "example": "global"
           },
           "method": {
-            "type": "string"
+            "type": "string",
+            "description": "匹配算法",
+            "example": "TM_CCOEFF_NORMED"
           },
           "threshold": {
-            "type": "number"
+            "type": "number",
+            "description": "匹配阈值（0.0 ~ 1.0）",
+            "example": 0.85
           },
           "grayscale": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "是否开启灰度比对",
+            "example": false
           },
           "scales": {
             "type": "array",
             "items": {
               "type": "number"
-            }
+            },
+            "description": "缩放比对系数列表",
+            "example": [
+              1.0
+            ]
           },
           "enabled": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "是否启用该模板",
+            "example": true
           },
           "image_base64": {
-            "type": "string"
+            "type": "string",
+            "description": "更新后的模板图像 Base64（留空不修改原图）",
+            "example": ""
           }
         }
       },
       "MatchingServiceStatus": {
         "type": "object",
-        "required": [
-          "state",
-          "pid",
-          "error",
-          "environment",
-          "devices"
-        ],
+        "description": "后台 Python 模板匹配微服务状态",
         "properties": {
           "state": {
             "type": "string",
+            "description": "服务当前生命周期状态（stopped: 已停止, starting: 启动中, running: 运行中, error: 异常错误）",
             "enum": [
               "stopped",
-              "checking",
-              "installing",
               "starting",
               "running",
-              "stopping",
-              "failed"
-            ]
+              "error"
+            ],
+            "example": "running"
           },
           "pid": {
-            "type": "integer"
+            "type": "integer",
+            "description": "服务后台进程 PID（未运行时为 0）",
+            "example": 12345
           },
           "error": {
-            "type": "string"
+            "type": "string",
+            "description": "服务异常错误信息（正常时为空字符串）",
+            "example": ""
           },
           "environment": {
             "type": "object",
-            "required": [
-              "path",
-              "version",
-              "ready",
-              "error",
-              "warning",
-              "dependencies"
-            ],
-            "properties": {
-              "path": {
-                "type": "string"
-              },
-              "version": {
-                "type": "string"
-              },
-              "ready": {
-                "type": "boolean"
-              },
-              "error": {
-                "type": "string"
-              },
-              "warning": {
-                "type": "string"
-              },
-              "dependencies": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "required": [
-                    "name",
-                    "available",
-                    "error"
-                  ],
-                  "properties": {
-                    "name": {
-                      "type": "string"
-                    },
-                    "available": {
-                      "type": "boolean"
-                    },
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
+            "description": "Python 运行时环境及第三方 OpenCV/NumPy 依赖状态"
           },
           "devices": {
             "type": "array",
             "items": {
-              "type": "object",
-              "required": [
-                "serial",
-                "state",
-                "error"
-              ],
-              "properties": {
-                "serial": {
-                  "type": "string"
-                },
-                "state": {
-                  "type": "string",
-                  "enum": [
-                    "waiting",
-                    "matching",
-                    "failed"
-                  ]
-                },
-                "error": {
-                  "type": "string"
-                }
-              }
-            }
+              "type": "string"
+            },
+            "description": "当前已分配并纳入模板匹配监听的设备列表",
+            "example": [
+              "10.0.0.30:5555"
+            ]
           }
-        }
+        },
+        "required": [
+          "state",
+          "pid",
+          "error"
+        ]
       },
       "OperationLog": {
         "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "id",
-          "serial",
-          "type",
-          "description",
-          "adb_command",
-          "occurred_at"
-        ],
+        "description": "操作审计日志项",
         "properties": {
           "id": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128,
-            "description": "客户端生成的唯一记录 ID，重试必须沿用同一 ID"
+            "type": "integer",
+            "description": "日志自增唯一 ID",
+            "example": 101
+          },
+          "timestamp": {
+            "type": "integer",
+            "description": "操作发生的时间戳（毫秒）",
+            "example": 1710400000000
           },
           "serial": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 256
+            "description": "操作的目标 Android 设备序列号",
+            "example": "10.0.0.30:5555"
           },
           "type": {
             "type": "string",
-            "enum": [
-              "tap",
-              "longpress",
-              "swipe",
-              "key",
-              "text"
-            ]
+            "description": "操作分类（如 tap, swipe, key, text, shell, reboot 等）",
+            "example": "tap"
           },
-          "description": {
+          "action": {
             "type": "string",
-            "minLength": 1,
-            "description": "操作描述，UTF-8 最多 8192 字节"
+            "description": "动作简述或下发的关键指令",
+            "example": "Tap at (540, 960)"
           },
-          "adb_command": {
+          "params": {
             "type": "string",
-            "minLength": 1,
-            "description": "对应的 ADB 复现命令，UTF-8 最多 16384 字节；接口仅存储，不执行命令"
-          },
-          "occurred_at": {
-            "type": "integer",
-            "format": "int64",
-            "description": "操作时间，Unix 毫秒；最近 7 天内，允许最多 1 分钟未来时钟偏差"
+            "description": "操作携带的详细参数 JSON 格式字符串",
+            "example": "{\"x\":540,\"y\":960}"
           }
-        }
+        },
+        "required": [
+          "id",
+          "timestamp",
+          "serial",
+          "type",
+          "action"
+        ]
       },
       "OperationLogPage": {
         "type": "object",
-        "required": [
-          "items",
-          "next_before"
-        ],
+        "description": "操作日志分页查询结果",
         "properties": {
           "items": {
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/OperationLog"
-            }
+            },
+            "description": "当前页的操作日志记录列表"
           },
-          "next_before": {
+          "total": {
             "type": "integer",
-            "format": "int64",
-            "description": "下一页的排他序号游标，0 表示没有下一页"
+            "description": "满足当前筛选条件的总日志条数",
+            "example": 86
           }
-        }
+        },
+        "required": [
+          "items",
+          "total"
+        ]
       },
       "TaskRun": {
         "type": "object",
+        "description": "任务运行实例完整状态与连接性监控信息",
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "任务运行记录唯一标识符 (UUID)",
+            "example": "run_9f2c8d1e"
           },
           "client_run_id": {
-            "type": "string"
+            "type": "string",
+            "description": "客户端指定的幂等任务标识",
+            "example": "local-test-01"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "任务显示名称",
+            "example": "每日签到测试"
           },
           "source": {
-            "type": "string"
+            "type": "string",
+            "description": "任务触发来源（python-sdk, web, cli 等）",
+            "example": "python-sdk"
           },
           "device_serial": {
-            "type": "string"
+            "type": "string",
+            "description": "绑定的目标设备序列号",
+            "example": "10.0.0.30:5555"
           },
           "summary": {
-            "type": "string"
+            "type": "string",
+            "description": "任务执行摘要说明",
+            "example": "所有流程执行成功"
           },
           "report_markdown": {
-            "type": "string"
+            "type": "string",
+            "description": "任务结果 Markdown 格式详细报告",
+            "example": "# 执行报告\n- 步骤1: 成功"
           },
           "log_count": {
             "type": "integer",
-            "format": "int64"
+            "description": "已收集的运行日志总行数",
+            "example": 42
           },
           "created_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time",
+            "description": "任务创建时间（ISO 8601）",
+            "example": "2026-10-16T10:00:00Z"
           },
           "updated_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time",
+            "description": "最后更新时间",
+            "example": "2026-10-16T10:01:00Z"
           },
           "last_heartbeat_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time",
+            "description": "最近一次客户端心跳上报时间",
+            "example": "2026-10-16T10:00:55Z"
           },
           "ended_at": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time",
+            "description": "任务结束时间",
+            "example": "2026-10-16T10:01:00Z"
           },
           "duration_ms": {
             "type": "integer",
-            "format": "int64"
+            "description": "任务运行总持续时间（毫秒）",
+            "example": 60000
           },
           "status": {
             "type": "string",
+            "description": "任务状态（running: 进行中, finished: 正常完成, failed: 运行失败, lost: 心跳超时失联）",
             "enum": [
               "running",
-              "succeeded",
+              "finished",
               "failed",
-              "cancelled"
-            ]
+              "lost"
+            ],
+            "example": "finished"
           },
           "exit_code": {
-            "type": [
-              "integer",
-              "null"
-            ]
+            "type": "integer",
+            "description": "客户端进程退出码（0 表示正常）",
+            "example": 0
           },
           "log_truncated": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "日志是否超出容量上限而被截断",
+            "example": false
           },
           "connectivity": {
             "type": "string",
-            "enum": [
-              "connected",
-              "disconnected",
-              "closed"
-            ]
+            "description": "设备在线连接性健康状态（connected: 连接正常, degraded: 偶发抖动, offline: 彻底离线）",
+            "example": "connected"
           },
           "disconnected": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "设备是否已离线",
+            "example": false
           },
           "connectivity_message": {
-            "type": "string"
+            "type": "string",
+            "description": "设备连接状态说明信息",
+            "example": "设备保持活跃"
           },
           "acknowledged_seq": {
             "type": "integer",
-            "format": "int64"
+            "description": "服务端已确认接收的最大日志序列号",
+            "example": 42
           }
         },
         "required": [
           "id",
-          "client_run_id",
           "name",
           "source",
           "device_serial",
-          "summary",
-          "report_markdown",
-          "log_count",
-          "created_at",
-          "updated_at",
-          "last_heartbeat_at",
-          "ended_at",
-          "duration_ms",
           "status",
-          "exit_code",
-          "log_truncated",
-          "connectivity",
-          "disconnected"
+          "created_at",
+          "updated_at"
         ]
       },
       "TaskRunLog": {
         "type": "object",
+        "description": "任务运行日志单条记录",
         "properties": {
           "seq": {
             "type": "integer",
-            "format": "int64"
+            "description": "日志单调递增序列号",
+            "example": 1
           },
           "timestamp": {
-            "type": "integer",
-            "format": "int64"
+            "type": "string",
+            "format": "date-time",
+            "description": "日志产生时间（ISO 8601）",
+            "example": "2026-10-16T10:00:01Z"
           },
           "stream": {
             "type": "string",
-            "enum": [
-              "stdout",
-              "stderr"
-            ]
+            "description": "日志输出流（stdout / stderr）",
+            "example": "stdout"
           },
           "message": {
-            "type": "string"
+            "type": "string",
+            "description": "日志文本行内容",
+            "example": "设备初始化完成"
           }
         },
         "required": [
@@ -5929,72 +6701,90 @@
           "timestamp",
           "stream",
           "message"
-        ],
-        "additionalProperties": false
+        ]
       },
       "CreateTaskRunRequest": {
         "type": "object",
+        "description": "创建任务运行实例请求参数",
         "properties": {
           "client_run_id": {
-            "type": "string"
+            "type": "string",
+            "description": "可选。客户端指定的运行唯一标识，用于幂等排重",
+            "example": "test-run-101"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "任务显示名称",
+            "example": "自动化探索测试"
           },
           "source": {
-            "type": "string"
+            "type": "string",
+            "description": "任务来源标识（如 python-sdk, cli, web）",
+            "example": "python-sdk"
           },
           "device_serial": {
-            "type": "string"
+            "type": "string",
+            "description": "执行任务所关联的设备 serial",
+            "example": "10.0.0.30:5555"
           },
           "summary": {
-            "type": "string"
+            "type": "string",
+            "description": "任务初始化简述",
+            "example": "启动探索任务"
           },
           "report_markdown": {
-            "type": "string"
+            "type": "string",
+            "description": "初始 Markdown 报告模板",
+            "example": ""
           }
         },
         "required": [
-          "client_run_id",
           "name",
+          "source",
           "device_serial"
-        ],
-        "additionalProperties": false
+        ]
       },
       "FinishTaskRunRequest": {
         "type": "object",
+        "description": "结束任务运行上报参数",
         "properties": {
           "status": {
             "type": "string",
+            "description": "结束状态（finished: 正常完成, failed: 失败异常）",
             "enum": [
-              "succeeded",
-              "failed",
-              "cancelled"
-            ]
+              "finished",
+              "failed"
+            ],
+            "example": "finished"
           },
           "exit_code": {
-            "type": [
-              "integer",
-              "null"
-            ]
+            "type": "integer",
+            "description": "进程退出码（0 表示成功，非 0 失败）",
+            "example": 0
           },
           "summary": {
-            "type": "string"
+            "type": "string",
+            "description": "任务最终结论摘要",
+            "example": "用例全部通过"
           },
           "report_markdown": {
-            "type": "string"
+            "type": "string",
+            "description": "最终 Markdown 详细测试报告",
+            "example": "# 测试报告\n通过: 10, 失败: 0"
           }
         },
         "required": [
           "status"
-        ],
-        "additionalProperties": false
+        ]
       },
       "TaskRunError": {
         "type": "object",
+        "description": "任务运行接口错误响应体",
         "properties": {
           "error": {
-            "type": "string"
+            "type": "string",
+            "description": "错误原因详细描述",
+            "example": "task run not found"
           }
         },
         "required": [
@@ -6155,43 +6945,45 @@
       },
       "VisionMessage": {
         "type": "object",
-        "description": "Vision 广播消息体（目标识别或触控可视化）",
+        "description": "Python Vision WebSocket 双向传输消息帧",
         "properties": {
-          "type": {
-            "type": "string",
-            "description": "消息类型，如 detection.result / touch",
-            "example": "detection.result"
-          },
           "protocol_version": {
-            "type": "string",
-            "example": "1"
+            "type": "integer",
+            "description": "视觉传输协议版本号",
+            "example": 1
           },
           "device_id": {
             "type": "string",
-            "example": "emulator-5554"
+            "description": "关联的目标设备序列号",
+            "example": "10.0.0.30:5555"
           },
           "session_id": {
             "type": "string",
-            "example": "sess_1710400000"
+            "description": "视觉流会话 ID",
+            "example": "sess_1"
           },
           "frame_id": {
             "type": "integer",
-            "example": 105
+            "description": "视频图像帧单调递增编号",
+            "example": 100
           },
           "timestamp": {
             "type": "integer",
-            "description": "Unix 毫秒时间戳",
+            "description": "消息产生毫秒时间戳",
             "example": 1710400000000
           },
-          "objects": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/VisionObject"
-            },
-            "description": "检测到的目标物体列表（为空表示清空绘制）"
+          "type": {
+            "type": "string",
+            "description": "消息类型（frame / results / heartbeat / error）",
+            "example": "results"
+          },
+          "payload": {
+            "type": "object",
+            "description": "消息内容载荷对象"
           }
         },
         "required": [
+          "protocol_version",
           "type"
         ]
       },
@@ -6598,131 +7390,87 @@
       },
       "ActionResult": {
         "type": "object",
+        "description": "底层动作注入执行结果",
         "properties": {
           "request_id": {
-            "type": "string"
+            "type": "string",
+            "description": "请求唯一标识符（UUID）",
+            "example": "act_8f7b2c1e"
           },
           "status": {
             "type": "string",
-            "enum": [
-              "executed",
-              "failed"
-            ]
+            "description": "执行结果状态（success: 成功, error: 失败）",
+            "example": "success"
           },
           "executed": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "动作是否实际下发到设备执行",
+            "example": true
           },
           "mode": {
             "type": "string",
-            "enum": [
-              "sdk",
-              "hid",
-              "adb"
-            ]
+            "description": "本次执行实际使用的输入注入模式（sdk / hid / adb）",
+            "example": "sdk"
           },
           "error_code": {
-            "type": "string"
+            "type": "string",
+            "description": "错误码或状态标记（如 ok, device_offline, invalid_params, timeout 等）",
+            "example": "ok"
           },
           "elapsed_ms": {
-            "type": "integer"
+            "type": "integer",
+            "description": "动作从接收请求到执行完毕的耗时（毫秒）",
+            "example": 25
           }
-        }
+        },
+        "required": [
+          "request_id",
+          "status",
+          "executed",
+          "mode",
+          "error_code",
+          "elapsed_ms"
+        ]
       },
       "ConditionRequest": {
         "type": "object",
-        "required": [
-          "serial",
-          "kind",
-          "condition"
-        ],
+        "description": "视觉/文本/像素条件检查与等待请求体",
         "properties": {
           "serial": {
-            "type": "string"
+            "type": "string",
+            "description": "目标 Android 设备序列号（如 10.0.0.30:5555 或 emulator-5554）",
+            "example": "10.0.0.30:5555"
           },
           "kind": {
             "type": "string",
+            "description": "检测条件类型：text（OCR 文本）、template（模板匹配）、pixel（像素颜色比对）",
             "enum": [
               "text",
               "template",
               "pixel"
-            ]
+            ],
+            "example": "text"
           },
           "condition": {
             "type": "object",
-            "properties": {
-              "keywords": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "OCR 待匹配的关键词"
-              },
-              "engine": {
-                "type": "string",
-                "enum": [
-                  "auto",
-                  "macocr",
-                  "paddleocr",
-                  "indraocr"
-                ]
-              },
-              "bbox": {
-                "type": "array",
-                "items": {
-                  "type": "number"
-                },
-                "description": "归一化区域裁剪 [x, y, w, h]"
-              },
-              "template_names": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "模板名称列表"
-              },
-              "template_name": {
-                "type": "string",
-                "description": "单个模板名称"
-              },
-              "threshold": {
-                "type": "number",
-                "default": 0.88,
-                "description": "模板匹配阈值 (0~1)"
-              },
-              "points": {
-                "type": "array",
-                "items": {
-                  "type": "object"
-                },
-                "description": "像素点定义列表"
-              },
-              "pixel_mode": {
-                "type": "string",
-                "enum": [
-                  "all",
-                  "any"
-                ]
-              },
-              "match_mode": {
-                "type": "string",
-                "enum": [
-                  "any",
-                  "all"
-                ]
-              }
-            }
+            "description": "具体条件规则参数。text 模式传 keywords/threshold/roi；template 模式传 template_id/threshold/roi；pixel 模式传 pixels/mode 等"
           },
           "timeout_ms": {
             "type": "integer",
-            "default": 0,
-            "description": "超时等待时间 (ms)。<=0（或缺省）时为即时单帧检查；>0 时为持续轮询等待直到目标出现或超时"
+            "description": "最大等待超时时间（毫秒）。默认 0 表示仅检测 1 次；>0 表示其间以轮询方式持续检测，一旦匹配立即返回",
+            "example": 1500
           },
-          "poll_interval_ms": {
+          "interval_ms": {
             "type": "integer",
-            "default": 100,
-            "description": "轮询检测间隔 (ms)，仅在 timeout_ms > 0 时生效"
+            "description": "轮询重试检测间隔（毫秒，默认 500ms）",
+            "example": 300
           }
-        }
+        },
+        "required": [
+          "serial",
+          "kind",
+          "condition"
+        ]
       },
       "WaitRequest": {
         "allOf": [
@@ -6793,89 +7541,679 @@
       },
       "CheckResponse": {
         "type": "object",
+        "description": "视觉/文本/像素条件检测或轮询等待的响应结果",
         "properties": {
           "status": {
             "type": "string",
-            "enum": [
-              "matched",
-              "not_matched"
-            ]
+            "description": "执行状态（success: 匹配成功, timeout: 轮询等待超时未匹配, error: 异常错误）",
+            "example": "success"
           },
           "matched": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "目标条件当前是否成功匹配命中",
+            "example": true
           },
           "kind": {
-            "type": "string"
+            "type": "string",
+            "description": "本次匹配使用的条件类型（text: OCR文字, template: 模板图, pixel: 像素颜色）",
+            "example": "text"
           },
           "elapsed_ms": {
-            "type": "integer"
+            "type": "integer",
+            "description": "检测或轮询等待总耗时（毫秒）",
+            "example": 450
           },
           "result": {
-            "type": "object"
+            "type": "object",
+            "description": "详细的匹配结果（包含文字识别框坐标、模板匹配相似度及区域、或像素点颜色比对详情）",
+            "properties": {
+              "point": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "命中目标的中心点击点坐标 [x, y]",
+                "example": [
+                  540,
+                  960
+                ]
+              },
+              "score": {
+                "type": "number",
+                "description": "匹配置信度或相似度（0.0 ~ 1.0）",
+                "example": 0.98
+              },
+              "box": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "命中目标在屏幕上的边界矩形 [x1, y1, x2, y2]",
+                "example": [
+                  400,
+                  900,
+                  680,
+                  1020
+                ]
+              }
+            }
           }
-        }
+        },
+        "required": [
+          "status",
+          "matched",
+          "kind",
+          "elapsed_ms"
+        ]
       },
       "WaitResponse": {
         "type": "object",
+        "description": "视觉/文本/像素条件检测或轮询等待的响应结果",
         "properties": {
           "status": {
             "type": "string",
-            "enum": [
-              "matched",
-              "timeout"
-            ]
+            "description": "执行状态（success: 匹配成功, timeout: 轮询等待超时未匹配, error: 异常错误）",
+            "example": "success"
           },
           "matched": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "目标条件当前是否成功匹配命中",
+            "example": true
           },
           "kind": {
-            "type": "string"
+            "type": "string",
+            "description": "本次匹配使用的条件类型（text: OCR文字, template: 模板图, pixel: 像素颜色）",
+            "example": "text"
           },
           "elapsed_ms": {
-            "type": "integer"
+            "type": "integer",
+            "description": "检测或轮询等待总耗时（毫秒）",
+            "example": 450
           },
           "result": {
-            "type": "object"
+            "type": "object",
+            "description": "详细的匹配结果（包含文字识别框坐标、模板匹配相似度及区域、或像素点颜色比对详情）",
+            "properties": {
+              "point": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "命中目标的中心点击点坐标 [x, y]",
+                "example": [
+                  540,
+                  960
+                ]
+              },
+              "score": {
+                "type": "number",
+                "description": "匹配置信度或相似度（0.0 ~ 1.0）",
+                "example": 0.98
+              },
+              "box": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                },
+                "description": "命中目标在屏幕上的边界矩形 [x1, y1, x2, y2]",
+                "example": [
+                  400,
+                  900,
+                  680,
+                  1020
+                ]
+              }
+            }
           }
-        }
+        },
+        "required": [
+          "status",
+          "matched",
+          "kind",
+          "elapsed_ms"
+        ]
       },
       "TapWhenResponse": {
         "type": "object",
+        "description": "条件匹配并触发点击的组合动作执行结果",
         "properties": {
           "status": {
             "type": "string",
-            "enum": [
-              "matched",
-              "timeout"
-            ]
+            "description": "整体状态（success: 匹配并成功点击, timeout: 等待超时未匹配, error: 执行错误）",
+            "example": "success"
           },
           "matched": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "条件是否匹配命中",
+            "example": true
           },
           "kind": {
-            "type": "string"
+            "type": "string",
+            "description": "条件检测类型（text / template / pixel）",
+            "example": "text"
           },
           "elapsed_ms": {
-            "type": "integer"
+            "type": "integer",
+            "description": "从检测到点击完成的全流程总耗时（毫秒）",
+            "example": 520
           },
           "tap_point": {
-            "type": "object",
-            "properties": {
-              "x": {
-                "type": "number"
-              },
-              "y": {
-                "type": "number"
-              }
-            }
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "实际点击的屏幕绝对像素坐标 [x, y]",
+            "example": [
+              540,
+              960
+            ]
           },
           "action": {
-            "$ref": "#/components/schemas/ActionResult"
+            "$ref": "#/components/schemas/ActionResult",
+            "description": "点击动作的详细执行结果"
           },
           "result": {
-            "type": "object"
+            "type": "object",
+            "description": "条件匹配的原始检测详情"
+          }
+        },
+        "required": [
+          "status",
+          "matched",
+          "kind",
+          "elapsed_ms"
+        ]
+      },
+      "DeviceStatusResponse": {
+        "type": "object",
+        "description": "设备屏幕物理分辨率与输入注入模式状态",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "查询状态（success / error）",
+            "example": "success"
+          },
+          "serial": {
+            "type": "string",
+            "description": "设备序列号",
+            "example": "10.0.0.30:5555"
+          },
+          "width": {
+            "type": "integer",
+            "description": "屏幕物理分辨率宽度（像素）",
+            "example": 1080
+          },
+          "height": {
+            "type": "integer",
+            "description": "屏幕物理分辨率高度（像素）",
+            "example": 2400
+          },
+          "touch_mode": {
+            "type": "string",
+            "description": "当前继承并生效的全局输入模式（sdk / hid / adb）",
+            "example": "sdk"
+          },
+          "stream_active": {
+            "type": "boolean",
+            "description": "Scrcpy 视频流当前是否处于连接活跃状态",
+            "example": true
+          }
+        },
+        "required": [
+          "status",
+          "serial",
+          "width",
+          "height",
+          "touch_mode",
+          "stream_active"
+        ]
+      },
+      "ManualDeviceRequest": {
+        "type": "object",
+        "description": "手动添加网络或局域网设备请求体",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "description": "设备网络地址及端口或序列号（如 192.168.1.100:5555）",
+            "example": "192.168.1.100:5555"
+          },
+          "alias": {
+            "type": "string",
+            "description": "设备备注别名（如 客厅电视）",
+            "example": "客厅电视"
+          }
+        },
+        "required": [
+          "serial"
+        ]
+      },
+      "UpdateDeviceAliasRequest": {
+        "type": "object",
+        "description": "修改设备别名请求体",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "新的设备备注别名",
+            "example": "测试样机A"
+          }
+        },
+        "required": [
+          "alias"
+        ]
+      },
+      "DependencySelection": {
+        "type": "object",
+        "description": "外部依赖选择项配置",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "依赖来源（managed: 内置受控下载, system: 系统全局 PATH, custom: 自定义绝对路径）",
+            "enum": [
+              "managed",
+              "system",
+              "custom"
+            ],
+            "example": "system"
+          },
+          "path": {
+            "type": "string",
+            "description": "指定的可执行文件或解释器绝对路径（仅在 custom 或固定指定时生效）",
+            "example": "/usr/local/bin/adb"
+          }
+        },
+        "required": [
+          "source"
+        ]
+      },
+      "DependencySettings": {
+        "type": "object",
+        "description": "系统依赖配置选项",
+        "properties": {
+          "schema": {
+            "type": "integer",
+            "description": "配置协议版本号",
+            "example": 1
+          },
+          "adb": {
+            "$ref": "#/components/schemas/DependencySelection",
+            "description": "ADB 工具依赖配置"
+          },
+          "python": {
+            "$ref": "#/components/schemas/DependencySelection",
+            "description": "Python 解释器依赖配置"
+          }
+        },
+        "required": [
+          "adb",
+          "python"
+        ]
+      },
+      "DependencyPaths": {
+        "type": "object",
+        "description": "自定义依赖二进制可执行文件路径配置",
+        "properties": {
+          "adb": {
+            "type": "string",
+            "description": "ADB 可执行文件绝对路径",
+            "example": "/usr/local/bin/adb"
+          },
+          "python": {
+            "type": "string",
+            "description": "Python 解释器绝对路径",
+            "example": "/usr/bin/python3"
           }
         }
+      },
+      "DependencyTool": {
+        "type": "object",
+        "description": "依赖工具的有效解析与安装就绪状态",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "依赖唯一标识（如 adb, python）",
+            "example": "adb"
+          },
+          "name": {
+            "type": "string",
+            "description": "依赖显示名称",
+            "example": "Android Debug Bridge"
+          },
+          "purpose": {
+            "type": "string",
+            "description": "依赖在系统中的主要功能定位",
+            "example": "设备连接管理、按键注入与 Scrcpy Server 投屏通讯"
+          },
+          "installed": {
+            "type": "boolean",
+            "description": "当前依赖是否已被探测到并可正常执行",
+            "example": true
+          },
+          "path": {
+            "type": "string",
+            "description": "当前实际解析使用的二进制绝对路径",
+            "example": "/usr/local/bin/adb"
+          },
+          "version": {
+            "type": "string",
+            "description": "探测到的工具版本号",
+            "example": "1.0.41"
+          },
+          "error": {
+            "type": "string",
+            "description": "若不可用时的探测错误说明",
+            "example": ""
+          },
+          "download_url": {
+            "type": "string",
+            "description": "托管下载地址",
+            "example": ""
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "installed",
+          "path"
+        ]
+      },
+      "InstallTask": {
+        "type": "object",
+        "description": "依赖下载与安装任务进度信息",
+        "properties": {
+          "stage": {
+            "type": "string",
+            "description": "任务执行阶段（idle: 空闲, downloading: 下载中, extracting: 解压中, verifying: 校验中, installed: 完成, error: 失败）",
+            "example": "installed"
+          },
+          "received": {
+            "type": "integer",
+            "description": "已接收的字节数",
+            "example": 10485760
+          },
+          "total": {
+            "type": "integer",
+            "description": "总字节大小",
+            "example": 10485760
+          },
+          "error": {
+            "type": "string",
+            "description": "发生错误时的异常描述",
+            "example": ""
+          }
+        },
+        "required": [
+          "stage",
+          "received",
+          "total"
+        ]
+      },
+      "ManagedTool": {
+        "type": "object",
+        "description": "系统内置受控管理的依赖包对象",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "受控组件标识（adb / python）",
+            "example": "adb"
+          },
+          "name": {
+            "type": "string",
+            "description": "受控组件名称",
+            "example": "ADB"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/DependencySelection",
+            "description": "当前选用的来源配置"
+          },
+          "installed": {
+            "type": "boolean",
+            "description": "受控版本是否已经安装就绪",
+            "example": true
+          },
+          "residual": {
+            "type": "boolean",
+            "description": "是否存在未清理的历史残留",
+            "example": false
+          },
+          "version": {
+            "type": "string",
+            "description": "受控版本号",
+            "example": "34.0.5"
+          },
+          "builtin_path": {
+            "type": "string",
+            "description": "安装在内置目录中的绝对路径",
+            "example": "/Users/liuzhuo/code/MyWebScrcpy/data/bin/adb"
+          },
+          "supported": {
+            "type": "boolean",
+            "description": "当前平台是否支持内置一键安装",
+            "example": true
+          },
+          "effective": {
+            "$ref": "#/components/schemas/DependencyTool",
+            "description": "当前实际生效的依赖信息"
+          },
+          "task": {
+            "$ref": "#/components/schemas/InstallTask",
+            "description": "当前安装或下载任务状态"
+          },
+          "modules_task": {
+            "$ref": "#/components/schemas/InstallTask",
+            "description": "Python 模块依赖安装任务状态（仅 python 依赖包含）"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "installed",
+          "supported",
+          "effective",
+          "task"
+        ]
+      },
+      "DependenciesStatusResponse": {
+        "type": "object",
+        "description": "系统依赖完整运行状态与配置",
+        "properties": {
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DependencyTool"
+            },
+            "description": "全局依赖工具列表及可用性"
+          },
+          "paths": {
+            "$ref": "#/components/schemas/DependencyPaths",
+            "description": "当前生效的自定义绝对路径"
+          },
+          "configurable": {
+            "type": "boolean",
+            "description": "是否允许用户在界面上动态修改配置",
+            "example": true
+          },
+          "managed": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManagedTool"
+            },
+            "description": "内置受控依赖项列表"
+          },
+          "config": {
+            "$ref": "#/components/schemas/DependencySettings",
+            "description": "当前生效的系统依赖设置"
+          }
+        },
+        "required": [
+          "tools",
+          "paths",
+          "configurable",
+          "managed",
+          "config"
+        ]
+      },
+      "DetectDependencyRequest": {
+        "type": "object",
+        "description": "依赖有效性检测请求体",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "依赖标识（adb / python）",
+            "enum": [
+              "adb",
+              "python"
+            ],
+            "example": "adb"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/DependencySelection",
+            "description": "待检测的依赖来源配置"
+          }
+        },
+        "required": [
+          "id",
+          "selection"
+        ]
+      },
+      "InstallDependencyRequest": {
+        "type": "object",
+        "description": "安装内置受控依赖请求体",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "需要安装的受控依赖标识（adb / python）",
+            "enum": [
+              "adb",
+              "python"
+            ],
+            "example": "adb"
+          },
+          "accept_license": {
+            "type": "boolean",
+            "description": "是否同意官方许可协议条款",
+            "example": true
+          }
+        },
+        "required": [
+          "id",
+          "accept_license"
+        ]
+      },
+      "VersionCheckResult": {
+        "type": "object",
+        "description": "版本更新检查结果",
+        "properties": {
+          "can_upgrade": {
+            "type": "boolean",
+            "description": "当前运行环境是否支持直接在线自动升级",
+            "example": true
+          },
+          "has_update": {
+            "type": "boolean",
+            "description": "是否有更高的新版本发布",
+            "example": true
+          },
+          "current_version": {
+            "type": "string",
+            "description": "当前服务运行的版本号",
+            "example": "1.26.1"
+          },
+          "latest_version": {
+            "type": "string",
+            "description": "远端 Release 最新版本号",
+            "example": "1.26.2"
+          },
+          "release_notes": {
+            "type": "string",
+            "description": "新版本更新日志说明（Markdown 格式）",
+            "example": "## 更新说明\n- 修复问题"
+          },
+          "published_at": {
+            "type": "string",
+            "description": "新版本发布时间（RFC 3339）",
+            "example": "2026-10-16T12:00:00Z"
+          },
+          "asset_name": {
+            "type": "string",
+            "description": "匹配当前操作系统和架构的安装包文件名",
+            "example": "mywebscrcpy-darwin-arm64.tar.gz"
+          },
+          "asset_size": {
+            "type": "integer",
+            "description": "更新安装包字节数大小",
+            "example": 35651584
+          },
+          "download_url": {
+            "type": "string",
+            "description": "安装包官方下载直链",
+            "example": "https://github.com/mywebscrcpy/releases/download/v1.26.2/mywebscrcpy-darwin-arm64.tar.gz"
+          },
+          "digest": {
+            "type": "string",
+            "description": "安装包 SHA256 完整性摘要",
+            "example": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          }
+        },
+        "required": [
+          "can_upgrade",
+          "has_update",
+          "current_version",
+          "latest_version"
+        ]
+      },
+      "VersionProgressInfo": {
+        "type": "object",
+        "description": "版本下载与自动升级进度快照",
+        "properties": {
+          "state": {
+            "type": "string",
+            "description": "升级阶段状态（idle: 空闲, downloading: 下载中, staged: 下载就绪, applying: 应用更新, success: 成功, error: 失败）",
+            "example": "idle"
+          },
+          "percent": {
+            "type": "number",
+            "description": "下载或安装进度百分比（0.0 ~ 100.0）",
+            "example": 100.0
+          },
+          "downloaded": {
+            "type": "integer",
+            "description": "已下载的字节数",
+            "example": 35651584
+          },
+          "total": {
+            "type": "integer",
+            "description": "安装包总字节数",
+            "example": 35651584
+          },
+          "speed": {
+            "type": "string",
+            "description": "实时下载速度文本（如 5.2 MB/s）",
+            "example": "5.2 MB/s"
+          },
+          "error": {
+            "type": "string",
+            "description": "发生错误时的异常说明",
+            "example": ""
+          },
+          "target_file": {
+            "type": "string",
+            "description": "下载并暂存的目标文件路径",
+            "example": ""
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "进度状态最后刷新时间",
+            "example": "2026-10-16T12:00:00Z"
+          }
+        },
+        "required": [
+          "state",
+          "percent",
+          "downloaded",
+          "total",
+          "updated_at"
+        ]
       }
     },
     "securitySchemes": {
@@ -6885,5 +8223,87 @@
         "description": "专用任务运行上报令牌"
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "设备与控制",
+      "description": "Android 设备连接发现、别名维护、屏幕旋转、电源状态及重启管理"
+    },
+    {
+      "name": "自动化与视觉 (Automation & Vision)",
+      "description": "基于 Go 原生实现的屏幕点击、拟人滑动、按键发送、OCR 文字匹配、多核加速模板匹配、像素颜色校验及条件轮询与点击"
+    },
+    {
+      "name": "实时投屏",
+      "description": "Scrcpy 视频流与交互触控 WebSocket 连接"
+    },
+    {
+      "name": "Web 终端",
+      "description": "通过 WebSocket 桥接的交互式 ADB Shell PTY 终端会话"
+    },
+    {
+      "name": "依赖管理",
+      "description": "系统 ADB、Python 解释器及第三方模块检测、配置、受控下载与安装维护"
+    },
+    {
+      "name": "系统版本与更新",
+      "description": "版本检测、服务健康状态、在线更新下载与自动升级流程"
+    },
+    {
+      "name": "全局输入配置",
+      "description": "系统全局触控模式（SDK / HID / ADB）配置读取与热更新"
+    },
+    {
+      "name": "Task Runs",
+      "description": "自动化任务运行状态报告、日志分流流式追加与心跳守护"
+    },
+    {
+      "name": "模板管理",
+      "description": "图像模板增删改查、多尺度参数配置及图像导入导出"
+    },
+    {
+      "name": "模板匹配服务",
+      "description": "后台 Python 模板匹配微服务生命周期与状态探测"
+    },
+    {
+      "name": "OCR",
+      "description": "OCR 识别引擎配置、启停与文本坐标检测"
+    },
+    {
+      "name": "Vision",
+      "description": "Python 视觉检测双向视频帧与识别结果数据通道"
+    },
+    {
+      "name": "UI 检查",
+      "description": "Android 页面层次 XML 快照转储及前台 Activity / 屏幕规格读取"
+    },
+    {
+      "name": "文件",
+      "description": "设备共享存储目录浏览、文件上传下载、重命名、移动与删除"
+    },
+    {
+      "name": "截图",
+      "description": "设备屏幕静态截图捕获、历史列表查询与文件读取"
+    },
+    {
+      "name": "录像",
+      "description": "设备屏幕实时录屏任务管理与视频下载"
+    },
+    {
+      "name": "回放",
+      "description": "触控操作录制回放与分段调试"
+    },
+    {
+      "name": "ADB 与按键",
+      "description": "底层 ADB Shell 命令异步提交执行与按键模拟"
+    },
+    {
+      "name": "操作日志",
+      "description": "用户与系统关键操作审计日志记录与检索"
+    },
+    {
+      "name": "系统",
+      "description": "OpenAPI 接口规范描述文档"
+    }
+  ]
 }
