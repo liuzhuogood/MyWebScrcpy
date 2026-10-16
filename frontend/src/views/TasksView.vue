@@ -6,11 +6,17 @@ import {
   AlertCircle,
   ArrowLeft,
   CheckCircle2,
+  Clock,
+  Cpu,
   Download,
+  FileText,
+  Hash,
+  ImageIcon,
   Loader2,
   RefreshCw,
   Search,
   Terminal,
+  Video,
   XCircle,
 } from 'lucide-vue-next'
 import { marked } from 'marked'
@@ -55,7 +61,36 @@ const logs = ref<TaskRunLogEntry[]>([])
 const logStreamFilter = ref<'all' | 'stdout' | 'stderr'>('all')
 const autoScroll = ref(true)
 const logContainerRef = ref<HTMLDivElement | null>(null)
+const detailTab = ref<'logs' | 'screenshots' | 'videos'>('logs')
 let logPollingTimer: number | null = null
+
+const parsedEvidence = computed(() => {
+  const markdown = selectedRun.value?.report_markdown || ''
+  if (!markdown) return null
+  const jsonMatch = markdown.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) return null
+  try {
+    return JSON.parse(jsonMatch[0]) as Record<string, unknown>
+  } catch {
+    return null
+  }
+})
+
+const screenshotsList = computed(() => {
+  const list: string[] = []
+  if (parsedEvidence.value && typeof parsedEvidence.value.screenshot === 'string') {
+    list.push(parsedEvidence.value.screenshot)
+  }
+  return list
+})
+
+const videosList = computed(() => {
+  const list: string[] = []
+  if (parsedEvidence.value && typeof parsedEvidence.value.record_file === 'string') {
+    list.push(parsedEvidence.value.record_file)
+  }
+  return list
+})
 
 const filteredLogs = computed(() => {
   if (logStreamFilter.value === 'all') {
@@ -276,8 +311,7 @@ onUnmounted(() => {
               <tr
                 v-for="item in items"
                 :key="item.id"
-                class="hover:bg-muted/30 transition-colors cursor-pointer"
-                @click="openDetail(item)"
+                class="hover:bg-muted/30 transition-colors"
               >
                 <td class="px-4 py-3 font-medium">
                   <div class="flex flex-col">
@@ -333,12 +367,12 @@ onUnmounted(() => {
 
     <!-- 任务详情对话框 -->
     <Dialog v-model:open="detailOpen">
-      <DialogContent class="max-w-4xl max-h-[88vh] flex flex-col p-6">
-        <DialogHeader class="border-b pb-3">
+      <DialogContent class="w-[80vw] min-w-[60vw] max-w-[80vw] sm:max-w-[80vw] max-h-[88vh] flex flex-col p-6">
+        <DialogHeader class="border-b pb-4 space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <Terminal class="size-5 text-primary" />
-              <DialogTitle class="text-base">{{ selectedRun?.name }}</DialogTitle>
+              <DialogTitle class="text-base font-semibold">{{ selectedRun?.name }}</DialogTitle>
             </div>
             <div class="flex items-center gap-2">
               <Badge v-if="selectedRun?.status === 'succeeded'" class="bg-emerald-500/15 text-emerald-600 border-emerald-500/30">已完成</Badge>
@@ -347,20 +381,94 @@ onUnmounted(() => {
               <Badge v-else-if="selectedRun?.status === 'running'" class="bg-blue-500/15 text-blue-600 border-blue-500/30">运行中</Badge>
             </div>
           </div>
-          <DialogDescription class="font-mono text-xs">
-            运行 ID: {{ selectedRun?.id }} | 设备: {{ selectedRun?.device_serial }} | 客户端 ID: {{ selectedRun?.client_run_id }}
+
+          <!-- 顶部最重要的位置：结果描述 -->
+          <div class="rounded-lg border bg-muted/40 p-3.5 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                <FileText class="size-4 text-primary" />
+                <span>结果描述</span>
+              </div>
+              <Badge v-if="selectedRun?.exit_code !== null" variant="outline" class="font-mono text-[11px]">
+                退出码: {{ selectedRun?.exit_code }}
+              </Badge>
+            </div>
+            <div v-if="selectedRun?.summary" class="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+              {{ selectedRun.summary }}
+            </div>
+            <div
+              v-else-if="renderedMarkdown"
+              class="prose prose-sm dark:prose-invert max-w-none text-xs leading-relaxed max-h-40 overflow-y-auto"
+              v-html="renderedMarkdown"
+            />
+            <div v-else class="text-xs text-muted-foreground italic">
+              暂无结果描述
+            </div>
+          </div>
+
+          <!-- 全部采用纵向布局的元信息 -->
+          <DialogDescription as-child>
+            <div class="rounded-lg border bg-card p-3 space-y-2 text-xs">
+              <div class="flex flex-col gap-0.5">
+                <span class="text-muted-foreground flex items-center gap-1">
+                  <Clock class="size-3 text-muted-foreground" />
+                  执行耗时
+                </span>
+                <span class="font-mono font-medium text-foreground">
+                  {{ formatDuration(selectedRun?.duration_ms || 0) }}
+                </span>
+              </div>
+              <div class="flex flex-col gap-0.5">
+                <span class="text-muted-foreground flex items-center gap-1">
+                  <Hash class="size-3 text-muted-foreground" />
+                  运行 ID
+                </span>
+                <span class="font-mono text-foreground select-all break-all">
+                  {{ selectedRun?.id || '-' }}
+                </span>
+              </div>
+              <div class="flex flex-col gap-0.5">
+                <span class="text-muted-foreground flex items-center gap-1">
+                  <Cpu class="size-3 text-muted-foreground" />
+                  设备
+                </span>
+                <span class="font-mono text-foreground">
+                  {{ selectedRun?.device_serial || '-' }}
+                </span>
+              </div>
+              <div class="flex flex-col gap-0.5">
+                <span class="text-muted-foreground flex items-center gap-1">
+                  <Terminal class="size-3 text-muted-foreground" />
+                  客户 ID
+                </span>
+                <span class="font-mono text-foreground select-all break-all">
+                  {{ selectedRun?.client_run_id || '-' }}
+                </span>
+              </div>
+            </div>
           </DialogDescription>
         </DialogHeader>
 
         <p v-if="detailError" role="alert" class="text-sm text-destructive">{{ detailError }}</p>
-        <Tabs default-value="logs" class="flex-1 flex flex-col min-h-0 pt-2">
+        <Tabs v-model="detailTab" class="flex-1 flex flex-col min-h-0 pt-2">
           <div class="flex items-center justify-between border-b pb-2">
             <TabsList>
-              <TabsTrigger value="logs">实时日志 ({{ logs.length }})</TabsTrigger>
-              <TabsTrigger value="report">结果报告</TabsTrigger>
+              <TabsTrigger value="logs" class="gap-1.5">
+                <Terminal class="size-3.5" />
+                <span>实时日志 ({{ logs.length }})</span>
+              </TabsTrigger>
+              <TabsTrigger value="screenshots" class="gap-1.5">
+                <ImageIcon class="size-3.5" />
+                <span>截图 ({{ screenshotsList.length }})</span>
+              </TabsTrigger>
+              <TabsTrigger value="videos" class="gap-1.5">
+                <Video class="size-3.5" />
+                <span>视频 ({{ videosList.length }})</span>
+              </TabsTrigger>
             </TabsList>
             <div class="flex items-center gap-2">
               <Button
+                v-if="detailTab === 'logs'"
                 variant="outline"
                 size="sm"
                 class="h-7 text-xs"
@@ -374,7 +482,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- 日志 Tab -->
+          <!-- 实时日志 Tab -->
           <TabsContent value="logs" class="flex-1 flex flex-col min-h-0 pt-2 m-0">
             <div class="flex items-center justify-between pb-2 text-xs text-muted-foreground">
               <div class="flex items-center gap-2">
@@ -435,43 +543,50 @@ onUnmounted(() => {
                 </span>
               </div>
             </div>
-            <Button v-if="logs.length < (selectedRun?.log_count ?? 0)" variant="outline" size="sm" :disabled="logsLoading" @click="selectedRun && loadLogs(selectedRun.id)">加载更多日志</Button>
+            <Button v-if="logs.length < (selectedRun?.log_count ?? 0)" variant="outline" size="sm" class="mt-2" :disabled="logsLoading" @click="selectedRun && loadLogs(selectedRun.id)">加载更多日志</Button>
           </TabsContent>
 
-          <!-- 结果报告 Tab -->
-          <TabsContent value="report" class="flex-1 overflow-auto p-4 m-0">
-            <div class="space-y-4">
-              <div class="grid grid-cols-2 gap-4 rounded-lg border p-3 bg-muted/20">
-                <div>
-                  <span class="text-xs text-muted-foreground block">退出码</span>
-                  <span class="font-mono text-sm font-semibold">
-                    {{ selectedRun?.exit_code !== null ? selectedRun?.exit_code : '-' }}
-                  </span>
+          <!-- 截图 Tab -->
+          <TabsContent value="screenshots" class="flex-1 overflow-auto p-4 m-0">
+            <div v-if="screenshotsList.length > 0" class="space-y-4">
+              <div
+                v-for="(src, idx) in screenshotsList"
+                :key="idx"
+                class="rounded-lg border bg-card p-3 space-y-2"
+              >
+                <div class="flex items-center justify-between text-xs text-muted-foreground">
+                  <span class="font-mono break-all">{{ src }}</span>
                 </div>
-                <div>
-                  <span class="text-xs text-muted-foreground block">总耗时</span>
-                  <span class="font-mono text-sm font-semibold">
-                    {{ formatDuration(selectedRun?.duration_ms || 0) }}
-                  </span>
+                <div class="flex items-center justify-center rounded border bg-muted/20 p-2 overflow-hidden max-h-[480px]">
+                  <img :src="src" alt="任务截图证据" class="max-h-[460px] object-contain rounded" />
                 </div>
               </div>
+            </div>
+            <div v-else class="h-64 flex flex-col items-center justify-center text-muted-foreground gap-2">
+              <ImageIcon class="size-8 opacity-40" />
+              <p class="text-sm">暂无截图记录</p>
+            </div>
+          </TabsContent>
 
-              <div v-if="selectedRun?.summary">
-                <h4 class="text-xs font-semibold text-muted-foreground mb-1">执行摘要</h4>
-                <div class="rounded border p-3 text-sm bg-card">{{ selectedRun.summary }}</div>
-              </div>
-
-              <div>
-                <h4 class="text-xs font-semibold text-muted-foreground mb-1">报告</h4>
-                <div
-                  v-if="renderedMarkdown"
-                  class="prose prose-sm dark:prose-invert max-w-none rounded border p-4 bg-card"
-                  v-html="renderedMarkdown"
-                />
-                <div v-else class="text-xs text-muted-foreground italic rounded border p-4 text-center">
-                  暂无报告
+          <!-- 视频 Tab -->
+          <TabsContent value="videos" class="flex-1 overflow-auto p-4 m-0">
+            <div v-if="videosList.length > 0" class="space-y-4">
+              <div
+                v-for="(vSrc, idx) in videosList"
+                :key="idx"
+                class="rounded-lg border bg-card p-3 space-y-2"
+              >
+                <div class="flex items-center justify-between text-xs text-muted-foreground">
+                  <span class="font-mono break-all">{{ vSrc }}</span>
+                </div>
+                <div class="flex items-center justify-center rounded border bg-muted/20 p-2 overflow-hidden max-h-[480px]">
+                  <video :src="vSrc" controls class="max-h-[460px] rounded w-full" />
                 </div>
               </div>
+            </div>
+            <div v-else class="h-64 flex flex-col items-center justify-center text-muted-foreground gap-2">
+              <Video class="size-8 opacity-40" />
+              <p class="text-sm">暂无视频记录</p>
             </div>
           </TabsContent>
         </Tabs>
