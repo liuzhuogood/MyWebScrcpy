@@ -32,6 +32,7 @@
 | 投屏设置 | 播放器设置 | 系统设置页签 `frontend/src/components/system/PlayerSettingsContent.vue` 保存默认配置;投屏详情页侧栏 `frontend/src/components/player/PlayerSettingsPanel.vue` 调整当前投屏 |
 | 右侧抽屉 | 抽屉、侧栏、侧边栏 | 投屏详情页右侧自适应面板,收纳检查器、文件管理、模板管理、ADB 终端(`frontend/src/components/player/DevicePlayer.vue`) |
 | 播放器检查器 | 检查器、取色器、放大镜 | 右侧抽屉内:取色坐标、像素放大镜、XML 树、XPath 与元素定位联动 |
+| 检查模式 | 拾取模式、检查开关 | 检查器顶栏的显式开关,仅开启后拦截画面输入;打开面板默认可操控设备,完成取色、元素选择或 OCR 框选后自动退出 |
 | ADB 终端 | Web Shell、交互式终端 | 右侧抽屉内 xterm.js 终端,真实 PTY 分配 |
 | 系统配置 | 设置、系统设置、系统配置弹窗 | 首页入口弹窗 `frontend/src/components/system/SystemConfigDialog.vue`,页签:主题 / ADB / Python / 模板匹配 / OCR 服务 |
 | 大屏磁贴 | 磁贴、tile | `frontend/src/components/dashboard/DashTile.vue` |

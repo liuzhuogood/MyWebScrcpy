@@ -62,7 +62,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
-import { setInspector } from '@/inspector/guard'
+import { inspectionMode, setInspector } from '@/inspector/guard'
 import CaptureLayer from '@/capture/CaptureLayer.vue'
 import InspectorPanel from '@/inspector/InspectorPanel.vue'
 import { provideInspector } from '@/inspector/useInspector'
@@ -108,13 +108,15 @@ const p = usePlayer(serial.value, {
     recordOp(serial.value, type, data)
   },
   onTouch: event => touchVisualizerRef.value?.handle(event),
+  onFrame: () => ins.ocr.frameChanged(),
   onDisconnect: () => {
+    ins.ocr.invalidate()
     if (props.embedded && nativePlayerWindow)
       void windowEffects.restore()
   },
 })
 const showPip = computed(() => !isGui.value && p.pipSupported.value)
-const ins = provideInspector(serial.value, () => p.canvasRef.value)
+const ins = provideInspector(serial.value, () => p.canvasRef.value, p.frameVersion, () => p.live.value && p.frameVersion() > 0)
 const inspectorVisible = ref(false)
 const templateOpen = ref(false)
 const tm = useTemplateMatches(serial.value, () => p.canvasRef.value)
@@ -680,7 +682,7 @@ defineExpose({ handleEscape })
       <template #main><div class="flex h-full min-h-0 flex-col overflow-hidden p-0" :class="embedded ? 'bg-black' : 'bg-muted/40 gap-3 overflow-auto'">
       <main class="relative flex min-w-0 flex-1 items-center justify-center" :class="embedded ? 'min-h-0 bg-black' : 'min-h-80'">
         <div class="relative">
-          <canvas :ref="p.canvasRef" tabindex="0" class="block touch-none bg-black select-none" :class="{ 'rounded-sm': !embedded }" aria-label="设备投屏画面" @pointerdown="embedded && p.canvasRef.value?.focus({ preventScroll: true })" />
+          <canvas :ref="p.canvasRef" tabindex="0" class="block touch-none bg-black select-none" :class="{ 'rounded-sm': !embedded, 'cursor-crosshair': inspectorVisible && inspectionMode }" aria-label="设备投屏画面" @pointerdown="p.canvasRef.value?.focus({ preventScroll: true })" />
           <canvas
             :ref="ins.overlayRef"
             class="pointer-events-none absolute inset-0 h-full w-full"

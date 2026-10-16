@@ -1,8 +1,9 @@
 import { computed, inject, onUnmounted, provide, ref } from 'vue'
 import type { InjectionKey, Ref } from 'vue'
 import { fetchPageInfo, fetchXml, type PageInfo } from '@/api/ui'
-import { detectOCR, type OCRDetectResponse } from '@/api/ocr'
-import { inspectorOpen, inspectorTab, xmlHitTest } from './guard'
+import type { OCRDetectResponse } from '@/api/ocr'
+import { useInspectorOcr } from './useInspectorOcr'
+import { inspectorOpen, inspectorTab, inspectionMode, xmlHitTest } from './guard'
 import { evalXPath, makeXPath, measureBasis, parseXml, toBox, type Box } from './xmlUtils'
 
 export interface InspectorContext {
@@ -45,6 +46,7 @@ export interface InspectorContext {
   pageInfo: Ref<PageInfo | null>
   loadPageInfo: () => Promise<void>
   // OCR
+  ocr: ReturnType<typeof useInspectorOcr>
   ocrLoading: Ref<boolean>
   ocrResult: Ref<OCRDetectResponse | null>
   ocrError: Ref<string>
@@ -54,7 +56,7 @@ export interface InspectorContext {
 
 const key: InjectionKey<InspectorContext> = Symbol('inspector')
 
-export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElement | null): InspectorContext {
+export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElement | null, frameVersion?: () => number, isSourceReady?: () => boolean): InspectorContext {
   const overlayRef = ref<HTMLCanvasElement | null>(null)
 
   // ---------- overlay ----------
@@ -148,7 +150,7 @@ export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElem
   }
 
   function hoverColor(e: MouseEvent) {
-    if (!inspectorOpen.value || inspectorTab.value !== 'color' || colorPinned.value)
+    if (!inspectorOpen.value || !inspectionMode.value || inspectorTab.value !== 'color' || colorPinned.value)
       return
     const p = sourcePoint(e)
     if (!p)
@@ -178,6 +180,11 @@ export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElem
   const selectedNode = ref<Element | null>(null)
   const locatorAttrs = ref<Set<string>>(new Set())
   const basis = ref<{ width: number, height: number } | null>(null)
+
+  const ocr = useInspectorOcr(serial, getCanvas, selectedNode, () => {
+    const canvas = getCanvas()
+    return selectedNode.value && canvas ? toBox(selectedNode.value, basis.value, canvas.width, canvas.height) : null
+  }, drawBoxes, frameVersion, isSourceReady)
 
   const xmlEmpty = computed(() => !xmlLoading.value && !xmlError.value && !xmlDoc.value)
   const treeRoots = computed<Element[]>(() => {
@@ -216,6 +223,10 @@ export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElem
     if (!ctx || !canvas)
       return
     ctx.clearRect(0, 0, canvas.width, canvas.height)
+    if (inspectorTab.value === 'ocr') {
+      ocr.draw(ctx, canvas.width, canvas.height)
+      return
+    }
     if (inspectorTab.value === 'color') {
       const p = colorPoint.value
       if (!p)
@@ -370,7 +381,7 @@ export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElem
 
   /** 画布点击：取色 Tab 切换固定；XML Tab 点中绿框选中节点；返回 true 表示已消费 */
   function clickCanvas(e: MouseEvent): boolean {
-    if (!inspectorOpen.value)
+    if (!inspectorOpen.value || !inspectionMode.value)
       return false
     if (inspectorTab.value === 'color') {
       colorPinned.value = !colorPinned.value
@@ -414,103 +425,6 @@ export function provideInspector(serial: string, getCanvas: () => HTMLCanvasElem
     }
   }
 
-  // ---------- OCR ----------
-  const ocrLoading = ref(false)
-  const ocrResult = ref<OCRDetectResponse | null>(null)
-  const ocrError = ref('')
-
-async function cropCanvasRegion(
-  sourceCanvas: HTMLCanvasElement,
-  left: number,
-  top: number,
-  width: number,
-  height: number,
-): Promise<Blob | null> {
-  if (typeof document !== 'undefined' && typeof document.createElement === 'function') {
-    const cropCanvas = document.createElement('canvas')
-    cropCanvas.width = width
-    cropCanvas.height = height
-    const ctx = cropCanvas.getContext('2d')
-    if (ctx) {
-      ctx.drawImage(sourceCanvas, left, top, width, height, 0, 0, width, height)
-      return new Promise<Blob | null>(resolve => cropCanvas.toBlob(resolve, 'image/png'))
-    }
-  }
-  return null
-}
-
-  async function runOcr() {
-    ocrError.value = ''
-    const canvas = getCanvas()
-    if (!canvas?.width || !canvas.height) {
-      ocrError.value = '投屏画面未就绪'
-      return
-    }
-
-    let bbox: [number, number, number, number] = [0, 0, 1, 1]
-    let blob: Blob | null = null
-
-    if (selectedNode.value) {
-      const box = toBox(selectedNode.value, basis.value, canvas.width, canvas.height)
-      if (!box || ![box.x, box.y, box.w, box.h].every(Number.isFinite) || box.w <= 0 || box.h <= 0) {
-        ocrError.value = '无法确定选中元素的画面区域'
-        return
-      }
-
-      const left = Math.max(0, Math.min(canvas.width, Math.floor(box.x)))
-      const top = Math.max(0, Math.min(canvas.height, Math.floor(box.y)))
-      const right = Math.max(0, Math.min(canvas.width, Math.ceil(box.x + box.w)))
-      const bottom = Math.max(0, Math.min(canvas.height, Math.ceil(box.y + box.h)))
-      if (right <= left || bottom <= top) {
-        ocrError.value = '选中元素不在当前画面内'
-        return
-      }
-
-      const cropW = right - left
-      const cropH = bottom - top
-      bbox = [left / canvas.width, top / canvas.height, cropW / canvas.width, cropH / canvas.height]
-      try {
-        blob = await cropCanvasRegion(canvas as HTMLCanvasElement, left, top, cropW, cropH)
-      }
-      catch {
-        ocrError.value = '截取选中区域失败'
-        return
-      }
-    }
-    else {
-      blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'))
-    }
-
-    if (!blob) {
-      ocrError.value = '截取投屏画面失败'
-      return
-    }
-
-    const form = new FormData()
-    form.append('file', blob, selectedNode.value ? 'crop.png' : 'screen.png')
-    form.append('serial', serial)
-    form.append('mark', 'true')
-    form.append('bbox', JSON.stringify(bbox))
-
-    ocrLoading.value = true
-    ocrError.value = ''
-    try {
-      const res = await detectOCR(form)
-      ocrResult.value = res
-    }
-    catch (e) {
-      ocrError.value = e instanceof Error ? e.message : 'OCR 识别失败'
-    }
-    finally {
-      ocrLoading.value = false
-    }
-  }
-
-  function clearOcr() {
-    ocrResult.value = null
-    ocrError.value = ''
-  }
-
   // ---------- 清理 ----------
   function closeInspector() {
     xmlHitTest.fn = null
@@ -519,7 +433,7 @@ async function cropCanvasRegion(
     selectNode(null)
     clearXpath()
     clearOverlay()
-    clearOcr()
+    ocr.invalidate()
   }
 
   onUnmounted(() => {
@@ -564,11 +478,12 @@ async function cropCanvasRegion(
     pageError,
     pageInfo,
     loadPageInfo,
-    ocrLoading,
-    ocrResult,
-    ocrError,
-    runOcr,
-    clearOcr,
+    ocr,
+    ocrLoading: ocr.loading,
+    ocrResult: ocr.result,
+    ocrError: ocr.error,
+    runOcr: ocr.run,
+    clearOcr: ocr.clear,
   }
   provide(key, ctx)
   return ctx

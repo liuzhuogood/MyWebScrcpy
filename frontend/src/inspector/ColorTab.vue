@@ -14,7 +14,7 @@ const ins = useInspector()
       <dt class="text-muted-foreground">颜色</dt>
       <dd class="font-mono">{{ ins.colorText.value.color }}</dd>
     </dl>
-    <p v-if="ins.colorPinned.value" class="text-xs text-muted-foreground">已固定，再次点击画面解除</p>
+    <p v-if="ins.colorPinned.value" class="text-xs text-muted-foreground">已固定，再次进入检查模式可重新取色</p>
     <canvas :ref="ins.magnifierRef" width="240" height="240" class="h-60 w-60 rounded-md border" aria-label="像素放大镜" />
   </div>
 </template>
