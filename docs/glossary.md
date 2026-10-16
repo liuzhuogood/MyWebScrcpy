@@ -26,6 +26,10 @@
 |---|---|---|
 | 设备卡片 | 卡片 | `frontend/src/components/device/DeviceCard.vue` |
 | 顶栏 | header、顶部导航 | `frontend/src/components/layout/AppHeader.vue` |
+| 小窗顶栏 | 小窗工具条、投屏工具栏 | `frontend/src/components/player/DevicePlayer.vue` 内的工具栏;隐藏后可用顶部把手、恢复小窗快捷键或菜单“视图 → 恢复所有小窗”恢复 |
+| 小窗窗口设置 | 透明度菜单、鼠标穿透菜单 | `frontend/src/components/player/WindowEffectsControl.vue`;原生小窗的透明度、鼠标穿透与无边框开关 |
+| 无边框 | 隐藏系统标题栏 | 原生投屏小窗的系统窗口装饰开关,独立于小窗顶栏;系统设置的“投屏设置”保存新小窗默认值,小窗窗口设置与投屏设置侧栏控制当前窗口 |
+| 投屏设置 | 播放器设置 | 系统设置页签 `frontend/src/components/system/PlayerSettingsContent.vue` 保存默认配置;投屏详情页侧栏 `frontend/src/components/player/PlayerSettingsPanel.vue` 调整当前投屏 |
 | 右侧抽屉 | 抽屉、侧栏、侧边栏 | 投屏详情页右侧自适应面板,收纳检查器、文件管理、模板管理、ADB 终端(`frontend/src/components/player/DevicePlayer.vue`) |
 | 播放器检查器 | 检查器、取色器、放大镜 | 右侧抽屉内:取色坐标、像素放大镜、XML 树、XPath 与元素定位联动 |
 | ADB 终端 | Web Shell、交互式终端 | 右侧抽屉内 xterm.js 终端,真实 PTY 分配 |

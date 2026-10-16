@@ -23,6 +23,7 @@ pub fn open_device_window(
     title: Option<String>,
     width: Option<f64>,
     height: Option<f64>,
+    borderless: Option<bool>,
 ) -> Result<(), String> {
     let state = app.state::<State>();
     let safe_serial = serial.replace(|c: char| !c.is_alphanumeric(), "_");
@@ -45,6 +46,7 @@ pub fn open_device_window(
     let win_title = title.unwrap_or_else(|| format!("投屏 - {}", serial));
     let w = width.unwrap_or(380.0);
     let h = height.unwrap_or(836.0);
+    let borderless = borderless.unwrap_or(false);
 
     let token_script = if let Ok(guard) = state.backend.lock() {
         if let Some(b) = guard.as_ref() {
@@ -62,9 +64,10 @@ pub fn open_device_window(
         .inner_size(w, h)
         .min_inner_size(240.0, 360.0)
         .transparent(true)
+        .decorations(!borderless)
         .on_page_load(|window, payload| {
             if matches!(payload.event(), tauri::webview::PageLoadEvent::Started) {
-                if let Err(error) = crate::player_windows::restore(window.app_handle(), window.label()) {
+                if let Err(error) = crate::player_windows::restore_after_navigation(window.app_handle(), window.label()) {
                     eprintln!("[Desktop] 页面加载后恢复小窗失败: {error}");
                 }
             }
@@ -73,7 +76,7 @@ pub fn open_device_window(
         .initialization_script(CLICK_SCRIPT);
 
     // Track before loading so the first frontend snapshot already has this window.
-    crate::player_windows::track(&app, &label, &serial)?;
+    crate::player_windows::track(&app, &label, &serial, borderless)?;
     if let Err(error) = builder.build() {
         crate::player_windows::forget(&app, &label);
         return Err(error.to_string());

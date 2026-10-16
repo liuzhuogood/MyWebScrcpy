@@ -27,7 +27,7 @@ try {
   const [code] = await once(child, 'exit')
   assert.equal(code, 0, errors)
   const result = JSON.parse(await readFile(report, 'utf8')).player_windows
-  for (const key of ['ok', 'mainProtected', 'zeroAndHalfOpacity', 'transparentBody', 'clickThroughIPC', 'rangeGuard', 'independentRecovery', 'reopenRecovery', 'closeReopen', 'menuRecovery'])
+  for (const key of ['ok', 'mainProtected', 'zeroAndHalfOpacity', 'transparentBody', 'clickThroughIPC', 'rangeGuard', 'independentRecovery', 'reopenRecovery', 'closeReopen', 'menuRecovery', 'borderlessDefault', 'borderlessControls', 'toolbarToast', 'toolbarRecovery', 'nativeDecorations'])
     assert.equal(result[key], true, `${key}: ${JSON.stringify(result)}\n${errors}`)
   if (process.env.MYWEBSCRCPY_VERIFY_HOTKEY) assert.equal(result.globalHotkey, true, JSON.stringify(result))
   console.log('PASS: native player IPC, 0%/50% rendering, range guard, main-window guard, independent recovery and reopening')

@@ -2,8 +2,10 @@
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { usePlayerSettings } from '@/composables/usePlayerSettings'
+import { isTauri } from '@tauri-apps/api/core'
 
 const s = usePlayerSettings()
+const native = isTauri()
 </script>
 
 <template>
@@ -24,6 +26,10 @@ const s = usePlayerSettings()
             <SelectItem value="large">宽大 (450px)</SelectItem>
           </SelectContent>
         </Select>
+      </div>
+      <div v-if="native" class="flex items-center justify-between gap-4 border-t pt-3">
+        <p class="text-sm font-medium">无边框</p>
+        <Switch :model-value="s.borderless.value" aria-label="无边框" @update:model-value="v => s.borderless.value = !!v" />
       </div>
     </div>
 

@@ -89,6 +89,8 @@ fn main() {
             player_windows::list_player_windows,
             player_windows::set_player_opacity,
             player_windows::set_player_click_through,
+            player_windows::set_player_borderless,
+            player_windows::set_player_toolbar_visible,
             player_windows::restore_player_window,
             updater::desktop_check_update,
             updater::desktop_upgrade
@@ -111,6 +113,9 @@ fn main() {
                     .permission("allow-list-player-windows")
                     .permission("allow-set-player-opacity")
                     .permission("allow-set-player-click-through")
+                    .permission("allow-set-player-borderless")
+                    .permission("allow-set-player-toolbar-visible")
+                    .permission("core:window:allow-start-dragging")
                     .permission("allow-restore-player-window")
  .permission("allow-desktop-check-update")
  .permission("allow-desktop-upgrade"),

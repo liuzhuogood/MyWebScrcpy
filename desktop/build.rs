@@ -22,6 +22,8 @@ fn main() {
             "list_player_windows",
             "set_player_opacity",
             "set_player_click_through",
+            "set_player_borderless",
+            "set_player_toolbar_visible",
             "restore_player_window",
         ]),
     ))

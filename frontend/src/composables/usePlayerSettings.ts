@@ -6,6 +6,7 @@ export type FloatingSize = 'compact' | 'normal' | 'large'
 export function usePlayerSettings() {
   const openMode = useStorage<OpenMode>('player-open-mode', 'floating')
   const floatingSize = useStorage<FloatingSize>('player-floating-size', 'normal')
+  const borderless = useStorage<boolean>('player-borderless', false)
   const autoAudio = useStorage<boolean>('player-auto-audio', false)
   const bitrate = useStorage<number>('player-bitrate', 4000000)
   const maxFps = useStorage<number>('player-max-fps', 30)
@@ -19,6 +20,7 @@ export function usePlayerSettings() {
   return {
     openMode,
     floatingSize,
+    borderless,
     autoAudio,
     bitrate,
     maxFps,

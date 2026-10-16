@@ -113,6 +113,7 @@ async function openFloatingWindow(e?: Event) {
         title: store.displayName(props.device),
         width: targetW,
         height: targetH,
+        borderless: playerSettings.borderless.value,
       })
       return
     }
