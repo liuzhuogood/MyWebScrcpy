@@ -10,7 +10,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"mywebscrcpy/internal/automation"
 	"mywebscrcpy/internal/db"
+	"mywebscrcpy/internal/dependencies"
+	"mywebscrcpy/internal/inputconfig"
 	"mywebscrcpy/internal/matchingservice"
 	"mywebscrcpy/internal/ocr"
 	"mywebscrcpy/internal/serviceprefs"
@@ -24,6 +27,7 @@ type auxiliaryServices struct {
 	ocr         *ocr.Service
 	matching    *matchingservice.Manager
 	preferences *serviceprefs.Manager
+	automation  *automation.Service
 }
 
 func configureAuxiliaryServices(dataDir string, database *db.DB, hub *ws.Hub, mux *http.ServeMux) *auxiliaryServices {
@@ -79,9 +83,17 @@ func configureAuxiliaryServices(dataDir string, database *db.DB, hub *ws.Hub, mu
 		},
 		API: mux, Vision: http.HandlerFunc(hub.ServeMatchingVisionWS),
 	})
-	matchingManager.RegisterRoutes(mux)
+	inputConfig := inputconfig.New(database)
+	automationService := automation.NewService(hub, templateStorage, ocrService, inputConfig, dependencies.ManagedADB)
+	automationService.RegisterRoutes(mux)
 
-	return &auxiliaryServices{templates: templateService, ocr: ocrService, matching: matchingManager, preferences: serviceSettings}
+	return &auxiliaryServices{
+		templates:   templateService,
+		ocr:         ocrService,
+		matching:    matchingManager,
+		preferences: serviceSettings,
+		automation:  automationService,
+	}
 }
 
 func (s *auxiliaryServices) stopPythonServices() error {

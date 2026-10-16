@@ -87,9 +87,12 @@ func (h *Hub) defaultMode() string {
 	return h.inputConfig.Mode()
 }
 
-// resolveActionMode 把请求携带的 mode 与全局默认合成生效模式：
+// InputConfig 返回当前关联的系统输入配置存储。
+func (h *Hub) InputConfig() *inputconfig.Store { return h.inputConfig }
+
+// ResolveActionMode 把请求携带的 mode 与全局默认合成生效模式：
 // 显式指定优先（含显式 sdk 覆盖全局 hid/adb），否则用全局默认，最后回落 sdk。
-func (h *Hub) resolveActionMode(requested string) string {
+func (h *Hub) ResolveActionMode(requested string) string {
 	if requested != "" {
 		return requested
 	}
@@ -97,6 +100,10 @@ func (h *Hub) resolveActionMode(requested string) string {
 		return mode
 	}
 	return action.ModeSDK
+}
+
+func (h *Hub) resolveActionMode(requested string) string {
+	return h.ResolveActionMode(requested)
 }
 
 type deviceStreamConfig struct {
