@@ -28,6 +28,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { useDeviceStore } from '@/stores/devices'
+import { toast } from 'vue-sonner'
 
 const store = useDeviceStore()
 const isDevelopment = import.meta.env.DEV
@@ -96,9 +97,12 @@ async function handleAddSubmit() {
   try {
     await store.addDevice(serial, addAlias.value.trim())
     isAddDialogOpen.value = false
+    toast.success('已添加网络设备')
   }
   catch (e) {
-    addError.value = e instanceof Error ? e.message : '添加设备失败'
+    const msg = e instanceof Error ? e.message : '添加设备失败'
+    addError.value = msg
+    toast.error(msg)
   }
   finally {
     isAdding.value = false

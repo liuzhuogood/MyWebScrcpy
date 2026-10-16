@@ -13,6 +13,7 @@ import { useDeviceStore } from '@/stores/devices'
 import { usePlayerSettings } from '@/composables/usePlayerSettings'
 import { useDesktopConfig } from '@/composables/useDesktopConfig'
 import { usePlayerWindows } from '@/composables/usePlayerWindows'
+import { toast } from 'vue-sonner'
 
 const props = defineProps<{ device: Device }>()
 const emit = defineEmits<{ openFloating: [serial: string] }>()
@@ -66,11 +67,12 @@ async function handleReconnect(e: Event) {
   if (isConnecting.value)
     return
   isReconnecting.value = true
+  toast.info('正在尝试连接设备...')
   try {
     await store.reconnect(props.device.serial)
   }
-  catch {
-    // 忽略或等待轮询
+  catch (err) {
+    toast.error(err instanceof Error ? err.message : '连接设备失败')
   }
   finally {
     setTimeout(() => {
@@ -86,9 +88,11 @@ async function handleDelete(e: Event) {
   isDeleting.value = true
   try {
     await store.removeDevice(props.device.serial)
+    toast.success('已删除设备')
   }
-  catch {
+  catch (err) {
     isDeleting.value = false
+    toast.error(err instanceof Error ? err.message : '删除设备失败')
   }
 }
 

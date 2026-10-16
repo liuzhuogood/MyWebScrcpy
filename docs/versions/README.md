@@ -56,6 +56,9 @@
 | [v1.24.0-feature](v1.24.0-feature/version.md) | 已合入本地 main；待桌面验收 | GUI 小窗透明度 0%～100% 与鼠标穿透，已实现快捷键、主窗口与托盘恢复入口。 |
 | [v1.25.0-feature](v1.25.0-feature/version.md) | 已发布 SDK；CI 补充修复转 v1.25.1 | 外部任务运行与上报、小窗透明度与鼠标穿透、移除 Pi/内置脚本并清理遗留模块。 |
 | [v1.25.1-fix](v1.25.1-fix/version.md) | 已发布 v1.25.1 | 修复 Windows CI 下 OCR 测试夹具，全平台回归测试、Release 资产、Docker 镜像与 SDK 均成功发布。 |
+| [v1.25.2-fix](v1.25.2-fix/version.md) | 已发布 v1.25.2 | 原生投屏小窗无边框与顶栏恢复、Indra OCR 接入及运行环境统一管理。 |
+| [v1.26.0-feature](v1.26.0-feature/version.md) | 已发布 v1.26.0 | HID 硬件模拟通道、点击注入模式、Python 环境平滑切换与并发保护、AI 集成与自动化技能市场规划原型。 |
+| [v1.26.1-fix](v1.26.1-fix/version.md) | 进行中 | 记录与修复 v1.26.1 Bug 清单。 |
 
 ## Vue 前端迁移版本
 

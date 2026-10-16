@@ -51,12 +51,12 @@ func TestManagerManualDevices(t *testing.T) {
 		t.Errorf("unexpected manual dev: %+v", dev)
 	}
 
-	// 验证 Devices() 中包含该手动设备
+	// 验证 Devices() 中包含该手动设备，且初始状态为 connecting
 	all := mgr.Devices()
 	if len(all) != 1 {
 		t.Fatalf("expected 1 device, got %d", len(all))
 	}
-	if all[0].Serial != "192.168.1.188:5555" || all[0].Source != "manual" {
+	if all[0].Serial != "192.168.1.188:5555" || all[0].Source != "manual" || all[0].State != "connecting" {
 		t.Errorf("unexpected listed dev: %+v", all[0])
 	}
 

@@ -100,11 +100,15 @@ func (m *Manager) refresh() {
 	// 1. 处理数据库中的手动设备
 	for _, rec := range manualList {
 		seen[rec.Serial] = true
+		initialState := rec.State
+		if initialState == "" {
+			initialState = "offline"
+		}
 		d := Device{
 			Serial:        rec.Serial,
 			Source:        "manual",
 			Alias:         rec.Alias,
-			State:         "offline",
+			State:         initialState,
 			Product:       rec.Product,
 			Model:         rec.Model,
 			DeviceName:    rec.DeviceName,
@@ -224,7 +228,21 @@ func (m *Manager) AddManualDevice(serial, alias string) (*Device, error) {
 		AutoReconnect: true,
 	}
 
-	m.refresh()
+	m.mu.Lock()
+	found := false
+	for i, existing := range m.devices {
+		if existing.Serial == dev.Serial {
+			m.devices[i] = *dev
+			found = true
+			break
+		}
+	}
+	if !found {
+		m.devices = append(m.devices, *dev)
+	}
+	m.mu.Unlock()
+
+	go m.refresh()
 	return dev, nil
 }
 
@@ -238,6 +256,16 @@ func (m *Manager) RemoveManualDevice(serial string) error {
 		return err
 	}
 
+	m.mu.Lock()
+	newDevs := make([]Device, 0, len(m.devices))
+	for _, d := range m.devices {
+		if d.Serial != serial {
+			newDevs = append(newDevs, d)
+		}
+	}
+	m.devices = newDevs
+	m.mu.Unlock()
+
 	// 可选尝试断开 adb disconnect
 	go func() {
 		cmd := dependencies.Command(m.adbPath, "disconnect", serial)
@@ -245,7 +273,7 @@ func (m *Manager) RemoveManualDevice(serial string) error {
 		_ = cmd.Run()
 	}()
 
-	m.refresh()
+	go m.refresh()
 	return nil
 }
 

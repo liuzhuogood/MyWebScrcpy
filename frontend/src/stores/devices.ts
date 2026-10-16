@@ -51,10 +51,15 @@ export const useDeviceStore = defineStore('devices', () => {
     )
   })
 
+  let loadSeq = 0
+
   async function load(silent = false) {
+    const currentSeq = ++loadSeq
     if (mockEnabled.value) {
       // Mock 模式：本地假数据，不请求后端
       await new Promise(r => setTimeout(r, silent ? 0 : 300))
+      if (currentSeq !== loadSeq)
+        return
       devices.value = MOCK_DEVICES
       error.value = ''
       loading.value = false
@@ -63,14 +68,21 @@ export const useDeviceStore = defineStore('devices', () => {
     if (!silent)
       loading.value = true
     try {
-      devices.value = await fetchDevices()
-      error.value = ''
+      const res = await fetchDevices()
+      if (currentSeq === loadSeq) {
+        devices.value = res
+        error.value = ''
+      }
     }
     catch (e) {
-      error.value = e instanceof Error ? e.message : '加载失败'
+      if (currentSeq === loadSeq) {
+        error.value = e instanceof Error ? e.message : '加载失败'
+      }
     }
     finally {
-      loading.value = false
+      if (!silent && currentSeq === loadSeq) {
+        loading.value = false
+      }
     }
   }
 
@@ -115,16 +127,34 @@ export const useDeviceStore = defineStore('devices', () => {
   }
 
   async function addDevice(serial: string, alias?: string) {
-    await addManualDevice(serial, alias)
+    const dev = await addManualDevice(serial, alias)
+    if (dev && dev.serial) {
+      const idx = devices.value.findIndex(d => d.serial === dev.serial)
+      if (idx >= 0) {
+        devices.value[idx] = { ...devices.value[idx], ...dev }
+      }
+      else {
+        devices.value.unshift(dev)
+      }
+    }
+    if (sourceFilter.value === 'auto') {
+      sourceFilter.value = 'all'
+    }
     await load(true)
+    return dev
   }
 
   async function removeDevice(serial: string) {
     await removeManualDevice(serial)
+    devices.value = devices.value.filter(d => d.serial !== serial)
     await load(true)
   }
 
   async function reconnect(serial: string) {
+    const idx = devices.value.findIndex(d => d.serial === serial)
+    if (idx >= 0) {
+      devices.value[idx] = { ...devices.value[idx], state: 'connecting' }
+    }
     await reconnectDevice(serial)
     await load(true)
   }
