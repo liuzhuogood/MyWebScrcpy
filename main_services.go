@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -80,6 +82,23 @@ func configureAuxiliaryServices(dataDir string, database *db.DB, hub *ws.Hub, mu
 	matchingManager.RegisterRoutes(mux)
 
 	return &auxiliaryServices{templates: templateService, ocr: ocrService, matching: matchingManager, preferences: serviceSettings}
+}
+
+func (s *auxiliaryServices) stopPythonServices() error {
+	var failures []error
+	for _, service := range []struct {
+		name string
+		stop func() error
+	}{
+		{servicepython.Matching, s.matching.Stop},
+		{servicepython.PaddleOCR, s.ocr.StopPaddle},
+		{servicepython.IndraOCR, s.ocr.StopIndra},
+	} {
+		if err := s.preferences.StopForRuntimeChange(service.name, service.stop); err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", service.name, err))
+		}
+	}
+	return errors.Join(failures...)
 }
 
 func (s *auxiliaryServices) restore() {

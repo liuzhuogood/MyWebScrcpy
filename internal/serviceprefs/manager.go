@@ -78,6 +78,19 @@ func (m *Manager) Control(name string, enabled bool, action func() error) error 
 	return nil
 }
 
+// StopForRuntimeChange cancels delayed restoration and stale start completions.
+// The next application launch still honors the user's saved startup preference.
+func (m *Manager) StopForRuntimeChange(name string, stop func() error) error {
+	m.mu.Lock()
+	m.revisions[name]++
+	if cancel := m.cancels[name]; cancel != nil {
+		cancel()
+		delete(m.cancels, name)
+	}
+	m.mu.Unlock()
+	return stop()
+}
+
 func (m *Manager) RestoreAfter(delay time.Duration, starts map[string]func(context.Context) error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

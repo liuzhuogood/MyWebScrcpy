@@ -144,3 +144,40 @@ func TestSlowStartCannotOverwriteNewerStopPreference(t *testing.T) {
 		t.Fatal("stale completion restored enabled state", value, err)
 	}
 }
+
+func TestRuntimeChangeStopsAndCancelsRestoreWithoutChangingPreference(t *testing.T) {
+	for _, delay := range []time.Duration{time.Hour, 0} {
+		t.Run(delay.String(), func(t *testing.T) {
+			database, err := db.Open(filepath.Join(t.TempDir(), "app.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer database.Close()
+			m := New(database)
+			defer m.Close()
+			if err := m.Remember("matching", true); err != nil {
+				t.Fatal(err)
+			}
+			entered := make(chan struct{})
+			m.RestoreAfter(delay, map[string]func(context.Context) error{
+				"matching": func(ctx context.Context) error { close(entered); <-ctx.Done(); return ctx.Err() },
+			})
+			if delay == 0 {
+				select {
+				case <-entered:
+				case <-time.After(time.Second):
+					t.Fatal("restore did not enter")
+				}
+			}
+			stopped := false
+			if err := m.StopForRuntimeChange("matching", func() error { stopped = true; return nil }); err != nil {
+				t.Fatal(err)
+			}
+			m.Close()
+			value, err := database.GetConfig("service_autostart_matching")
+			if !stopped || err != nil || value != "true" {
+				t.Fatal("runtime change failed to stop or changed startup preference", value, err)
+			}
+		})
+	}
+}

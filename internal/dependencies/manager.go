@@ -58,18 +58,21 @@ type ManagedTool struct {
 	ModulesTask *InstallTask `json:"modules_task,omitempty"`
 }
 type Manager struct {
-	operations sync.RWMutex
-	uses       map[string]*sync.RWMutex
-	jobs       sync.WaitGroup
-	root       string
-	mu         sync.RWMutex
-	settings   Settings
-	tasks      map[string]InstallTask
-	cancels    map[string]func()
+	operations     sync.RWMutex
+	configMu       sync.Mutex
+	uses           map[string]*sync.RWMutex
+	jobs           sync.WaitGroup
+	root           string
+	mu             sync.RWMutex
+	settings       Settings
+	pythonChanging bool
+	tasks          map[string]InstallTask
+	cancels        map[string]func()
 	// The host freezes HTTP/device/task work before changing ADB; cleanup releases it.
-	BeforeADBChange func() (func(), error)
-	BeforeMutation  func() error
-	client          downloader
+	BeforeADBChange    func() (func(), error)
+	BeforePythonChange func() error
+	BeforeMutation     func() error
+	client             downloader
 }
 
 var active *Manager
@@ -319,6 +322,11 @@ func (m *Manager) acquire(id string) (func(), error) {
 	if err := safeDirectory(m.root); err != nil {
 		return nil, err
 	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	if id == "python" && m.pythonChanging {
+		return nil, fmt.Errorf("Python 正在切换，请稍后重试")
+	}
 	if !m.uses[id].TryRLock() {
 		return nil, fmt.Errorf("依赖正在修改，请稍后重试")
 	}
@@ -370,6 +378,8 @@ func (m *Manager) exclusive(ids []string, adb bool) (func(), error) {
 	return release, nil
 }
 func (m *Manager) Apply(s Settings) error {
+	m.configMu.Lock()
+	defer m.configMu.Unlock()
 	guard, err := m.GuardMutation()
 	if err != nil {
 		return err
@@ -384,11 +394,6 @@ func (m *Manager) Apply(s Settings) error {
 	if busy {
 		return fmt.Errorf("请等待依赖安装完成")
 	}
-	release, err := m.exclusive([]string{"adb", "python"}, s.ADB != m.Settings().ADB)
-	if err != nil {
-		return err
-	}
-	defer release()
 	previous := m.Settings()
 	// Validate changed selections. Unavailable optional tools must not prevent
 	// saving a usable Python environment or another independent dependency.
@@ -402,6 +407,11 @@ func (m *Manager) Apply(s Settings) error {
 			}
 		}
 	}
+	release, err := m.lockSelections(previous, s)
+	if err != nil {
+		return err
+	}
+	defer release()
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := writeJSON(filepath.Join(m.root, "config.json"), s); err != nil {

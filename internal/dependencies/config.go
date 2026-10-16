@@ -92,6 +92,8 @@ func RegisterSettings(mux *http.ServeMux, authorize func(http.HandlerFunc) http.
 	registerManagedSettings(mux, authorize)
 	mux.HandleFunc("PUT /api/dependencies/paths", authorize(func(w http.ResponseWriter, r *http.Request) {
 		if active != nil {
+			active.configMu.Lock()
+			defer active.configMu.Unlock()
 			guard, err := active.GuardMutation()
 			if err != nil {
 				http.Error(w, err.Error(), 409)
@@ -112,19 +114,6 @@ func RegisterSettings(mux *http.ServeMux, authorize func(http.HandlerFunc) http.
 
 		if active != nil && value != Current() {
 			adbChanged, pythonChanged := value.ADB != Current().ADB, value.Python != Current().Python
-			ids := []string{}
-			if adbChanged {
-				ids = append(ids, "adb")
-			}
-			if pythonChanged {
-				ids = append(ids, "python")
-			}
-			release, err := active.exclusive(ids, adbChanged)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusConflict)
-				return
-			}
-			defer release()
 			previous = active.Settings()
 			next = previous
 			managedChange = true
@@ -146,6 +135,12 @@ func RegisterSettings(mux *http.ServeMux, authorize func(http.HandlerFunc) http.
 					}
 				}
 			}
+			release, err := active.lockSelections(previous, next)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
+			defer release()
 			if err := writeJSON(filepath.Join(active.root, "config.json"), next); err != nil {
 				http.Error(w, err.Error(), 500)
 				return

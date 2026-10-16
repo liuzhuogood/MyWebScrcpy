@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { Loader2 } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
 import type { MatchingStatus } from '@/composables/useMatchingService'
 
@@ -18,10 +19,10 @@ function onToggle(enabled: boolean) {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <Card class="gap-0 p-4">
     <div class="flex items-center justify-between gap-3">
       <div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <h2 class="text-sm font-medium">模板匹配服务</h2>
           <Badge variant="outline">{{ status ? labels[status.state] : '读取中' }}</Badge>
           <Loader2 v-if="busy" class="size-3.5 animate-spin text-muted-foreground" />
@@ -36,7 +37,7 @@ function onToggle(enabled: boolean) {
       />
     </div>
 
-    <div v-if="status?.devices.length" class="divide-y rounded-lg border px-4">
+    <div v-if="status?.devices.length" class="mt-4 divide-y rounded-lg border px-4">
       <div v-for="device in status.devices" :key="device.serial" class="space-y-1 py-3">
         <div class="flex items-center justify-between gap-3">
           <span class="min-w-0 break-all text-xs">{{ device.serial }}</span>
@@ -46,6 +47,6 @@ function onToggle(enabled: boolean) {
       </div>
     </div>
 
-    <p v-if="error || status?.error" role="alert" class="break-all text-xs text-destructive">{{ error || status?.error }}</p>
-  </div>
+    <p v-if="error || status?.error" role="alert" class="mt-4 break-all text-xs text-destructive">{{ error || status?.error }}</p>
+  </Card>
 </template>

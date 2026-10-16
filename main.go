@@ -215,6 +215,7 @@ func main() {
 	// 模板管理与匹配 API
 	auxiliary := configureAuxiliaryServices(dataDir, database, hub, mux)
 	matchingManager = auxiliary.matching
+	dependencyManager.BeforePythonChange = auxiliary.stopPythonServices
 	defer auxiliary.Close()
 
 	if database == nil {

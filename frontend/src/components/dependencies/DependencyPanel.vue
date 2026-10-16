@@ -16,6 +16,7 @@ const { status, error, message, loading, saving, pending, checking, checks } = w
 const uninstallTarget = ref<ManagedTool>()
 const licenseOpen = ref(false)
 const licenseAccepted = ref(false)
+const pythonChangeOpen = ref(false)
 let disposed = false
 let activation = 0
 onUnmounted(() => { disposed = true })
@@ -42,6 +43,19 @@ async function uninstall() {
   const tool = uninstallTarget.value
   uninstallTarget.value = undefined
   if (tool) await w.action(tool.id, `/api/dependencies/installed/${tool.id}`, 'DELETE')
+}
+function save() {
+  const previous = status.value?.config.python
+  const next = w.selection('python')
+  if (previous && (previous.source !== next.source || previous.path !== next.path)) {
+    pythonChangeOpen.value = true
+    return
+  }
+  void w.save()
+}
+function confirmPythonChange() {
+  pythonChangeOpen.value = false
+  void w.save()
 }
 function result(tool: ManagedTool) {
   if (checks.value[tool.id]) return checks.value[tool.id]
@@ -97,9 +111,10 @@ function label(tool: ManagedTool) {
       <p v-else-if="message" role="status" class="flex-1 text-xs text-muted-foreground">{{ message }}</p>
       <div class="ml-auto flex items-center gap-2">
         <slot name="actions" />
-        <Button size="sm" :disabled="!status || loading || pending || saving" @click="w.save"><Loader2 v-if="saving" class="size-3.5 animate-spin" />保存</Button>
+        <Button size="sm" :disabled="!status || loading || pending || saving" @click="save"><Loader2 v-if="saving" class="size-3.5 animate-spin" />保存</Button>
       </div>
     </footer>
+    <Dialog v-model:open="pythonChangeOpen"><DialogContent class="sm:max-w-md"><DialogHeader><DialogTitle>切换 Python</DialogTitle><DialogDescription>切换将结束本应用使用旧 Python 的模板匹配、PaddleOCR 和 Indra OCR 进程，并中断正在准备的服务依赖。切换后需手动重新启动相关服务。</DialogDescription></DialogHeader><DialogFooter class="gap-2"><Button variant="outline" @click="pythonChangeOpen = false">取消</Button><Button @click="confirmPythonChange">切换并保存</Button></DialogFooter></DialogContent></Dialog>
     <Dialog :open="Boolean(uninstallTarget)" @update:open="value => { if (!value) uninstallTarget = undefined }"><DialogContent class="sm:max-w-sm"><DialogHeader><DialogTitle>卸载内置 {{ uninstallTarget?.name }}</DialogTitle><DialogDescription>将删除应用安装的依赖文件。{{ uninstallTarget?.selection.source === 'builtin' ? '重新安装后才能使用相关功能。' : '不会删除系统安装的依赖。' }}</DialogDescription></DialogHeader><DialogFooter class="gap-2"><Button variant="outline" @click="uninstallTarget = undefined">取消</Button><Button variant="destructive" @click="uninstall">卸载</Button></DialogFooter></DialogContent></Dialog>
     <Dialog v-model:open="licenseOpen"><DialogContent class="sm:max-w-md"><DialogHeader><DialogTitle>安装 ADB</DialogTitle><DialogDescription>下载并安装 Android SDK Platform-Tools 36.0.2。</DialogDescription></DialogHeader><a href="https://developer.android.com/studio/terms" target="_blank" rel="noopener" class="text-sm underline">阅读 Android SDK 许可协议</a><label class="flex items-center gap-2 text-sm"><Checkbox :model-value="licenseAccepted" @update:model-value="value => licenseAccepted = value === true" />我已阅读并同意许可协议</label><DialogFooter><Button variant="outline" @click="licenseOpen = false">取消</Button><Button :disabled="!licenseAccepted" @click="licenseOpen = false; w.action('adb', '/api/dependencies/install', 'POST', { id: 'adb', accept_license: true })">安装</Button></DialogFooter></DialogContent></Dialog>
   </div>
