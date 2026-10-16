@@ -13,6 +13,8 @@ func (s *Service) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/ocr/status", s.handleStatus)
 	mux.HandleFunc("POST /api/ocr/start", s.handleStart)
 	mux.HandleFunc("POST /api/ocr/stop", s.handleStop)
+	mux.HandleFunc("POST /api/ocr/indra/start", s.handleIndraStart)
+	mux.HandleFunc("POST /api/ocr/indra/stop", s.handleIndraStop)
 	mux.HandleFunc("POST /api/ocr/config", s.handleSaveConfig)
 	mux.HandleFunc("POST /api/ocr/test", s.handleTest)
 }
@@ -28,7 +30,14 @@ func (s *Service) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleStart(w http.ResponseWriter, r *http.Request) {
-	if err := s.StartPaddle(r.Context()); err != nil {
+	action := func() error { return s.StartPaddle(r.Context()) }
+	var err error
+	if s.control != nil {
+		err = s.control(true, action)
+	} else {
+		err = action()
+	}
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -36,7 +45,13 @@ func (s *Service) handleStart(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) handleStop(w http.ResponseWriter, r *http.Request) {
-	if err := s.StopPaddle(); err != nil {
+	var err error
+	if s.control != nil {
+		err = s.control(false, s.StopPaddle)
+	} else {
+		err = s.StopPaddle()
+	}
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
@@ -48,6 +63,7 @@ func (s *Service) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		MacOCRURL    string `json:"macocr_url"`
 		MacOCRAuth   string `json:"macocr_auth"`
 		PaddleOCRURL string `json:"paddleocr_url"`
+		IndraOCRURL  string `json:"indraocr_url"`
 		Engine       string `json:"engine"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -55,7 +71,7 @@ func (s *Service) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.SaveConfig(body.MacOCRURL, body.MacOCRAuth, body.PaddleOCRURL, body.Engine); err != nil {
+	if err := s.SaveConfig(body.MacOCRURL, body.MacOCRAuth, body.PaddleOCRURL, body.IndraOCRURL, body.Engine); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}

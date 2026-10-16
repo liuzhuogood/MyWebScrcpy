@@ -5,6 +5,7 @@ import base64
 from dataclasses import dataclass, field
 import json
 import logging
+import math
 import os
 import time
 from typing import Any
@@ -17,6 +18,7 @@ from .dependencies import vision_dependencies
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_INDRAOCR_URL = "http://127.0.0.1:8032/upload"
 DEFAULT_MACOCR_URL = "http://10.0.0.11:8000/upload"
 DEFAULT_PADDLEOCR_URL = "http://127.0.0.1:8031/upload"
 
@@ -119,21 +121,34 @@ def perform_ocr(
     macocr_url: str | None = None,
     macocr_auth: str | None = None,
     paddleocr_url: str | None = None,
+    indraocr_url: str | None = None,
     timeout: float = 10.0,
 ) -> tuple[dict[str, Any], str, list[str]]:
     """调用底层 OCR 引擎识别图像并返回结果、所用引擎与降级原因。"""
-    if engine not in {"auto", "macocr", "paddleocr"}:
-        raise ValueError("engine 必须是 auto、macocr 或 paddleocr")
+    if engine not in {"auto", "indraocr", "macocr", "paddleocr"}:
+        raise ValueError("engine 必须是 auto、indraocr、macocr 或 paddleocr")
 
     mac_url = macocr_url or os.getenv("MACOCR_URL", DEFAULT_MACOCR_URL)
     mac_auth = macocr_auth or os.getenv("MACOCR_AUTH", "")
     paddle_url = paddleocr_url or os.getenv("PADDLEOCR_URL", DEFAULT_PADDLEOCR_URL)
 
+    indra_url = indraocr_url if indraocr_url is not None else os.getenv("INDRAOCR_URL", DEFAULT_INDRAOCR_URL)
     errors: list[str] = []
     result: dict[str, Any] | None = None
     engine_used = engine
 
-    if engine in {"auto", "macocr"}:
+    if engine in {"auto", "indraocr"}:
+        try:
+            res = upload_image(image, indra_url, "", timeout=timeout)
+            _validate_indra(res)
+            result, engine_used = res, "indraocr"
+        except Exception as exc:
+            errors.append(f"Indra OCR: {exc}")
+            if engine == "indraocr":
+                raise RuntimeError(f"Indra OCR 不可用: {exc}") from exc
+            logger.warning("Indra OCR unavailable; trying next engine: %s", type(exc).__name__)
+
+    if result is None and engine in {"auto", "macocr"}:
         try:
             res = upload_image(image, mac_url, mac_auth, timeout=timeout)
             if res.get("success") is False:
@@ -154,6 +169,20 @@ def perform_ocr(
             raise RuntimeError(f"OCR 服务均不可用: {'；'.join(errors)}") from exc
 
     return result, engine_used, errors
+
+
+def _validate_indra(result):
+    if not isinstance(result["ocr_result"], str) or not isinstance(result["ocr_boxes"], list):
+        raise ValueError("Indra OCR 响应结构无效")
+    for box in result["ocr_boxes"]:
+        if not isinstance(box["text"], str):
+            raise ValueError("Indra OCR 文字框缺少 text")
+        for key in ("x", "y", "w", "h", "confidence"):
+            value = box[key]
+            if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
+                raise ValueError(f"Indra OCR 文字框 {key} 无效")
+            if key in ("w", "h") and value <= 0 or key == "confidence" and value > 1:
+                raise ValueError(f"Indra OCR 文字框 {key} 无效")
 
 
 def crop_image(image: Any, bbox: list[float] | tuple[float, float, float, float]) -> tuple[Any, dict[str, int]]:

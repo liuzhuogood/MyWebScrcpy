@@ -90,6 +90,7 @@ function label(tool: ManagedTool) {
           <PythonModulesPanel v-if="tool.id === 'python'" :runtime="result(tool)" :task="tool.modules_task" :disabled="Boolean(pending) || saving" @install="w.action('python', '/api/dependencies/python/modules', 'POST', { selection: w.selection('python') })" @cancel="w.action('python', '/api/dependencies/python/modules', 'DELETE')" />
         </div>
       </template>
+      <slot />
     </div>
     <footer class="flex shrink-0 items-center gap-3 border-t px-5 py-3">
       <p v-if="error" role="alert" class="flex-1 text-xs text-destructive">{{ error }}</p>

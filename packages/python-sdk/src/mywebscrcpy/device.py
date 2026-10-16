@@ -142,6 +142,7 @@ class Device:
         macocr_url: str | None = None,
         macocr_auth: str | None = None,
         paddleocr_url: str | None = None,
+        indraocr_url: str | None = None,
         timeout: float = 10,
     ):
         from .ocr import OCRBox, OCRResult, crop_image, perform_ocr
@@ -161,6 +162,7 @@ class Device:
             macocr_url=macocr_url,
             macocr_auth=macocr_auth,
             paddleocr_url=paddleocr_url,
+            indraocr_url=indraocr_url,
             timeout=deadline.remaining(FrameTimeout),
         )
 
@@ -182,7 +184,7 @@ class Device:
             rx, ry = float(raw.get("x", 0)), float(raw.get("y", 0))
             rw, rh = float(raw.get("w", 0)), float(raw.get("h", 0))
             # 兼容像素坐标与已归一化坐标
-            if max(abs(rx), abs(ry), abs(rw), abs(rh)) > 1.0:
+            if engine_used == "indraocr" or max(abs(rx), abs(ry), abs(rw), abs(rh)) > 1.0:
                 nx, ny = rx / max(cw, 1), ry / max(ch, 1)
                 nw, nh = rw / max(cw, 1), rh / max(ch, 1)
                 px, py, pw, ph = round(rx), round(ry), round(rw), round(rh)
