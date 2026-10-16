@@ -127,3 +127,15 @@ func TestRegionScreenshotBounds(t *testing.T) {
 		t.Errorf("expected error for out of bounds screenshot, got nil")
 	}
 }
+
+func TestCheckUnifiedTimeout(t *testing.T) {
+	svc := &Service{}
+	// 测试调用缺少 serial 时的错误
+	_, err := svc.Check(nil, CheckRequest{
+		Kind:      KindPixel,
+		TimeoutMS: 50,
+	})
+	if err == nil {
+		t.Errorf("expected error for missing serial in Check, got nil")
+	}
+}

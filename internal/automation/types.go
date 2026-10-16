@@ -193,16 +193,18 @@ type ConditionRequest struct {
 	Condition Condition `json:"condition"`
 }
 
-// CheckRequest 即时检查请求
+// CheckRequest 视觉检查请求（支持即时单帧检查与超时等待）
 type CheckRequest struct {
-	Serial    string    `json:"serial"`
-	VisionURL string    `json:"vision_url,omitempty"`
-	Insecure  bool      `json:"insecure,omitempty"`
-	Kind      Kind      `json:"kind"`
-	Condition Condition `json:"condition"`
+	Serial         string    `json:"serial"`
+	VisionURL      string    `json:"vision_url,omitempty"`
+	Insecure       bool      `json:"insecure,omitempty"`
+	Kind           Kind      `json:"kind"`
+	Condition      Condition `json:"condition"`
+	TimeoutMS      int64     `json:"timeout_ms,omitempty"`       // 超时等待时间 (ms)，<=0 为即时单帧检查，>0 为持续轮询等待
+	PollIntervalMS int64     `json:"poll_interval_ms,omitempty"` // 轮询间隔 (ms)，默认 100ms
 }
 
-// WaitRequest 超时等待请求
+// WaitRequest 超时等待请求（兼容保留）
 type WaitRequest struct {
 	Serial         string    `json:"serial"`
 	VisionURL      string    `json:"vision_url,omitempty"`
@@ -240,11 +242,12 @@ type EvaluationResult struct {
 
 // CheckResponse 检查响应
 type CheckResponse struct {
-	Status    string           `json:"status"` // matched | not_matched
-	Matched   bool             `json:"matched"`
-	Kind      Kind             `json:"kind"`
-	ElapsedMS int64            `json:"elapsed_ms"`
-	Result    EvaluationResult `json:"result"`
+	Status     string            `json:"status"` // matched | not_matched | timeout
+	Matched    bool              `json:"matched"`
+	Kind       Kind              `json:"kind"`
+	ElapsedMS  int64             `json:"elapsed_ms"`
+	Result     EvaluationResult  `json:"result"`
+	LastResult *EvaluationResult `json:"last_result,omitempty"`
 }
 
 // WaitResponse 等待响应（超时时提供 last_result 与 result 保证调用端双向兼容）

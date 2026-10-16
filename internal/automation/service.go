@@ -465,8 +465,34 @@ func (s *Service) evaluateCondition(ctx context.Context, img image.Image, rawPNG
 	}
 }
 
-// Check 执行即时单帧检查
+// Check 执行视觉检查（当 TimeoutMS > 0 时执行持续轮询等待；<= 0 时执行单帧即时检查）
 func (s *Service) Check(ctx context.Context, req CheckRequest) (CheckResponse, error) {
+	if req.Serial == "" {
+		return CheckResponse{}, fmt.Errorf("missing serial")
+	}
+	if req.TimeoutMS > 0 {
+		waitRes, err := s.Wait(ctx, WaitRequest{
+			Serial:         req.Serial,
+			VisionURL:      req.VisionURL,
+			Insecure:       req.Insecure,
+			Kind:           req.Kind,
+			Condition:      req.Condition,
+			TimeoutMS:      req.TimeoutMS,
+			PollIntervalMS: req.PollIntervalMS,
+		})
+		if err != nil {
+			return CheckResponse{}, err
+		}
+		return CheckResponse{
+			Status:     waitRes.Status,
+			Matched:    waitRes.Matched,
+			Kind:       waitRes.Kind,
+			ElapsedMS:  waitRes.ElapsedMS,
+			Result:     waitRes.Result,
+			LastResult: waitRes.LastResult,
+		}, nil
+	}
+
 	started := time.Now()
 	img, raw, err := s.CaptureFrame(ctx, req.Serial)
 	if err != nil {
@@ -494,6 +520,9 @@ func (s *Service) Check(ctx context.Context, req CheckRequest) (CheckResponse, e
 
 // Wait 执行限时持续轮询等待
 func (s *Service) Wait(ctx context.Context, req WaitRequest) (WaitResponse, error) {
+	if req.Serial == "" {
+		return WaitResponse{}, fmt.Errorf("missing serial")
+	}
 	started := time.Now()
 	timeout := req.TimeoutMS
 	if timeout <= 0 {

@@ -4099,8 +4099,8 @@
         "tags": [
           "自动化与视觉 (Automation & Vision)"
         ],
-        "summary": "视觉单帧即时检查 (判断是否存在)",
-        "description": "立即截取最新一帧画面，评估指定的目标是否存在（支持 kind: text 文字、template 模板、pixel 像素颜色），不阻塞等待。",
+        "summary": "视觉检查与超时等待 (判断是否存在)",
+        "description": "评估指定的目标是否存在（支持 kind: text 文字、template 模板、pixel 像素颜色）。当 timeout_ms <= 0 或缺省时执行单帧即时检查；当 timeout_ms > 0 时持续轮询等待直到目标出现或超时（已合并原 /wait 能力）。",
         "requestBody": {
           "required": true,
           "content": {
@@ -6711,6 +6711,16 @@
                 ]
               }
             }
+          },
+          "timeout_ms": {
+            "type": "integer",
+            "default": 0,
+            "description": "超时等待时间 (ms)。<=0（或缺省）时为即时单帧检查；>0 时为持续轮询等待直到目标出现或超时"
+          },
+          "poll_interval_ms": {
+            "type": "integer",
+            "default": 100,
+            "description": "轮询检测间隔 (ms)，仅在 timeout_ms > 0 时生效"
           }
         }
       },
