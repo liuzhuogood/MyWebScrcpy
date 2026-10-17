@@ -4838,7 +4838,7 @@
                     "version": {
                       "type": "string",
                       "description": "当前服务运行版本号",
-                      "example": "1.27.1"
+                      "example": "1.27.2"
                     }
                   },
                   "required": [
@@ -8396,7 +8396,7 @@
           "current_version": {
             "type": "string",
             "description": "当前服务运行的版本号",
-            "example": "1.27.1"
+            "example": "1.27.2"
           },
           "latest_version": {
             "type": "string",

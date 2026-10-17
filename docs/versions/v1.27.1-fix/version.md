@@ -27,5 +27,6 @@
 
 ## 发布状态
 
-- `VERSION` 已同步为 `v1.27.1`，标签 `v1.27.1` 指向本次发布提交；推送后由 GitHub Actions 触发多平台 CLI、Windows GUI、macOS DMG 与 Docker 镜像的构建与发布。
+- `VERSION` 已同步为 `v1.27.1`，标签 `v1.27.1` 已推送；本版的技能包编码修复在 Windows 上生效（该任务日志中 `internal/skillsmarket` 为 `ok`）。
+- 但同一次 Windows 桌面任务里 `internal/template` 因既有的 fsnotify 互锁被 10 分钟超时，`release` 与 `docker` 被跳过，**未生成 Release**；标签保留，转 [v1.27.2-fix](../v1.27.2-fix/version.md)。
 - `v1.27.0` 标签保留但无 Release；`v1.26.1` 已发布。
