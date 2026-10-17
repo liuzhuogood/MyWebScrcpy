@@ -39,3 +39,14 @@
 - [x] 前端 TypeScript 类型检查与 Vite 生产构建通过。
 - [x] Node 回归测试脚本（`player_windows_test.cjs`、`roi_test.cjs`）通过。
 - [x] 版本号全模块一致性与换行符测试通过（1.26.1）。
+
+### 本版同时包含
+
+1. **OCR 文字排版接口**：新增 `POST /api/vision/ocr-text-art`，支持上传图片或指定 `serial` 由后端经 ADB 截图，识别后按文字框坐标渲染为可直接阅读的纯文本；`Accept: text/plain` 直接返回文本，否则返回含 `text_art`、`boxes` 的 JSON。同步 OpenAPI 文档与路由、服务层测试。
+2. **快手极速版短视频任务技能**：新增 `skills/kuaishou-short-video`，包含红包弹窗监测、连续打卡与连续签到的观看视频流程、规则文档、脚本入口、离线自检与报告模板；术语字典登记该技能指向。
+3. **接口文档页**：移除可复制的 AI 技能提示词卡片，仅保留接口目录与规范入口。
+
+### 本版补充验证
+
+- [x] `go build ./...`、`go test ./... -count=1` 全量通过，含 `internal/ocr` 文字排版接口用例与接口文档一致性测试。
+- [x] `gofmt -l internal/ocr` 无输出，`go vet ./internal/ocr` 无告警。

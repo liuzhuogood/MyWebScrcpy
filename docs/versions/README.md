@@ -58,7 +58,7 @@
 | [v1.25.1-fix](v1.25.1-fix/version.md) | 已发布 v1.25.1 | 修复 Windows CI 下 OCR 测试夹具，全平台回归测试、Release 资产、Docker 镜像与 SDK 均成功发布。 |
 | [v1.25.2-fix](v1.25.2-fix/version.md) | 已发布 v1.25.2 | 原生投屏小窗无边框与顶栏恢复、Indra OCR 接入及运行环境统一管理。 |
 | [v1.26.0-feature](v1.26.0-feature/version.md) | 已发布 v1.26.0 | HID 硬件模拟通道、点击注入模式、Python 环境平滑切换与并发保护、AI 集成与自动化技能市场规划原型。 |
-| [v1.26.1-fix](v1.26.1-fix/version.md) | 进行中 | 记录与修复 v1.26.1 Bug 清单。 |
+| [v1.26.1-fix](v1.26.1-fix/version.md) | 已打标签 v1.26.1；待推送发布 | 修复首页添加网络设备的反馈与即时呈现；同版包含 OCR 文字排版接口与快手极速版短视频任务技能。 |
 
 ## Vue 前端迁移版本
 
