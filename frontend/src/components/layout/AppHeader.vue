@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Bot, Ellipsis, Github, LayoutGrid, ListTodo, Settings, Sparkles } from 'lucide-vue-next'
+import { Bot, ChevronDown, Ellipsis, Github, LayoutGrid, ListTodo, Settings, Sparkles } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -88,9 +88,26 @@ onMounted(() => {
             GitHub
           </a>
         </Button>
-        <Button variant="ghost" size="sm" as-child>
-          <a href="/api-docs.html" target="_blank" rel="noopener">API 文档</a>
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger as-child>
+            <Button variant="ghost" size="sm" class="gap-1">
+              <span>API 文档</span>
+              <ChevronDown class="h-3.5 w-3.5 opacity-60" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem as-child>
+              <a href="/api-docs-automation.html" target="_blank" rel="noopener">
+                🤖 自动化接口文档
+              </a>
+            </DropdownMenuItem>
+            <DropdownMenuItem as-child>
+              <a href="/api-docs.html" target="_blank" rel="noopener">
+                📚 全量接口文档
+              </a>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       <Button variant="ghost" size="sm" class="ml-auto shrink-0 xl:ml-0" aria-label="系统设置" @click="configOpen = true"><Settings class="size-4" /><span class="hidden sm:inline">系统设置</span></Button>
       <DropdownMenu>
@@ -117,7 +134,10 @@ onMounted(() => {
             <a href="https://github.com/liuzhuogood/MyWebScrcpy" target="_blank" rel="noopener noreferrer"><Github class="h-4 w-4" />GitHub</a>
           </DropdownMenuItem>
           <DropdownMenuItem as-child>
-            <a href="/api-docs.html" target="_blank" rel="noopener">API 文档</a>
+            <a href="/api-docs-automation.html" target="_blank" rel="noopener">🤖 自动化接口文档</a>
+          </DropdownMenuItem>
+          <DropdownMenuItem as-child>
+            <a href="/api-docs.html" target="_blank" rel="noopener">📚 全量接口文档</a>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

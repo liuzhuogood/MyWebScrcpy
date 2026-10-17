@@ -8,13 +8,34 @@ import (
 	"strings"
 	"time"
 
+	"mywebscrcpy/internal/apidocs"
 	"mywebscrcpy/internal/skillsmarket"
 )
+
+var automationAPIsManager *apidocs.Manager
+
+func init() {
+	if automationAPIsManager == nil && len(defaultAutomationAPIsConfig) > 0 && len(openAPISpec) > 0 {
+		automationAPIsManager = apidocs.NewManager("configs/automation-apis.json", defaultAutomationAPIsConfig, openAPISpec)
+	}
+}
+
+func serveAutomationOpenAPISpec(w http.ResponseWriter, r *http.Request) {
+	if automationAPIsManager == nil {
+		http.Error(w, "automation apis manager not initialized", http.StatusInternalServerError)
+		return
+	}
+	automationAPIsManager.ServeAutomationOpenAPISpec(w, r)
+}
 
 func serveOpenAPISpec(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if r.URL.Query().Get("scope") == "automation" && automationAPIsManager != nil {
+		automationAPIsManager.ServeAutomationOpenAPISpec(w, r)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")

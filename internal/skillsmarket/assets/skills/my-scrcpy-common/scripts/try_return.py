@@ -73,13 +73,8 @@ def analyze_diff(pre: dict, post: dict) -> tuple[str, str]:
     if pre_win and post_win and pre_win != post_win:
         return "changed", f"窗口名称变更: {pre_win} -> {post_win}"
 
-    pre_xml = pre.get("ui_xml", "")
-    post_xml = post.get("ui_xml", "")
-    if pre_xml and post_xml and pre_xml != post_xml:
-        return "changed", "页面层次结构发生变化（弹窗/浮层已关闭或变更）"
-
     # 严禁单靠视频字幕、弹幕、轮播时间戳等 OCR 文本波动误判返回成功
-    return "unchanged", f"包名 ({pre_pkg})、Activity ({pre_act}) 与页面结构均未变化，未退出当前页面"
+    return "unchanged", f"包名 ({pre_pkg})、Activity ({pre_act}) 与窗口标识均未变化，未确认退出当前页面"
 
 
 def main() -> int:

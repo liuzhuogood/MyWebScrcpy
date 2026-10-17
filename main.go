@@ -13,11 +13,12 @@ import (
 	"time"
 
 	"mywebscrcpy/internal/adbshell"
+	"mywebscrcpy/internal/apidocs"
 	"mywebscrcpy/internal/db"
 	"mywebscrcpy/internal/dependencies"
 	"mywebscrcpy/internal/desktop"
-	"mywebscrcpy/internal/devicestate"
 	"mywebscrcpy/internal/device"
+	"mywebscrcpy/internal/devicestate"
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/inputconfig"
 	"mywebscrcpy/internal/matchingservice"
@@ -36,11 +37,14 @@ var versionBytes []byte
 //go:embed assets/scrcpy-server
 var serverJarFS []byte
 
-//go:embed all:web/dist web/api-docs.html
+//go:embed all:web/dist web/api-docs.html web/api-docs-automation.html
 var webFS embed.FS
 
 //go:embed web/openapi.json
 var openAPISpec []byte
+
+//go:embed configs/automation-apis.json
+var defaultAutomationAPIsConfig []byte
 
 //go:embed assets/certs/cert.pem
 var defaultCert []byte
@@ -62,6 +66,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	automationAPIsManager = apidocs.NewManager(filepath.Join(dataDir, "configs", "automation-apis.json"), defaultAutomationAPIsConfig, openAPISpec)
 	dependencyManager, err := dependencies.Initialize(dataDir)
 	if err != nil {
 		log.Fatalf("读取依赖配置失败: %v", err)
@@ -131,6 +136,7 @@ func main() {
 		dependencies.RegisterSettings(mux, func(next http.HandlerFunc) http.HandlerFunc { return next })
 	}
 	mux.HandleFunc("/api/openapi.json", serveOpenAPISpec)
+	mux.HandleFunc("/api/openapi-automation.json", serveAutomationOpenAPISpec)
 
 	// 文件管理 API：每个请求都携带当前投屏页面选定的设备 serial，操作手机共享存储。
 	files.RegisterRoutes(mux, fileManager)
@@ -247,7 +253,6 @@ func main() {
 	deviceStateService := devicestate.NewService(
 		adbPath,
 		uiPage,
-		uiXML,
 		auxiliary.ocr,
 		auxiliary.storage,
 		taskRunService,
@@ -472,6 +477,8 @@ func main() {
 		log.Fatalf("初始化前端资源失败: %v", err)
 	}
 	mux.Handle("/api-docs.html", http.FileServer(http.FS(webRoot)))
+	mux.Handle("/api-docs-automation.html", http.FileServer(http.FS(webRoot)))
+	mux.Handle("/automation-api-docs.html", http.RedirectHandler("/api-docs-automation.html", http.StatusMovedPermanently))
 	mux.Handle("/", newAppHandler(appRoot))
 
 	auxiliary.restore()

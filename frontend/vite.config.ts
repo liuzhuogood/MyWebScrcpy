@@ -27,6 +27,8 @@ export default defineConfig({
         ws: true,
       },
       '/api-docs.html': { target: backendURL },
+      '/api-docs-automation.html': { target: backendURL },
+      '/automation-api-docs.html': { target: backendURL },
       // 投屏 / 终端 / Vision 均走 WebSocket，必须显式代理 ws
       '/ws': {
         target: backendURL,

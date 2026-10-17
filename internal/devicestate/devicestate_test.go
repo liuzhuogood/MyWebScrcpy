@@ -68,7 +68,6 @@ func setupTestDeviceStateEnvironment(t *testing.T) (*Service, *AIClient, *db.DB,
 		"adb",
 		uiPageSvc,
 		nil,
-		nil,
 		tmplStorage,
 		taskSvc,
 		aiClient,
@@ -473,7 +472,7 @@ func TestDeviceStateEdgeCasesAndProbeChecks(t *testing.T) {
 	}
 
 	// 5. 采集失败时 ContextStable 为 false，DeviceInfo 不为空
-	failedSvc := NewService("/nonexistent/test-adb", nil, nil, nil, nil, nil, nil)
+	failedSvc := NewService("/nonexistent/test-adb", nil, nil, nil, nil, nil)
 	observed, err := failedSvc.CollectState(context.Background(), "dev-failed", "", nil)
 	if err != nil {
 		t.Fatalf("CollectState 返回非预期外层错误: %v", err)

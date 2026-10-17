@@ -18,7 +18,6 @@ import (
 	"mywebscrcpy/internal/taskrun"
 	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/uipage"
-	"mywebscrcpy/internal/uixml"
 )
 
 const (
@@ -29,7 +28,6 @@ const (
 type Service struct {
 	adbPath         string
 	uiPage          *uipage.Service
-	uiXML           *uixml.Service
 	ocrService      *ocr.Service
 	templateStorage *template.Storage
 	taskRunService  *taskrun.Service
@@ -41,7 +39,6 @@ type Service struct {
 func NewService(
 	adbPath string,
 	uiPage *uipage.Service,
-	uiXML *uixml.Service,
 	ocrService *ocr.Service,
 	templateStorage *template.Storage,
 	taskRunService *taskrun.Service,
@@ -50,7 +47,6 @@ func NewService(
 	return &Service{
 		adbPath:         adbPath,
 		uiPage:          uiPage,
-		uiXML:           uiXML,
 		ocrService:      ocrService,
 		templateStorage: templateStorage,
 		taskRunService:  taskRunService,
@@ -140,39 +136,7 @@ func (s *Service) CollectState(ctx context.Context, serial, taskID string, templ
 		}
 	}
 
-	// 3. UI XML 快照采集
-	if s.uiXML != nil {
-		xmlStr, _, xErr := s.uiXML.Fetch(collectCtx, serial)
-		if xErr != nil {
-			state.UIXMLError = xErr.Error()
-			sources["ui_xml"] = SourceStatus{
-				Status:    "failed",
-				Timestamp: time.Now().UnixMilli(),
-				Error:     xErr.Error(),
-			}
-			partialFailures = append(partialFailures, fmt.Sprintf("UIAutomator XML 抓取失败: %v", xErr))
-		} else {
-			state.UIXML = xmlStr
-			if strings.TrimSpace(xmlStr) == "" {
-				sources["ui_xml"] = SourceStatus{
-					Status:    "empty",
-					Timestamp: time.Now().UnixMilli(),
-				}
-			} else {
-				sources["ui_xml"] = SourceStatus{
-					Status:    "success",
-					Timestamp: time.Now().UnixMilli(),
-				}
-			}
-		}
-	} else {
-		sources["ui_xml"] = SourceStatus{
-			Status:    "unavailable",
-			Timestamp: time.Now().UnixMilli(),
-		}
-	}
-
-	// 4. OCR 识别
+	// 3. OCR 识别
 	if s.ocrService != nil && len(out) > 0 {
 		ocrResp, oErr := s.ocrService.Detect(collectCtx, out, ocr.DetectRequest{Serial: serial, Engine: "auto"})
 		if oErr != nil {
@@ -219,7 +183,7 @@ func (s *Service) CollectState(ctx context.Context, serial, taskID string, templ
 		}
 	}
 
-	// 5. 关联任务解析
+	// 4. 关联任务解析
 	associatedTask, matchedSkillDir := s.resolveAssociatedTask(serial, taskID)
 	state.AssociatedTask = associatedTask
 	if s.taskRunService == nil {
@@ -245,7 +209,7 @@ func (s *Service) CollectState(ctx context.Context, serial, taskID string, templ
 		}
 	}
 
-	// 6. 三类模板加载与匹配
+	// 5. 三类模板加载与匹配
 	if sceneImg != nil {
 		allTemplates, tmplErrs := s.collectAllTemplates(serial, matchedSkillDir)
 		if len(tmplErrs) > 0 {
@@ -286,7 +250,7 @@ func (s *Service) CollectState(ctx context.Context, serial, taskID string, templ
 		}
 	}
 
-	// 7. 采集后页面上下文核对，验证观测稳定性
+	// 6. 采集后页面上下文核对，验证观测稳定性
 	if sceneImg == nil {
 		// 截屏失败，判定为不稳定
 		state.ContextStable = false
@@ -329,7 +293,7 @@ func (s *Service) CollectState(ctx context.Context, serial, taskID string, templ
 		}
 	}
 
-	// 8. 填充设备指标信息
+	// 7. 填充设备指标信息
 	deviceInfo := map[string]any{
 		"serial": serial,
 		"status": "offline",
@@ -361,15 +325,15 @@ func (s *Service) resolveAssociatedTask(serial, explicitTaskID string) (*Associa
 		detail, err := s.taskRunService.GetTaskDetail(explicitTaskID)
 		if err != nil {
 			return &AssociatedTaskInfo{
-				TaskID:   explicitTaskID,
-				Conflict: true,
+				TaskID:          explicitTaskID,
+				Conflict:        true,
 				ConflictMessage: fmt.Sprintf("指定任务 %s 读取失败: %v", explicitTaskID, err),
 			}, ""
 		}
 		if detail.TaskDef.DeviceSerial != serial {
 			return &AssociatedTaskInfo{
-				TaskID:   explicitTaskID,
-				Conflict: true,
+				TaskID:          explicitTaskID,
+				Conflict:        true,
 				ConflictMessage: fmt.Sprintf("指定任务 %s 所属设备 (%s) 与当前设备 (%s) 不一致", explicitTaskID, detail.TaskDef.DeviceSerial, serial),
 			}, ""
 		}

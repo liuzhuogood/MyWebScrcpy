@@ -166,10 +166,10 @@ class TestCommonScripts(unittest.TestCase):
         st, _ = try_return.analyze_diff(pre, post_act)
         self.assertEqual(st, "changed")
 
-        # 3. 页面 XML 结构变化 (如弹层关闭) -> changed
-        pre_xml = {"observation_id": "1", "page_info": {"package_name": "pkg.a", "activity": "ActA"}, "ui_xml": "<dialog>Ad</dialog>"}
-        post_xml = {"observation_id": "2", "page_info": {"package_name": "pkg.a", "activity": "ActA"}, "ui_xml": "<main>Content</main>"}
-        st, _ = try_return.analyze_diff(pre_xml, post_xml)
+        # 3. 窗口标识变化 -> changed
+        pre_window = {"observation_id": "1", "page_info": {"package_name": "pkg.a", "activity": "ActA", "window_name": "dialog"}}
+        post_window = {"observation_id": "2", "page_info": {"package_name": "pkg.a", "activity": "ActA", "window_name": "main"}}
+        st, _ = try_return.analyze_diff(pre_window, post_window)
         self.assertEqual(st, "changed")
 
         # 4. 未变化 -> unchanged

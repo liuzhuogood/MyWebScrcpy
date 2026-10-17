@@ -251,6 +251,45 @@
       border: 1px solid var(--border-light);
       border-radius: 4px;
     }
+    .doc-tabs {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+      margin-bottom: 4px;
+    }
+    .doc-tab {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: all 0.15s ease;
+      background: #eef2f6;
+      border: 1px solid transparent;
+    }
+    .doc-tab:hover {
+      text-decoration: none;
+      color: var(--text);
+      background: #e2e8f0;
+    }
+    .doc-tab.active {
+      color: #fff;
+      background: var(--primary);
+      border-color: var(--primary);
+      font-weight: 600;
+    }
+    .doc-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 500;
+      border-radius: 12px;
+      background: var(--primary-bg);
+      color: var(--primary);
+      margin-left: 8px;
+      vertical-align: middle;
+    }
     @media(max-width:600px){
       body{padding: 14px 10px 40px;}
       summary.endpoint-summary{flex-wrap: wrap; gap: 6px;}
@@ -261,8 +300,12 @@
 <body>
   <header>
     <p><a href="/">← 设备列表</a></p>
-    <h1>API 文档</h1>
+    <h1>API 文档 <span class="doc-badge">全量接口</span></h1>
     <p class="subtitle">接口规范遵循 OpenAPI 3.1.0，源文件位于 <code>/api/openapi.json</code>。</p>
+    <nav class="doc-tabs" aria-label="文档分类">
+      <a href="/api-docs.html" class="doc-tab active">📚 全量接口文档</a>
+      <a href="/api-docs-automation.html" class="doc-tab">🤖 自动化接口文档</a>
+    </nav>
   </header>
 
   <section class="card">
@@ -277,6 +320,12 @@
 
   <script>
   (()=>{
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('scope') === 'automation') {
+      window.location.replace('/api-docs-automation.html' + (window.location.hash || ''));
+      return;
+    }
+
     const listEl = document.querySelector('#list');
     listEl.addEventListener('click', e => {
       const btn = e.target.closest('.copy-path-btn');
@@ -364,6 +413,21 @@
         .replace(/"/g, '&quot;');
     }
 
+    const httpMethods = new Set(['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']);
+
+    function mergeParameters(spec, pathItem, operation) {
+      const parameters = new Map();
+      // Operation parameters override shared parameters with the same name and location.
+      for (const list of [pathItem.parameters, operation.parameters]) {
+        for (const parameter of list ?? []) {
+          const resolved = parameter.$ref ? resolveRef(spec, parameter.$ref) : parameter;
+          if (!resolved) throw new Error(`无法解析参数引用: ${parameter.$ref}`);
+          parameters.set(JSON.stringify([resolved.in, resolved.name]), resolved);
+        }
+      }
+      return [...parameters.values()];
+    }
+
     let globalGroups = {};
 
     function renderGroups(filterText = '') {
@@ -391,7 +455,7 @@
           const hasSideEffect = Boolean(x.op['x-side-effect']);
           const summary = x.op.summary || '';
           const desc = x.op.description || '';
-          const params = (x.op.parameters || []).map(p => p.$ref ? (resolveRef(x.spec, p.$ref) || p) : p);
+          const params = mergeParameters(x.spec, x.pathItem, x.op);
 
           let paramsHtml = '';
           if (params.length > 0) {
@@ -506,9 +570,10 @@
         const groups = {};
         for (const [path, item] of Object.entries(spec.paths)) {
           for (const [method, op] of Object.entries(item)) {
+            if (!httpMethods.has(method)) continue;
             const tag = (op.tags || ['其他'])[0];
             if(tag==='脚本')continue;
-            (groups[tag] ??= []).push({ path, method, op, spec });
+            (groups[tag] ??= []).push({ path, method, op, spec, pathItem: item });
           }
         }
         globalGroups = groups;

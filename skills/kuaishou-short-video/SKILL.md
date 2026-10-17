@@ -11,13 +11,11 @@ description: 快手极速版自动化业务技能：监测红包弹窗、执行�
 
 按需读取：
 
-1. [流程与边界](rules/00-overview.md)
-2. [前置条件](rules/01-preconditions.md)
-3. [页面与定位](rules/02-pages-and-locators.md)
-4. [动作与生命周期](rules/03-actions.md)
-5. [验证与报告](rules/04-verify-and-report.md)
-6. [弹层与RN页面经验 (Wiki)](wiki/rn-dialogs.md)
-7. [金币与收益核对 (Wiki)](wiki/coin-rewards.md)
+1. [动作与生命周期](rules/01-actions.md)
+2. [任务入口与生命周期](rules/02-entrypoint.md)
+3. [赚钱任务列表](rules/03-task.md)
+4. [弹层与RN页面经验 (Wiki)](wiki/rn-dialogs.md)
+5. [金币与收益核对 (Wiki)](wiki/coin-rewards.md)
 
 ## 通用操作调用约定
 

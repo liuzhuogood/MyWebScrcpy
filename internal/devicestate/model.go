@@ -43,8 +43,8 @@ type SourceStatus struct {
 
 // TemplateMatchItem 单个模板匹配结果
 type TemplateMatchItem struct {
-	Source       string  `json:"source"`                 // "global", "device", "skill"
-	SkillID      string  `json:"skill_id,omitempty"`     // 技能来源时记录技能目录/标识
+	Source       string  `json:"source"`             // "global", "device", "skill"
+	SkillID      string  `json:"skill_id,omitempty"` // 技能来源时记录技能目录/标识
 	TemplateID   string  `json:"template_id"`
 	TemplateName string  `json:"template_name"`
 	Confidence   float64 `json:"confidence"`
@@ -82,8 +82,6 @@ type DeviceState struct {
 	PageInfo        *uipage.PageInfo        `json:"page_info,omitempty"`
 	ContextStable   bool                    `json:"context_stable"`
 	Screenshot      ScreenshotInfo          `json:"screenshot"`
-	UIXML           string                  `json:"ui_xml,omitempty"`
-	UIXMLError      string                  `json:"ui_xml_error,omitempty"`
 	OCR             OCRData                 `json:"ocr"`
 	TemplateMatches []TemplateMatchItem     `json:"template_matches"`
 	AssociatedTask  *AssociatedTaskInfo     `json:"associated_task,omitempty"`
