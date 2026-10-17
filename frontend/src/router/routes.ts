@@ -8,6 +8,8 @@ const routes: RouteRecordRaw[] = [
   { path: '/files', name: 'files', component: () => import('@/views/FilesView.vue'), meta: { title: 'MyWebScrcpy - 文件管理' } },
   { path: '/tasks', name: 'tasks', component: () => import('@/views/TasksView.vue'), meta: { title: 'MyWebScrcpy - 任务运行' } },
   { path: '/dependencies', name: 'dependencies', component: () => import('@/views/DependenciesView.vue'), meta: { title: 'MyWebScrcpy - 依赖管理' } },
+  { path: '/ai-integration', name: 'ai-integration', component: () => import('@/views/AiIntegrationView.vue'), meta: { title: 'MyWebScrcpy - AI 集成' } },
+  { path: '/ai-integration/skills/:id', name: 'skill-detail', component: () => import('@/views/SkillDetailView.vue'), meta: { title: 'MyWebScrcpy - 技能详情' } },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 

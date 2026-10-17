@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"mywebscrcpy/internal/skillsmarket"
 )
 
 func serveOpenAPISpec(w http.ResponseWriter, r *http.Request) {
@@ -32,8 +34,11 @@ func newAppHandler(appRoot fs.FS) http.Handler {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		switch r.URL.Path {
-		case "/", "/index.html", "/player", "/dashboard", "/files", "/tasks", "/dependencies":
+		switch {
+		case r.URL.Path == "/" || r.URL.Path == "/index.html" || r.URL.Path == "/player" ||
+			r.URL.Path == "/dashboard" || r.URL.Path == "/files" || r.URL.Path == "/tasks" ||
+			r.URL.Path == "/dependencies" || r.URL.Path == "/ai-integration" ||
+			skillsmarket.IsSkillDetailRoutePath(r.URL.Path):
 			if indexErr != nil {
 				http.Error(w, "web app unavailable", http.StatusServiceUnavailable)
 				return

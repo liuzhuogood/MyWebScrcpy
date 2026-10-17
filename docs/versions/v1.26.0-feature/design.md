@@ -128,3 +128,23 @@ flowchart TD
 ## 回滚计划
 
 设计阶段可弃用本方案并新增后续方案，保留已有图片和记录；正式功能回滚需依据最终实现另行设计。
+
+## 2026-10-16：正式实现与独立验收
+
+正式源码位于 `frontend/src/views/AiIntegrationView.vue`、`frontend/src/views/SkillDetailView.vue`、`frontend/src/components/ai-integration/` 和 `internal/skillsmarket/`；接口以 `web/openapi.json` 为准。由本机 Antigravity `gemini-3.8-flash-high` 实施，Codex 独立审查、两轮同会话返工后作最小收口修正，未再新开外部会话。
+
+- 前端生产构建、原型检查与构建、Go 全仓竞态测试、21 项 Node 与 15 项 Python 回归通过。Linux amd64、Windows amd64/arm64 测试包交叉编译通过。
+- 隔离临时 home 的真实 Go 接口通过 46 项接口与下载包检查：ZIP CRC/路径/资源、三包格式及任意 cwd 的 helper 调用、数组契约、非法/超长 JSON、跨站请求拒绝、未知详情和缺失资源路由。另验证 15 个 Shell 示例语法、动态尺寸参数及缺失/非法尺寸拒绝。
+- 真实浏览器验证三助手多选、部分成功、原文件保留、仅重试失败目标、安装时禁用重复提交、取消/空选、下载 503 提示、实际 ZIP 下载、返回市场条件恢复和 URL 清空复位、未知技能返回入口。磁盘与下载包内容另行核对。
+- 1280px 桌面和 390px 小屏均无横向溢出；深色主题验证后恢复浏览器默认设置。仅安装临时目录，未验证真实助手加载、真机业务或 Windows/Linux 原生行为。
+- 主工作区 HEAD 与 876 个基线文件哈希保留。本次实现位于独立 `lz/v1.26.0-feature` 工作区；主工作区无关改动和主分支三个未推送历史阻止合并/推送。正式版本、标签和部署未变。
+
+### 正式页面实拍
+
+![正式技能市场，桌面完整页面](prototypes/ai-integration-v126-formal-market.png)
+![正式技能详情与安装状态](prototypes/ai-integration-v126-formal-detail.jpg)
+![正式页面深色主题](prototypes/ai-integration-v126-formal-dark.png)
+![390px 小屏完整页面](prototypes/ai-integration-v126-formal-mobile.png)
+![小屏空选择禁用](prototypes/ai-integration-v126-formal-empty-install.jpg)
+
+本地隔离预览会话记录在 `/tmp/mywebscrcpy-ai-implementation-20261016/browser-session.json`，包含实际 URL、临时 home 和进程记录；预览不替代主服务部署，原公网原型仍单独保留。

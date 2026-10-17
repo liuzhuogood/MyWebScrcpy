@@ -5113,6 +5113,210 @@
           }
         }
       }
+    },
+    "/api/ai-integrations": {
+      "get": {
+        "tags": [
+          "AI 集成与技能市场"
+        ],
+        "summary": "获取支持的 AI 助手配置及接入指引",
+        "description": "返回当前服务支持的 AI 助手（WorkBuddy、Codex、Claude Code）元信息、接入步骤、在运行服务宿主机上的技能目标目录与官方文档链接。",
+        "responses": {
+          "200": {
+            "description": "AI 助手配置与指引列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiIntegrationsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/skills": {
+      "get": {
+        "tags": [
+          "AI 集成与技能市场"
+        ],
+        "summary": "获取技能市场列表及各助手安装状态",
+        "description": "返回技能市场中的所有技能概要，并根据运行 MyWebScrcpy 服务的宿主机文件系统返回各 AI 助手的实时安装状态。",
+        "responses": {
+          "200": {
+            "description": "技能市场列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillsListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/skills/{id}": {
+      "get": {
+        "tags": [
+          "AI 集成与技能市场"
+        ],
+        "summary": "获取指定技能详情",
+        "description": "返回指定技能的完整详情，包含概览、核心能力、使用场景、示例提示词、准备条件、使用步骤及各 AI 助手的实时安装状态。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "技能唯一标识（如 mywebscrcpy-device-base）",
+            "example": "mywebscrcpy-device-base"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "技能详细信息",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "技能不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/skills/{id}/download": {
+      "get": {
+        "tags": [
+          "AI 集成与技能市场"
+        ],
+        "summary": "下载技能 ZIP 包",
+        "description": "下载指定技能的可独立安装运行 ZIP 包，内容包含 SKILL.md、通用请求客户端及元数据清单。下载不改变任何安装状态。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "技能唯一标识",
+            "example": "mywebscrcpy-device-base"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "技能 ZIP 压缩包",
+            "content": {
+              "application/zip": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "技能不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/skills/{id}/install": {
+      "post": {
+        "tags": [
+          "AI 集成与技能市场"
+        ],
+        "summary": "安装技能至选定的 AI 助手",
+        "description": "原子安装指定技能到运行 MyWebScrcpy 服务的宿主机中选定的一个或多个 AI 助手目录中。返回各目标的实际安装状态，拒绝跨 Origin 请求。",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "技能唯一标识",
+            "example": "mywebscrcpy-device-base"
+          }
+        ],
+        "x-side-effect": true,
+        "requestBody": {
+          "required": true,
+          "description": "目标 AI 助手标识列表",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillInstallRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "安装操作完成，包含各目标逐项安装结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillInstallResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数不合法或目标列表为空/重复/未知",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "拒绝跨站/跨域请求",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "技能不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8290,6 +8494,412 @@
           "total",
           "updated_at"
         ]
+      },
+      "AiTool": {
+        "type": "object",
+        "description": "AI 助手配置及接入指引信息",
+        "required": [
+          "id",
+          "name",
+          "subtitle",
+          "guideTitle",
+          "guideBadge",
+          "step1Title",
+          "step1Desc",
+          "step2Title",
+          "step2Desc",
+          "step2ActionText",
+          "step3Title",
+          "step3Desc",
+          "step3ActionText",
+          "samplePrompt",
+          "iconType",
+          "targetPath",
+          "targetRelPath",
+          "officialDocUrl"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "claude-code",
+              "workbuddy"
+            ],
+            "description": "AI 助手标识"
+          },
+          "name": {
+            "type": "string",
+            "description": "AI 助手名称"
+          },
+          "subtitle": {
+            "type": "string",
+            "description": "副标题"
+          },
+          "guideTitle": {
+            "type": "string",
+            "description": "指引面板标题"
+          },
+          "guideBadge": {
+            "type": "string",
+            "description": "角标文本"
+          },
+          "step1Title": {
+            "type": "string",
+            "description": "步骤 1 标题"
+          },
+          "step1Desc": {
+            "type": "string",
+            "description": "步骤 1 描述"
+          },
+          "step2Title": {
+            "type": "string",
+            "description": "步骤 2 标题"
+          },
+          "step2Desc": {
+            "type": "string",
+            "description": "步骤 2 描述"
+          },
+          "step2ActionText": {
+            "type": "string",
+            "description": "步骤 2 操作按钮文案"
+          },
+          "step3Title": {
+            "type": "string",
+            "description": "步骤 3 标题"
+          },
+          "step3Desc": {
+            "type": "string",
+            "description": "步骤 3 描述"
+          },
+          "step3ActionText": {
+            "type": "string",
+            "description": "步骤 3 操作按钮文案"
+          },
+          "samplePrompt": {
+            "type": "string",
+            "description": "任务示例提示词"
+          },
+          "iconType": {
+            "type": "string",
+            "description": "图标类型"
+          },
+          "targetPath": {
+            "type": "string",
+            "description": "在服务主机上的技能安装绝对路径"
+          },
+          "targetRelPath": {
+            "type": "string",
+            "description": "在用户目录下的相对路径"
+          },
+          "officialDocUrl": {
+            "type": "string",
+            "description": "官方接入文档链接"
+          }
+        }
+      },
+      "AiIntegrationsResponse": {
+        "type": "object",
+        "description": "AI 助手配置列表响应",
+        "required": [
+          "tools"
+        ],
+        "properties": {
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiTool"
+            }
+          }
+        }
+      },
+      "SkillSummary": {
+        "type": "object",
+        "description": "技能概要与安装状态",
+        "required": [
+          "id",
+          "name",
+          "app",
+          "category",
+          "categoryLabel",
+          "description",
+          "iconType",
+          "zipDownloadUrl",
+          "zipFileName",
+          "installedTargets",
+          "targetStatuses"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "技能唯一标识"
+          },
+          "name": {
+            "type": "string",
+            "description": "技能名称"
+          },
+          "app": {
+            "type": "string",
+            "description": "适配应用"
+          },
+          "category": {
+            "type": "string",
+            "description": "分类键值"
+          },
+          "categoryLabel": {
+            "type": "string",
+            "description": "分类中文名称"
+          },
+          "description": {
+            "type": "string",
+            "description": "技能简短描述"
+          },
+          "iconType": {
+            "type": "string",
+            "description": "图标类型"
+          },
+          "zipDownloadUrl": {
+            "type": "string",
+            "description": "直接下载链接"
+          },
+          "zipFileName": {
+            "type": "string",
+            "description": "下载文件名"
+          },
+          "installedTargets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "已成功安装的目标 AI 助手标识列表"
+          },
+          "targetStatuses": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "installed": {
+                  "type": "boolean"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "各 AI 助手的实时安装状态明细"
+          }
+        }
+      },
+      "SkillDetail": {
+        "type": "object",
+        "description": "技能完整详情",
+        "required": [
+          "id",
+          "name",
+          "app",
+          "category",
+          "categoryLabel",
+          "description",
+          "iconType",
+          "zipDownloadUrl",
+          "zipFileName",
+          "installedTargets",
+          "targetStatuses",
+          "details"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "app": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "categoryLabel": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "iconType": {
+            "type": "string"
+          },
+          "zipDownloadUrl": {
+            "type": "string"
+          },
+          "zipFileName": {
+            "type": "string"
+          },
+          "installedTargets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "targetStatuses": {
+            "type": "object"
+          },
+          "details": {
+            "type": "object",
+            "required": [
+              "overview",
+              "capabilities",
+              "scenarios",
+              "samplePrompts",
+              "prerequisites",
+              "usageSteps"
+            ],
+            "properties": {
+              "overview": {
+                "type": "string"
+              },
+              "capabilities": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "title",
+                    "description"
+                  ],
+                  "properties": {
+                    "title": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "scenarios": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "samplePrompts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "prerequisites": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "usageSteps": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "SkillsListResponse": {
+        "type": "object",
+        "description": "技能列表响应",
+        "required": [
+          "skills"
+        ],
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillSummary"
+            }
+          }
+        }
+      },
+      "SkillInstallRequest": {
+        "type": "object",
+        "description": "技能安装请求体",
+        "required": [
+          "targets"
+        ],
+        "properties": {
+          "targets": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": [
+                "codex",
+                "claude-code",
+                "workbuddy"
+              ]
+            },
+            "description": "选定的安装目标 AI 助手列表"
+          }
+        }
+      },
+      "SkillInstallTargetResult": {
+        "type": "object",
+        "description": "单目标安装结果",
+        "required": [
+          "target",
+          "status",
+          "path"
+        ],
+        "properties": {
+          "target": {
+            "type": "string",
+            "enum": [
+              "codex",
+              "claude-code",
+              "workbuddy"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "installed",
+              "already_installed",
+              "failed"
+            ]
+          },
+          "path": {
+            "type": "string",
+            "description": "落盘绝对路径"
+          },
+          "error": {
+            "type": "string",
+            "description": "失败原因说明"
+          }
+        }
+      },
+      "SkillInstallResponse": {
+        "type": "object",
+        "description": "批量安装结果响应",
+        "required": [
+          "skillId",
+          "results"
+        ],
+        "properties": {
+          "skillId": {
+            "type": "string"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillInstallTargetResult"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -8380,6 +8990,10 @@
     {
       "name": "系统",
       "description": "OpenAPI 接口规范描述文档"
+    },
+    {
+      "name": "AI 集成与技能市场",
+      "description": "AI 助手接入指引、技能市场列表与详情、技能包下载与多助手安装"
     }
   ]
 }

@@ -21,6 +21,7 @@ import (
 	"mywebscrcpy/internal/inputconfig"
 	"mywebscrcpy/internal/matchingservice"
 	"mywebscrcpy/internal/operationlog"
+	"mywebscrcpy/internal/skillsmarket"
 	"mywebscrcpy/internal/taskrun"
 	"mywebscrcpy/internal/uipage"
 	"mywebscrcpy/internal/uixml"
@@ -132,6 +133,19 @@ func main() {
 
 	// 文件管理 API：每个请求都携带当前投屏页面选定的设备 serial，操作手机共享存储。
 	files.RegisterRoutes(mux, fileManager)
+
+	// AI 集成与技能市场 API
+	userHome, homeErr := os.UserHomeDir()
+	if homeErr != nil {
+		log.Printf("错误: 获取用户主目录失败: %v，已禁用 AI 技能市场管理能力", homeErr)
+	} else {
+		skillsMgr, err := skillsmarket.NewManager(userHome)
+		if err != nil {
+			log.Printf("警告: 初始化 AI 技能市场管理器失败: %v", err)
+		} else {
+			skillsmarket.RegisterRoutes(mux, skillsMgr)
+		}
+	}
 
 	// 自动更新 API
 	currentVersionStr := strings.TrimSpace(string(versionBytes))
