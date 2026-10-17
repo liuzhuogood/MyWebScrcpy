@@ -1,0 +1,5 @@
+command: python3 scripts/test_flow.py
+device_access: false
+max_cases: 30
+max_runtime_seconds: 30
+cases_source: rules/07-dryrun.md

@@ -48,6 +48,7 @@
 | OCR | 识文字、文字识别 | 接口 `POST /api/vision/ocr`;引擎优先级 Indra OCR → macOCR → PaddleOCR,自动模式仅契约错误时降级,见 `docs/system-config.md` |
 | 任务运行 | Task Runs、任务上报 | 外部自动化执行端上报生命周期、心跳、日志与 Markdown 报告,见 `docs/task-runs.md` |
 | 动作执行 | 拟人化注入、input 执行 | 两种模式:SDK 拟人化注入(贝塞尔曲线/落点微抖动)与 ADB Shell input 系统级穿透 |
+| 快手短视频技能 | 快手技能、快手极速版任务、观看视频模式 | `skills/kuaishou-short-video/SKILL.md`；红包守护、连续打卡白拿手机、连续签到的视频观看流程 |
 
 ## 后端模块速查(`internal/`)
 
