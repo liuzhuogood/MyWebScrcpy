@@ -40,9 +40,10 @@ type AiIntegrationsResponse struct {
 type SkillID string
 
 const (
-	SkillDeviceBase   SkillID = "mywebscrcpy-device-base"
+	SkillDeviceBase    SkillID = "mywebscrcpy-device-base"
 	SkillKuaishouDaily SkillID = "mywebscrcpy-kuaishou-daily"
-	SkillWechatHelper SkillID = "mywebscrcpy-wechat-helper"
+	SkillWechatHelper  SkillID = "mywebscrcpy-wechat-helper"
+	SkillCommon        SkillID = "my-scrcpy-common"
 )
 
 // SkillCapability represents a specific capability of a skill.

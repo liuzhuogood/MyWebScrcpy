@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""Register a task environment and launch it in its own temporary directory."""
+"""Register a task environment and launch it in its dedicated task workspace directory."""
 
 import argparse
 import os
 from pathlib import Path
 import sys
-import tempfile
+import time
 from urllib.parse import urlsplit
 
 
 def main():
-    parser = argparse.ArgumentParser(description="注册环境变量并在独立临时目录执行任务")
+    parser = argparse.ArgumentParser(description="注册环境变量并在任务工作目录中执行任务")
     parser.add_argument("--base-url", required=True, help="已确认的服务根地址")
     parser.add_argument("--serial", required=True, help="已确认的设备 serial")
+    parser.add_argument("--task-id", help="可选任务 ID (默认自动按时间戳生成)")
+    parser.add_argument("--task-dir", help="可选显式指定任务工作目录")
     parser.add_argument("command", nargs=argparse.REMAINDER, help="-- 后的任务命令；脚本路径须为绝对路径")
     args = parser.parse_args()
     if not args.command or args.command[0] != "--" or len(args.command) < 2:
@@ -30,17 +32,29 @@ def main():
     if not args.serial.strip():
         parser.error("设备 serial 不能为空")
 
+    if args.task_dir:
+        task_run_dir = Path(args.task_dir).resolve()
+    else:
+        root_dir = os.environ.get("MYWEBSCRCPY_TASK_ROOT")
+        if root_dir:
+            task_root = Path(root_dir).resolve()
+        else:
+            task_root = (Path.home() / ".mywebscrcppy" / "tasks").resolve()
+        task_id = args.task_id.strip() if args.task_id else f"task-{int(time.time())}"
+        task_run_dir = (task_root / task_id).resolve()
+
+    task_run_dir.mkdir(parents=True, exist_ok=True)
+
     task_env = os.environ.copy()
-    task_run_dir = Path(tempfile.mkdtemp(prefix="my-scrcpy-run-")).resolve()
     task_env.update({
         "MYWEBSCRCPY_API_URL": args.base_url.rstrip("/"),
+        "MYWEBSCRCPY_BASE_URL": args.base_url.rstrip("/"),
         "MYWEBSCRCPY_SERIAL": args.serial,
+        "MYWEBSCRCPY_TASK_DIR": str(task_run_dir),
         "MYWEBSCRCPY_RUN_DIR": str(task_run_dir),
-        "TMPDIR": str(task_run_dir),
-        "TEMP": str(task_run_dir),
-        "TMP": str(task_run_dir),
+        "MYWEBSCRCPY_TASK_ROOT": str(task_run_dir.parent),
     })
-    print(f"[env] run_dir={task_run_dir}", file=sys.stderr, flush=True)
+    print(f"[env] task_dir={task_run_dir}", file=sys.stderr, flush=True)
     os.chdir(task_run_dir)
     try:
         os.execvpe(args.command[1], args.command[1:], task_env)

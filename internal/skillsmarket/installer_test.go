@@ -16,7 +16,7 @@ import (
 )
 
 func TestSkillZipArchiveContentAndStructure(t *testing.T) {
-	for _, skillID := range []SkillID{SkillDeviceBase, SkillKuaishouDaily, SkillWechatHelper} {
+	for _, skillID := range []SkillID{SkillDeviceBase, SkillKuaishouDaily, SkillWechatHelper, SkillCommon} {
 		zipBytes, err := GenerateSkillZip(skillID)
 		if err != nil {
 			t.Fatalf("GenerateSkillZip(%s) error: %v", skillID, err)
@@ -364,7 +364,7 @@ func TestInstallConcurrencyAndContext(t *testing.T) {
 
 	// Concurrent installs of different skills to different targets
 	var wg sync.WaitGroup
-	skills := []SkillID{SkillDeviceBase, SkillKuaishouDaily, SkillWechatHelper}
+	skills := []SkillID{SkillDeviceBase, SkillKuaishouDaily, SkillWechatHelper, SkillCommon}
 	for _, sk := range skills {
 		wg.Add(1)
 		go func(s SkillID) {
@@ -478,7 +478,7 @@ func TestCancellationDuringStaging(t *testing.T) {
 
 func TestExtractedZipPythonClientExecutable(t *testing.T) {
 	tempDir := t.TempDir()
-	for _, skillID := range []SkillID{SkillDeviceBase, SkillKuaishouDaily, SkillWechatHelper} {
+	for _, skillID := range []SkillID{SkillDeviceBase, SkillKuaishouDaily, SkillWechatHelper, SkillCommon} {
 		zipBytes, err := GenerateSkillZip(skillID)
 		if err != nil {
 			t.Fatal(err)

@@ -257,6 +257,60 @@ var rawSkills = []SkillDetail{
 			},
 		},
 	},
+	{
+		SkillSummary: SkillSummary{
+			ID:               SkillCommon,
+			Name:             "通用操作技能",
+			App:              "通用设备",
+			Category:         "productivity",
+			CategoryLabel:    "通用",
+			Description:      "观察页面、拟人化看视频、尝试返回及生命周期管理",
+			IconType:         "device",
+			ZipDownloadURL:   "/api/skills/my-scrcpy-common/download",
+			ZipFileName:      "my-scrcpy-common.zip",
+			InstalledTargets: []AiToolID{},
+			TargetStatuses:   map[AiToolID]TargetStatus{},
+		},
+		Details: SkillDetails{
+			Overview: "提供设备总状态观察、AI 视觉决策、拟人化随机看视频上滑、KEYCODE_ESCAPE/BACK 尝试返回及应用启停等共享操作能力，让应用专属技能聚焦规则与知识。",
+			Capabilities: []SkillCapability{
+				{
+					Title:       "总状态与 AI 视觉决策",
+					Description: "只读采集单轮设备画面、OCR 与多源模板匹配结果，按需调用视觉模型获取建议。",
+				},
+				{
+					Title:       "拟人化看短视频",
+					Description: "随机 5~15 秒停留与曲线轨迹向上滑动，受总时限与前台稳定性检查点约束。",
+				},
+				{
+					Title:       "智能返回与前后差异分析",
+					Description: "发送 KEYCODE_ESCAPE 或 KEYCODE_BACK，比对前后页面、Activity 与可见文本变化。",
+				},
+				{
+					Title:       "应用生命周期管理",
+					Description: "通过包名启动或安全重启前台应用，并在动作后闭环核对实际运行状态。",
+				},
+			},
+			Scenarios: []string{
+				"作为短视频刷金币、打卡签到等应用技能的通用底层支撑",
+				"执行弹层关闭并确认页面是否真正退出的闭环决策",
+				"通过视觉大模型辅助分析未知弹窗并获得下一步操作建议",
+			},
+			SamplePrompts: []string{
+				"调用 my-scrcpy-common 观察当前设备状态，并提供下一步决策建议",
+				"使用通用看视频脚本在快手停留观看 3 个视频",
+				"尝试按 ESC 键返回并检查弹窗是否已关闭",
+			},
+			Prerequisites: []string{
+				"设备处于已连接且解锁状态",
+				"服务支持总状态与 ADB 指令接口",
+			},
+			UsageSteps: []string{
+				"安装通用技能至当前使用的外部助手目录",
+				"在应用技能或任务提示词中直接引用共享操作脚本",
+			},
+		},
+	},
 }
 
 // AllSkills returns all raw skill details.

@@ -1,42 +1,95 @@
-export interface TaskRunItem {
+export interface OutputDef {
   id: string
-  client_run_id: string
+  category: string
+  format: string
+  path: string
+  required: boolean
+  allowed_types?: string[]
+}
+
+export interface TaskDef {
   name: string
-  source: string
   device_serial: string
-  status: 'running' | 'succeeded' | 'failed' | 'cancelled'
-  exit_code: number | null
-  summary: string
-  report_markdown: string
-  log_count: number
-  log_truncated: boolean
-  created_at: number
+  goal: string
+  success_condition: string
+  timeout_seconds: number
+  source: string
+  skill_dir: string
+  outputs: OutputDef[]
+}
+
+export interface TaskState {
+  status: string
+  stage: string
+  progress: number
+  last_action: string
+  last_result: string
   updated_at: number
-  last_heartbeat_at: number
-  ended_at: number
-  connectivity: 'connected' | 'disconnected' | 'closed'
-  disconnected: boolean
-  duration_ms: number
+  ended_reason?: string
 }
 
-export interface TaskRunLogEntry {
-  seq: number
+export interface OutputCheckResult {
+  id: string
+  category: string
+  format: string
+  path: string
+  required: boolean
+  exists: boolean
+  valid: boolean
+  size_bytes?: number
+  files?: string[]
+  error?: string
+}
+
+export interface TaskSummary {
+  id: string
+  name: string
+  device_serial: string
+  source: string
+  status: string
+  business_result: string
+  outputs_complete: boolean
+  goal: string
+  updated_at: number
+  is_stale: boolean
+  corrupted?: boolean
+  error_message?: string
+}
+
+export interface ActionRecord {
   timestamp: number
-  stream: 'stdout' | 'stderr'
-  message: string
+  action: string
+  result: string
 }
 
-export interface TaskRunListResponse {
-  items: TaskRunItem[]
+export interface TaskDetail {
+  id: string
+  task_def: TaskDef
+  state: TaskState
+  outputs: OutputCheckResult[]
+  outputs_complete: boolean
+  is_stale: boolean
+  report_content?: string
+  recent_actions?: ActionRecord[]
+  log_tail?: string
+  corrupted?: boolean
+  error_message?: string
+}
+
+export interface ScanResult {
+  scanned_at: number
+  count: number
+  root_dir: string
+  errors?: string[]
+}
+
+export interface TaskListResponse {
+  items: TaskSummary[]
   total: number
   page: number
   limit: number
-}
-
-export interface TaskRunLogsResponse {
-  items: TaskRunLogEntry[]
-  acknowledged_seq: number
-  truncated: boolean
+  scanned_at: number
+  root_dir: string
 }
 
 async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
@@ -54,39 +107,36 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json()
 }
 
+export async function scanTaskRuns(): Promise<ScanResult> {
+  return fetchJSON<ScanResult>('/api/task-runs/scan', { method: 'POST' })
+}
+
 export async function fetchTaskRuns(params?: {
   page?: number
   limit?: number
   status?: string
-  connectivity?: string
   device_serial?: string
   source?: string
-  q?: string
-}): Promise<TaskRunListResponse> {
+}): Promise<TaskListResponse> {
   const query = new URLSearchParams()
   if (params?.page) query.set('page', String(params.page))
   if (params?.limit) query.set('limit', String(params.limit))
   if (params?.status) query.set('status', params.status)
-  if (params?.connectivity) query.set('connectivity', params.connectivity)
   if (params?.device_serial) query.set('device_serial', params.device_serial)
   if (params?.source) query.set('source', params.source)
-  if (params?.q) query.set('q', params.q)
   const qs = query.toString()
-  return fetchJSON<TaskRunListResponse>(`/api/task-runs${qs ? `?${qs}` : ''}`)
+  return fetchJSON<TaskListResponse>(`/api/task-runs${qs ? `?${qs}` : ''}`)
 }
 
-export async function fetchTaskRunDetail(id: string): Promise<TaskRunItem> {
-  return fetchJSON<TaskRunItem>(`/api/task-runs/${encodeURIComponent(id)}`)
+export async function fetchTaskRunDetail(id: string): Promise<TaskDetail> {
+  return fetchJSON<TaskDetail>(`/api/task-runs/${encodeURIComponent(id)}`)
 }
 
-export async function fetchTaskRunLogs(
-  id: string,
-  params?: { after?: number; limit?: number; stream?: string }
-): Promise<TaskRunLogsResponse> {
-  const query = new URLSearchParams()
-  if (params?.after !== undefined) query.set('after', String(params.after))
-  if (params?.limit !== undefined) query.set('limit', String(params.limit))
-  if (params?.stream) query.set('stream', params.stream)
-  const qs = query.toString()
-  return fetchJSON<TaskRunLogsResponse>(`/api/task-runs/${encodeURIComponent(id)}/logs${qs ? `?${qs}` : ''}`)
+export function getTaskOutputUrl(taskId: string, outputId: string, file?: string, download?: boolean): string {
+  const base = `/api/task-runs/${encodeURIComponent(taskId)}/outputs/${encodeURIComponent(outputId)}`
+  const params = new URLSearchParams()
+  if (file) params.set('file', file)
+  if (download) params.set('download', 'true')
+  const qs = params.toString()
+  return qs ? `${base}?${qs}` : base
 }

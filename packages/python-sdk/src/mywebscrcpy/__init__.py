@@ -4,13 +4,12 @@ from .device import Device
 from .matcher import Matcher
 from .models import ActionResult, CommandResult, DeviceInfo, Frame, ImportResult, Match, PageInfo, Template
 from .ocr import OCRBox, OCRResult
-from .reporter import TaskReporter
 from .errors import (ActionError, ActionTimeout, CommandError, ConnectionError, FrameTimeout,
                      HTTPError, MatchTimeout, MissingDependency, ProtocolError, SDKError,
                      TemplateDisabled, UnsupportedTemplateMethod)
 
 __version__ = "1.27.2"
-__all__ = ["Client", "Device", "Matcher", "TaskReporter", "ActionResult", "CommandResult", "DeviceInfo", "Frame",
+__all__ = ["Client", "Device", "Matcher", "ActionResult", "CommandResult", "DeviceInfo", "Frame",
            "ImportResult", "Match", "PageInfo", "Template", "OCRBox", "OCRResult",
            "ActionError", "ActionTimeout",
            "CommandError", "ConnectionError", "FrameTimeout", "HTTPError", "MatchTimeout",

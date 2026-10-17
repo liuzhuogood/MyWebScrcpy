@@ -24,6 +24,7 @@ import (
 
 type auxiliaryServices struct {
 	templates   *template.Service
+	storage     *template.Storage
 	ocr         *ocr.Service
 	matching    *matchingservice.Manager
 	preferences *serviceprefs.Manager
@@ -89,6 +90,7 @@ func configureAuxiliaryServices(dataDir string, database *db.DB, hub *ws.Hub, mu
 
 	return &auxiliaryServices{
 		templates:   templateService,
+		storage:     templateStorage,
 		ocr:         ocrService,
 		matching:    matchingManager,
 		preferences: serviceSettings,

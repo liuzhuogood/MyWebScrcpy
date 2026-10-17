@@ -1,22 +1,25 @@
-# 执行环境规范
+# 执行环境与工作目录规范
 
-1. 执行前统一通过 [run-with-env.py](../scripts/run-with-env.py) 注册环境并启动任务；确认服务地址与设备，不写默认目标。
-2. 脚本继承已有环境，注册下列变量并传给任务及其子进程；任务读取后显式传入 SDK，不把变量值写入日志。
+1. **统一工作目录**：
+   - 任务在系统统一任务根目录（默认为 `~/.mywebscrcppy/tasks/<task-id>/`）下创建与执行，取消强制临时目录、结束自动清理和默认录屏要求。
+   - 外部编排助手直接使用规范的工作目录，启动任务前确保服务地址与设备 serial 已明确，不使用默认 8080 或猜设备。
+
+2. **环境变量注册**：
+   - 脚本继承已有环境，可通过 [run-with-env.py](../scripts/run-with-env.py) 为任务进程树注册下列变量：
 
 | 环境变量 | 用途 |
 |---|---|
-| `MYWEBSCRCPY_API_URL` | 服务根地址 |
+| `MYWEBSCRCPY_API_URL` | 服务根地址 (例如 `http://127.0.0.1:15272`) |
 | `MYWEBSCRCPY_SERIAL` | 设备 serial |
-| `MYWEBSCRCPY_RUN_DIR` | 本次独立临时执行目录，同时作为任务工作目录 |
-| `TMPDIR` / `TEMP` / `TMP` | 均指向本次执行目录 |
+| `MYWEBSCRCPY_TASK_DIR` | 本次任务工作目录 (例如 `~/.mywebscrcppy/tasks/<task-id>/`) |
+| `MYWEBSCRCPY_TASK_ROOT` | 任务根目录 (默认为 `~/.mywebscrcppy/tasks`) |
 
-3. 日志、截图、录屏、下载文件、失败证据和中间文件均保存到 `MYWEBSCRCPY_RUN_DIR` 内；显式输出路径也须在该目录内。工作目录和环境变量不能限制程序主动写入其他绝对路径。
-4. 注册仅作用于本次任务进程树，不修改父 shell 或系统配置；收尾按[执行规范](execution.md)清理，保留证据仍留在本次目录内。
-
-以下变量均使用已确认的值，`skill_dir`、`task_script` 为绝对路径：
+3. **产出规范**：
+   - 日志 (`logs/task.log`)、报告 (`report.md`)、截图 (`screenshots/`) 和可选录屏 (`videos/`) 均按 `task.json` 声明的相对路径直接写入任务目录中。
+   - 目录持久保留，供任务中心在用户主动触发“扫描刷新”时读取并展示。
 
 ```bash
 python3 "$skill_dir/scripts/run-with-env.py" \
-  --base-url "$base_url" --serial "$serial" -- \
+  --base-url "$base_url" --serial "$serial" --task-id "$task_id" -- \
   python3 "$task_script"
 ```

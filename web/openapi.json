@@ -2008,10 +2008,18 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "serial": { "type": "string" },
-                  "engine": { "type": "string" },
-                  "columns": { "type": "integer" },
-                  "rows": { "type": "integer" }
+                  "serial": {
+                    "type": "string"
+                  },
+                  "engine": {
+                    "type": "string"
+                  },
+                  "columns": {
+                    "type": "integer"
+                  },
+                  "rows": {
+                    "type": "integer"
+                  }
                 }
               }
             }
@@ -2025,13 +2033,30 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "status": { "type": "string" },
-                    "matched": { "type": "boolean" },
-                    "text_art": { "type": "string" },
-                    "text": { "type": "string" },
-                    "boxes": { "type": "array", "items": { "$ref": "#/components/schemas/OCRBox" } },
-                    "engine": { "type": "string" },
-                    "elapsed_ms": { "type": "integer" }
+                    "status": {
+                      "type": "string"
+                    },
+                    "matched": {
+                      "type": "boolean"
+                    },
+                    "text_art": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "boxes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OCRBox"
+                      }
+                    },
+                    "engine": {
+                      "type": "string"
+                    },
+                    "elapsed_ms": {
+                      "type": "integer"
+                    }
                   }
                 }
               },
@@ -3063,217 +3088,54 @@
         "tags": [
           "Task Runs"
         ],
-        "summary": "分页查询任务运行",
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "description": "任务运行记录分页结果",
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/TaskRun"
-                      },
-                      "description": "任务记录列表"
-                    },
-                    "total": {
-                      "type": "integer",
-                      "description": "符合条件的总记录数",
-                      "example": 20
-                    },
-                    "page": {
-                      "type": "integer",
-                      "description": "当前返回的分页页码",
-                      "example": 1
-                    },
-                    "limit": {
-                      "type": "integer",
-                      "description": "每页返回的最大记录行数",
-                      "example": 20
-                    }
-                  },
-                  "required": [
-                    "items",
-                    "total",
-                    "page",
-                    "limit"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "请求不合法",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "运行不存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "内容冲突或终态冻结",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          }
-        },
+        "summary": "查询最近一次扫描的任务列表（支持过滤与分页）",
         "parameters": [
           {
             "in": "query",
             "name": "page",
             "schema": {
               "type": "integer",
-              "minimum": 1,
               "default": 1
-            },
-            "description": ""
+            }
           },
           {
             "in": "query",
             "name": "limit",
             "schema": {
               "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
               "default": 20
-            },
-            "description": ""
+            }
           },
           {
             "in": "query",
             "name": "status",
             "schema": {
-              "type": "string",
-              "enum": [
-                "running",
-                "succeeded",
-                "failed",
-                "cancelled"
-              ]
-            },
-            "description": ""
-          },
-          {
-            "in": "query",
-            "name": "connectivity",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "connected",
-                "disconnected"
-              ]
-            },
-            "description": "只筛选运行中任务的连接情况；失联不改变执行状态"
+              "type": "string"
+            }
           },
           {
             "in": "query",
             "name": "device_serial",
             "schema": {
               "type": "string"
-            },
-            "description": ""
+            }
           },
           {
             "in": "query",
             "name": "source",
             "schema": {
               "type": "string"
-            },
-            "description": ""
-          },
-          {
-            "in": "query",
-            "name": "q",
-            "schema": {
-              "type": "string"
-            },
-            "description": ""
+            }
           }
-        ]
-      },
-      "post": {
-        "tags": [
-          "Task Runs"
         ],
-        "summary": "创建运行；相同 client_run_id 和元数据去重，冲突拒绝",
         "responses": {
           "200": {
             "description": "成功",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskRun"
+                  "$ref": "#/components/schemas/TaskListResponse"
                 }
-              }
-            }
-          },
-          "400": {
-            "description": "请求不合法",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "运行不存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "内容冲突或终态冻结",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "201": {
-            "description": "已创建",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRun"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateTaskRunRequest"
               }
             }
           }
@@ -3295,419 +3157,25 @@
         "tags": [
           "Task Runs"
         ],
-        "summary": "查询运行详情",
+        "summary": "查询指定任务的目录详情与产出状态",
         "responses": {
           "200": {
             "description": "成功",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskRun"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "请求不合法",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
+                  "$ref": "#/components/schemas/TaskDetail"
                 }
               }
             }
           },
           "404": {
-            "description": "运行不存在",
+            "description": "任务目录不存在",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
-              }
-            }
-          },
-          "409": {
-            "description": "内容冲突或终态冻结",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/task-runs/{id}/heartbeat": {
-      "parameters": [
-        {
-          "in": "path",
-          "name": "id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "post": {
-        "tags": [
-          "Task Runs"
-        ],
-        "summary": "上报心跳；终态不可回退",
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRun"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "请求不合法",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "运行不存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "内容冲突或终态冻结",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/task-runs/{id}/logs": {
-      "parameters": [
-        {
-          "in": "path",
-          "name": "id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "get": {
-        "tags": [
-          "Task Runs"
-        ],
-        "summary": "分页读取或下载日志",
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "description": "任务日志拉取结果",
-                  "properties": {
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/TaskRunLog"
-                      },
-                      "description": "日志条目列表"
-                    },
-                    "acknowledged_seq": {
-                      "type": "integer",
-                      "description": "当前已拉取确认的最大日志序列号",
-                      "example": 42
-                    },
-                    "truncated": {
-                      "type": "boolean",
-                      "description": "日志是否由于超长而被系统截断",
-                      "example": false
-                    }
-                  },
-                  "required": [
-                    "items",
-                    "acknowledged_seq"
-                  ]
-                }
-              },
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "请求不合法",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "运行不存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "内容冲突或终态冻结",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          }
-        },
-        "parameters": [
-          {
-            "in": "query",
-            "name": "after",
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "description": ""
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 1000,
-              "default": 500
-            },
-            "description": ""
-          },
-          {
-            "in": "query",
-            "name": "stream",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "stdout",
-                "stderr"
-              ]
-            },
-            "description": ""
-          },
-          {
-            "in": "query",
-            "name": "download",
-            "schema": {
-              "type": "boolean"
-            },
-            "description": "true 时返回完整纯文本日志"
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "Task Runs"
-        ],
-        "summary": "按连续序号追加日志；重发去重，跳号拒绝",
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "string",
-                      "description": "任务 ID",
-                      "example": "run_9f2c8d1e"
-                    },
-                    "acknowledged_seq": {
-                      "type": "integer",
-                      "description": "已成功写入并确认的最大日志序列号",
-                      "example": 50
-                    },
-                    "truncated": {
-                      "type": "boolean",
-                      "description": "日志存储是否已满并截断",
-                      "example": false
-                    }
-                  },
-                  "required": [
-                    "id",
-                    "acknowledged_seq"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "请求不合法",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "运行不存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "内容冲突或终态冻结",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "description": "批量追加日志条目请求体",
-                "properties": {
-                  "entries": {
-                    "type": "array",
-                    "description": "日志项数组",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "stream": {
-                          "type": "string",
-                          "description": "日志输出流（stdout / stderr）",
-                          "example": "stdout"
-                        },
-                        "message": {
-                          "type": "string",
-                          "description": "日志文本行内容",
-                          "example": "执行命令成功"
-                        },
-                        "timestamp": {
-                          "type": "string",
-                          "description": "可选。时间戳（RFC 3339）",
-                          "example": "2026-10-16T10:00:00Z"
-                        }
-                      },
-                      "required": [
-                        "stream",
-                        "message"
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "entries"
-                ]
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/task-runs/{id}/finish": {
-      "parameters": [
-        {
-          "in": "path",
-          "name": "id",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "post": {
-        "tags": [
-          "Task Runs"
-        ],
-        "summary": "提交最终结果；相同结果幂等，冲突拒绝",
-        "responses": {
-          "200": {
-            "description": "成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRun"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "请求不合法",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "运行不存在",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "内容冲突或终态冻结",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TaskRunError"
-                }
-              }
-            }
-          }
-        },
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FinishTaskRunRequest"
               }
             }
           }
@@ -5311,6 +4779,239 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/task-runs/scan": {
+      "post": {
+        "tags": [
+          "Task Runs"
+        ],
+        "summary": "主动扫描任务目录并重建内存索引",
+        "description": "扫描任务根目录下所有任务子目录，解析 task.json、state.json 并检查产出完整性，更新内存索引",
+        "responses": {
+          "200": {
+            "description": "扫描成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScanResult"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "已有扫描在进行中",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/task-runs/{id}/outputs/{output_id}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "in": "path",
+          "name": "output_id",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Task Runs"
+        ],
+        "summary": "安全访问或下载任务声明的产出文件",
+        "responses": {
+          "200": {
+            "description": "产出文件内容流或下载"
+          },
+          "400": {
+            "description": "路径穿越、越界或不安全媒体",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "产出未声明或文件不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/device-state/{serial}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "serial",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "task_id",
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "in": "query",
+          "name": "template_ids",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "tags": [
+          "Device State"
+        ],
+        "summary": "获取设备总状态（支持 JSON 或 HTML）",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceTotalState"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/device-state/{serial}/decision": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "serial",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "tags": [
+          "Device State"
+        ],
+        "summary": "采集单轮总状态并调用 AI 视觉决策建议",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceStateDecisionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotalStateAndDecision"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "超出并发限制",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/system/service-config": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "获取服务端配置（任务根目录与脱敏 AI 配置）",
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceConfig"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "System"
+        ],
+        "summary": "更新服务端配置（任务根目录与 AI 视觉服务配置）",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ServiceConfig"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceConfig"
                 }
               }
             }
@@ -8898,6 +8599,428 @@
             "items": {
               "$ref": "#/components/schemas/SkillInstallTargetResult"
             }
+          }
+        }
+      },
+      "ScanResult": {
+        "type": "object",
+        "properties": {
+          "scanned_at": {
+            "type": "integer"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "root_dir": {
+            "type": "string"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "scanned_at",
+          "count",
+          "root_dir"
+        ]
+      },
+      "TaskSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "device_serial": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "business_result": {
+            "type": "string"
+          },
+          "outputs_complete": {
+            "type": "boolean"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "integer"
+          },
+          "is_stale": {
+            "type": "boolean"
+          },
+          "corrupted": {
+            "type": "boolean"
+          },
+          "error_message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "outputs_complete",
+          "updated_at",
+          "is_stale"
+        ]
+      },
+      "TaskListResponse": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TaskSummary"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "scanned_at": {
+            "type": "integer"
+          },
+          "root_dir": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "limit",
+          "scanned_at",
+          "root_dir"
+        ]
+      },
+      "OutputCheckResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "format": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "exists": {
+            "type": "boolean"
+          },
+          "valid": {
+            "type": "boolean"
+          },
+          "size_bytes": {
+            "type": "integer"
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "path",
+          "required",
+          "exists",
+          "valid"
+        ]
+      },
+      "TaskDef": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "device_serial": {
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          },
+          "success_condition": {
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "skill_dir": {
+            "type": "string"
+          }
+        }
+      },
+      "TaskState": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "stage": {
+            "type": "string"
+          },
+          "progress": {
+            "type": "number"
+          },
+          "last_action": {
+            "type": "string"
+          },
+          "last_result": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "integer"
+          },
+          "ended_reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "updated_at"
+        ]
+      },
+      "ActionRecord": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "integer"
+          },
+          "action": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "timestamp",
+          "action"
+        ]
+      },
+      "TaskDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "task_def": {
+            "$ref": "#/components/schemas/TaskDef"
+          },
+          "state": {
+            "$ref": "#/components/schemas/TaskState"
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OutputCheckResult"
+            }
+          },
+          "outputs_complete": {
+            "type": "boolean"
+          },
+          "is_stale": {
+            "type": "boolean"
+          },
+          "report_content": {
+            "type": "string"
+          },
+          "recent_actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionRecord"
+            }
+          },
+          "log_tail": {
+            "type": "string"
+          },
+          "corrupted": {
+            "type": "boolean"
+          },
+          "error_message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "outputs",
+          "outputs_complete",
+          "is_stale"
+        ]
+      },
+      "DeviceTotalState": {
+        "type": "object",
+        "properties": {
+          "observation_id": {
+            "type": "string"
+          },
+          "captured_at": {
+            "type": "integer"
+          },
+          "serial": {
+            "type": "string"
+          },
+          "screenshot": {
+            "type": "object"
+          },
+          "page_info": {
+            "type": "object"
+          },
+          "context_stable": {
+            "type": "boolean"
+          },
+          "ocr": {
+            "type": "object"
+          },
+          "template_matches": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "associated_task": {
+            "type": "object"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "observation_id",
+          "captured_at",
+          "serial",
+          "context_stable"
+        ]
+      },
+      "DeviceStateDecisionRequest": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string"
+          },
+          "template_ids": {
+            "type": "string"
+          },
+          "goal": {
+            "type": "string"
+          }
+        }
+      },
+      "AIDecisionResult": {
+        "type": "object",
+        "properties": {
+          "available": {
+            "type": "boolean"
+          },
+          "observation_id": {
+            "type": "string"
+          },
+          "page_summary": {
+            "type": "string"
+          },
+          "visible_controls_and_dialogs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "task_progress_assessment": {
+            "type": "string"
+          },
+          "next_step_suggestion": {
+            "type": "string"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "uncertainties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "available",
+          "observation_id"
+        ]
+      },
+      "TotalStateAndDecision": {
+        "type": "object",
+        "properties": {
+          "device_state": {
+            "$ref": "#/components/schemas/DeviceTotalState"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/AIDecisionResult"
+          }
+        },
+        "required": [
+          "device_state",
+          "decision"
+        ]
+      },
+      "ServiceConfig": {
+        "type": "object",
+        "properties": {
+          "task_root_dir": {
+            "type": "string"
+          },
+          "ai_chat_endpoint": {
+            "type": "string"
+          },
+          "ai_model": {
+            "type": "string"
+          },
+          "ai_api_key": {
+            "type": "string"
+          },
+          "ai_api_key_masked": {
+            "type": "string"
+          },
+          "ai_has_key": {
+            "type": "boolean"
+          },
+          "ai_timeout_seconds": {
+            "type": "integer"
           }
         }
       }

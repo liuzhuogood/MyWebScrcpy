@@ -63,8 +63,8 @@ func TestRoutesListAndGetSkills(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&listResp); err != nil {
 		t.Fatal(err)
 	}
-	if len(listResp.Skills) != 3 {
-		t.Fatalf("expected 3 skills, got %d", len(listResp.Skills))
+	if len(listResp.Skills) != 4 {
+		t.Fatalf("expected 4 skills, got %d", len(listResp.Skills))
 	}
 
 	// Get existing skill
