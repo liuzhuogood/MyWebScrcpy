@@ -49,6 +49,6 @@
 
 ## 发布状态
 
-- **尚未发布**：`VERSION` 仍为 `v1.26.1`。打 `v1.27.0` 标签前需先同步版本号（改 `VERSION` 后运行 `node scripts/sync-version.mjs`），否则产物内嵌版本与新标签不一致。
-- `v1.26.1` 已建本地标签但未推送；两个标签各自取本目录下同名 `version.md` 作为 Release notes。
+- `VERSION` 已同步为 `v1.27.0`（`node scripts/sync-version.mjs --check` 通过），前端、桌面与 Python SDK 的版本号同步一致；`web/openapi.json` 中健康检查与自动更新接口的版本示例一并更新为 `1.27.0`。
+- 标签 `v1.27.0` 指向本次发布提交；本次推送同时包含此前已打标签的 `v1.26.1`，两个标签各自取本目录下同名 `version.md` 作为 Release notes。
 - 推送 `v*` 标签后由 GitHub Actions 触发多平台 CLI、Windows GUI、macOS DMG 与 Docker 镜像的构建与发布。
