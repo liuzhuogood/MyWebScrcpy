@@ -61,7 +61,7 @@
 | [v1.26.1-fix](v1.26.1-fix/version.md) | 已发布 v1.26.1 | 修复首页添加网络设备的反馈与即时呈现；同版包含 OCR 文字排版接口与快手极速版短视频任务技能。2026-10-17 [GitHub Actions](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/39015414870) 的五个平台构建、Windows 桌面任务、Release 与 Docker 全部成功；[Release](https://github.com/liuzhuogood/MyWebScrcpy/releases/tag/v1.26.1) 已发布 10 个资产。 |
 | [v1.27.0-feature](v1.27.0-feature/version.md) | 已打标签；发布被 Windows 回归测试拦截，转 v1.27.1 | AI 集成接入指引与技能市场正式实现（后端 `skillsmarket`、前端页面与路由、技能包 ZIP 下载与多助手原子安装）。标签已推送但 `desktop (windows-latest)` 的 Go 回归失败，未生成 Release；助手客户端加载、真机业务与 Windows/Linux 原生运行未验收。 |
 | [v1.27.1-fix](v1.27.1-fix/version.md) | 已打标签；发布被 Windows 模板监听互锁拦截，转 v1.27.2 | 修复技能包 `request_client.py` 在 Windows 默认代码页（cp1252）下打印中文帮助抛 `UnicodeEncodeError` 的问题（该修复在 Windows 上已生效）；同一次任务里 `internal/template` 因既有 fsnotify 互锁测试超时，未生成 Release。 |
-| [v1.27.2-fix](v1.27.2-fix/version.md) | 已打标签 v1.27.2；发布由 Actions 构建 | 修复 `DirWatcher.Close` 在 Windows 上先关 fsnotify、后等事件循环造成的互锁（关闭时目录事件在途会永久阻塞），并让 `removeWatch` 只处理登记过的目录；新增关闭场景回归测试。其余内容与 v1.27.0 相同。 |
+| [v1.27.2-fix](v1.27.2-fix/version.md) | 已发布 v1.27.2 | 修复 `DirWatcher.Close` 在 Windows 上先关 fsnotify、后等事件循环造成的互锁（关闭时目录事件在途会永久阻塞），并让 `removeWatch` 只处理登记过的目录；新增关闭场景回归测试。其余内容与 v1.27.0 相同。2026-10-17 [GitHub Actions](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/39018862813) 全部成功；[Release](https://github.com/liuzhuogood/MyWebScrcpy/releases/tag/v1.27.2) 已发布 10 个资产。 |
 
 ## Vue 前端迁移版本
 
