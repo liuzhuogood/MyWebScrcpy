@@ -158,5 +158,14 @@ def main() -> int:
         return 1
 
 
+def configure_utf8_stdio() -> None:
+    """Windows 默认代码页无法编码中文帮助与错误信息，独立运行时统一按 UTF-8 输出。"""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8")
+
+
 if __name__ == "__main__":
+    configure_utf8_stdio()
     sys.exit(main())

@@ -506,6 +506,8 @@ func TestExtractedZipPythonClientExecutable(t *testing.T) {
 
 		cmd := exec.Command("python3", "scripts/request_client.py", "--help")
 		cmd.Dir = skillFolder
+		// Windows 控制台默认 cp1252 代码页无法编码中文帮助与错误信息，固定该编码验证脚本自身统一 UTF-8 输出。
+		cmd.Env = append(os.Environ(), "PYTHONIOENCODING=cp1252")
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("execute request_client.py in %s: %v, out=%s", skillID, err, string(out))
