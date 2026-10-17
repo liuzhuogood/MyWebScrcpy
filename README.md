@@ -54,7 +54,7 @@
 
 ## API 文档
 
-启动服务后访问 [`/api-docs.html`](/api-docs.html) 查看全部 HTTP/WebSocket 接口；机器可读清单位于 [`/api/openapi.json`](/api/openapi.json)。文档首段提供可复制的 `my-scrcpy-use` 技能提示词。
+启动服务后访问 [`/api-docs.html`](/api-docs.html) 查看全部 HTTP/WebSocket 接口；机器可读清单位于 [`/api/openapi.json`](/api/openapi.json)。
 
 ## 原理
 

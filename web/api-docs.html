@@ -46,40 +46,6 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
     .card h2 { font-size: 16px; margin: 0 0 12px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
-    .prompt {
-      display: block;
-      width: 100%;
-      min-height: 140px;
-      resize: vertical;
-      font: inherit;
-      font-size: 13px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      background: var(--dark-bg);
-      color: #e6edf7;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 14px 16px;
-      margin-top: 10px;
-      outline: none;
-      box-sizing: border-box;
-    }
-    .prompt:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 2px var(--primary-bg);
-    }
-    .copy-btn {
-      padding: 6px 14px;
-      background: var(--primary);
-      color: #fff;
-      border: 0;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: opacity 0.15s;
-    }
-    .copy-btn:hover { opacity: 0.9; }
     .filter-bar {
       display: flex;
       gap: 10px;
@@ -301,16 +267,6 @@
 
   <section class="card">
     <h2>
-      <span>AI 技能提示词</span>
-      <button class="copy-btn" id="copy">复制提示词</button>
-    </h2>
-    <textarea class="prompt" id="prompt" rows="6" aria-label="AI 技能提示词">请创建一个名为 my-scrcpy-use 的技能。先读取 http://&lt;这里替换成浏览器当前地址&gt;/api/openapi.json 和 http://&lt;这里替换成浏览器当前地址&gt;/api-docs.html，严格以当前接口定义为准，不要猜测不存在的路径、字段或响应。若服务使用自签名或内部证书，读取接口时忽略证书校验（curl 使用 -k/--insecure，代码客户端关闭 TLS 证书校验），仅在用户明确授权且网络可信时这样做。
-
-技能应帮助用户安全地使用设备列表、投屏实时连接、旋转/屏幕状态/重启、录像、ADB 命令、按键、文件管理、脚本管理、UI XML 和 Vision 接口。默认先执行只读操作；有副作用操作先说明影响并获得确认。</textarea>
-  </section>
-
-  <section class="card">
-    <h2>
       <span>接口目录</span>
     </h2>
     <div class="filter-bar">
@@ -321,23 +277,6 @@
 
   <script>
   (()=>{
-    const address = location.protocol === 'file:' ? location.href : location.origin;
-    const promptEl = document.querySelector('#prompt');
-    promptEl.value = promptEl.textContent.replaceAll('http://<这里替换成浏览器当前地址>', address);
-
-    document.querySelector('#copy').onclick = () => {
-      navigator.clipboard.writeText(promptEl.value).then(() => {
-        const btn = document.querySelector('#copy');
-        btn.textContent = '已复制';
-        setTimeout(() => btn.textContent = '复制提示词', 2000);
-      }).catch(err => {
-        console.error('复制提示词失败:', err);
-        const btn = document.querySelector('#copy');
-        btn.textContent = '复制失败';
-        setTimeout(() => btn.textContent = '复制提示词', 2000);
-      });
-    };
-
     const listEl = document.querySelector('#list');
     listEl.addEventListener('click', e => {
       const btn = e.target.closest('.copy-path-btn');

@@ -148,20 +148,13 @@ func TestAPIDocsConsistency(t *testing.T) {
 	TestOpenAPISpecDocumentsRegisteredAPIs(t)
 }
 
-func TestAPIDocsUsesCurrentBrowserAddress(t *testing.T) {
+func TestAPIDocsPageGuardsScriptTagGrouping(t *testing.T) {
 	pageBytes, err := webFS.ReadFile("web/api-docs.html")
 	if err != nil {
 		t.Fatalf("read embedded API docs page: %v", err)
 	}
 	page := string(pageBytes)
-	for _, expected := range []string{
-		"location.origin",
-		"promptEl.textContent",
-		"my-scrcpy-use",
-		"if(tag==='脚本')continue",
-	} {
-		if !strings.Contains(page, expected) {
-			t.Errorf("API docs page is missing %q", expected)
-		}
+	if !strings.Contains(page, "if(tag==='脚本')continue") {
+		t.Errorf("API docs page is missing %q", "if(tag==='脚本')continue")
 	}
 }
