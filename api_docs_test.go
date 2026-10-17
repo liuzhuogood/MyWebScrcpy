@@ -82,7 +82,14 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"/api/templates/{id}",
 		"/api/templates/{id}/image",
 		// 任务运行
+		"/api/task-runs/scan",
 		"/api/task-runs",
+		"/api/task-runs/{id}",
+		"/api/task-runs/{id}/outputs/{output_id}",
+		// 设备状态与AI决策
+		"/api/device-state/{serial}",
+		"/api/device-state/{serial}/decision",
+		"/api/system/service-config",
 		// AI 集成与技能市场
 		"/api/ai-integrations",
 		"/api/skills",
@@ -149,6 +156,12 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"SkillInstallRequest",
 		"SkillInstallTargetResult",
 		"SkillInstallResponse",
+		"TaskSummary",
+		"TaskDetail",
+		"ScanResult",
+		"DeviceTotalState",
+		"TotalStateAndDecision",
+		"ServiceConfig",
 	}
 
 	for _, schemaName := range expectedSchemas {

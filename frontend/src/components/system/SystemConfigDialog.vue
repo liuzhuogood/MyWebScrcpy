@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { theme } from '@/composables/useTheme'
 import { useDesktopConfig } from '@/composables/useDesktopConfig'
+import { useServiceConfig } from '@/composables/useServiceConfig'
 import DependencyPanel from '@/components/dependencies/DependencyPanel.vue'
 import MatchingServicePanel from './MatchingServicePanel.vue'
 import OcrServicePanel from './OcrServicePanel.vue'
@@ -18,7 +19,9 @@ const props = defineProps<{ initialTab?: 'general' | 'player' | 'theme' | 'servi
 const open = defineModel<boolean>('open', { default: false })
 const tab = ref('general')
 const desktopConfig = useDesktopConfig()
+const serviceConfig = useServiceConfig()
 const themes = [{ id: 'auto' as const, name: '系统', icon: Monitor }, { id: 'light' as const, name: '明亮', icon: Sun }, { id: 'dark' as const, name: '黑暗', icon: Moon }]
+
 watch(open, (value) => {
   if (value) {
     if (props.initialTab === 'matching' || props.initialTab === 'ocr') {
@@ -28,8 +31,16 @@ watch(open, (value) => {
       tab.value = props.initialTab === 'theme' ? 'general' : props.initialTab
     }
     void desktopConfig.load()
+    void serviceConfig.load()
   }
 })
+
+async function handleServiceSave() {
+  if (desktopConfig.isDesktop.value && !desktopConfig.config.value?.is_overridden) {
+    await desktopConfig.save()
+  }
+  await serviceConfig.save()
+}
 </script>
 
 <template>
@@ -54,6 +65,7 @@ watch(open, (value) => {
           </TabsContent>
           <TabsContent value="player" class="m-0"><PlayerSettingsContent /></TabsContent>
           <TabsContent value="service" class="m-0 space-y-4">
+            <!-- 桌面端口 -->
             <div class="space-y-3 rounded-lg border p-4">
               <div class="flex items-center justify-between gap-3">
                 <div>
@@ -79,6 +91,70 @@ watch(open, (value) => {
                 <p class="text-xs text-muted-foreground">重启生效</p>
               </div>
             </div>
+
+            <!-- 任务工作目录 -->
+            <div class="space-y-3 rounded-lg border p-4">
+              <div>
+                <label for="task-root-dir" class="text-sm font-medium">任务工作目录</label>
+                <p class="mt-1 text-xs text-muted-foreground">外部任务记录与产出的存放根目录（默认 ~/.mywebscrcppy/tasks/）</p>
+              </div>
+              <Input
+                id="task-root-dir"
+                v-model="serviceConfig.config.value.task_root_dir"
+                placeholder="~/.mywebscrcppy/tasks/"
+                autocomplete="off"
+                class="w-full font-mono text-xs"
+              />
+            </div>
+
+            <!-- AI 视觉决策服务 -->
+            <div class="space-y-3 rounded-lg border p-4">
+              <div>
+                <label class="text-sm font-medium">AI 视觉决策服务</label>
+                <p class="mt-1 text-xs text-muted-foreground">配置兼容官方视觉协议的 Chat Completions 服务，用于页面状态决策分析</p>
+              </div>
+              <div class="space-y-3 text-xs">
+                <div>
+                  <label for="ai-endpoint" class="text-muted-foreground block mb-1">接口完整地址 (Chat Completions)</label>
+                  <Input
+                    id="ai-endpoint"
+                    v-model="serviceConfig.config.value.ai_chat_endpoint"
+                    placeholder="https://api.openai.com/v1/chat/completions"
+                    class="w-full font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label for="ai-model" class="text-muted-foreground block mb-1">模型名称</label>
+                  <Input
+                    id="ai-model"
+                    v-model="serviceConfig.config.value.ai_model"
+                    placeholder="gpt-4o"
+                    class="w-full font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label for="ai-key" class="text-muted-foreground block mb-1">API 密钥</label>
+                  <Input
+                    id="ai-key"
+                    v-model="serviceConfig.apiKeyDraft.value"
+                    type="password"
+                    :placeholder="serviceConfig.config.value.ai_has_key ? `${serviceConfig.config.value.ai_api_key_masked} (留空保持原密钥)` : '输入 API Key'"
+                    class="w-full font-mono text-xs"
+                  />
+                </div>
+                <div class="w-36">
+                  <label for="ai-timeout" class="text-muted-foreground block mb-1">请求超时 (秒)</label>
+                  <Input
+                    id="ai-timeout"
+                    v-model="serviceConfig.config.value.ai_timeout_seconds"
+                    type="number"
+                    min="5"
+                    max="120"
+                    class="h-8"
+                  />
+                </div>
+              </div>
+            </div>
           </TabsContent>
         </div>
         <TabsContent value="dependencies" force-mount v-show="tab === 'dependencies'" class="m-0 flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -90,12 +166,22 @@ watch(open, (value) => {
         </TabsContent>
       </Tabs>
       <footer v-if="tab !== 'dependencies'" class="flex shrink-0 items-center gap-3 border-t px-5 py-3">
-        <p v-if="tab === 'service' && desktopConfig.error.value" role="alert" class="flex-1 text-xs text-destructive">{{ desktopConfig.error.value }}</p>
-        <p v-else-if="tab === 'service' && desktopConfig.message.value" role="status" class="flex-1 text-xs text-muted-foreground">{{ desktopConfig.message.value }}</p>
+        <p v-if="tab === 'service' && (desktopConfig.error.value || serviceConfig.error.value)" role="alert" class="flex-1 text-xs text-destructive">
+          {{ desktopConfig.error.value || serviceConfig.error.value }}
+        </p>
+        <p v-else-if="tab === 'service' && (desktopConfig.message.value || serviceConfig.message.value)" role="status" class="flex-1 text-xs text-muted-foreground">
+          {{ desktopConfig.message.value || serviceConfig.message.value }}
+        </p>
         <div class="ml-auto flex items-center gap-2">
           <Button variant="ghost" size="sm" @click="open = false">关闭</Button>
-          <Button v-if="tab === 'service'" size="sm" :disabled="desktopConfig.saving.value || desktopConfig.config.value?.is_overridden" @click="desktopConfig.save">
-            <Loader2 v-if="desktopConfig.saving.value" class="size-3.5 animate-spin" />保存
+          <Button
+            v-if="tab === 'service'"
+            size="sm"
+            :disabled="desktopConfig.saving.value || serviceConfig.saving.value"
+            @click="handleServiceSave"
+          >
+            <Loader2 v-if="desktopConfig.saving.value || serviceConfig.saving.value" class="size-3.5 animate-spin mr-1" />
+            保存
           </Button>
         </div>
       </footer>

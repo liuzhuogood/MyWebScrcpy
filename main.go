@@ -16,6 +16,7 @@ import (
 	"mywebscrcpy/internal/db"
 	"mywebscrcpy/internal/dependencies"
 	"mywebscrcpy/internal/desktop"
+	"mywebscrcpy/internal/devicestate"
 	"mywebscrcpy/internal/device"
 	"mywebscrcpy/internal/files"
 	"mywebscrcpy/internal/inputconfig"
@@ -232,13 +233,28 @@ func main() {
 	dependencyManager.BeforePythonChange = auxiliary.stopPythonServices
 	defer auxiliary.Close()
 
+	var taskRunService *taskrun.Service
 	if database == nil {
 		registerUnavailableTaskRoutes(mux)
 	} else {
-		taskRunHandler := taskrun.NewHandler(taskrun.NewService(database))
+		taskRunService = taskrun.NewService(database)
+		taskRunHandler := taskrun.NewHandler(taskRunService)
 		taskRunHandler.RegisterRoutes(mux)
-
 	}
+
+	// 统一设备总状态与 AI 决策 API
+	aiClient := devicestate.NewAIClient(database)
+	deviceStateService := devicestate.NewService(
+		adbPath,
+		uiPage,
+		uiXML,
+		auxiliary.ocr,
+		auxiliary.storage,
+		taskRunService,
+		aiClient,
+	)
+	deviceStateHandler := devicestate.NewHandler(deviceStateService, aiClient)
+	deviceStateHandler.RegisterRoutes(mux)
 
 	// API: 设备管理
 	mux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) {

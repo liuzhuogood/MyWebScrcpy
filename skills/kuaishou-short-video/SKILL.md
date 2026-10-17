@@ -1,67 +1,43 @@
 ---
 name: kuaishou-short-video
-description: 使用 MyWebScrcpy 操作快手极速版，监测红包弹窗、执行连续打卡白拿手机任务，并按连续签到入口观看指定时长的视频。
+description: 快手极速版自动化业务技能：监测红包弹窗、执行连续打卡白拿手机任务，并按连续签到入口观看指定时长的视频。通用设备操作与视觉决策由 my-scrcpy-common 提供。
 ---
 
 # 快手极速版短视频任务
 
-先从当前仓库安装包含 TaskReporter 的 SDK：`python3 -m pip install ./packages/python-sdk`。
+本技能维护快手极速版的业务目标、页面判断、规则与经验知识。通用设备操作、页面观察与动作脚本由 `my-scrcpy-common` 统一提供。
 
-先加载项目内 `skills/my-scrcpy-use/SKILL.md`。服务地址与设备必须由当前会话确认。
+## 规则与知识库
 
-按序读取：
+按需读取：
 
 1. [流程与边界](rules/00-overview.md)
 2. [前置条件](rules/01-preconditions.md)
 3. [页面与定位](rules/02-pages-and-locators.md)
-4. [动作实现](rules/03-actions.md)、[设备与证据](rules/05-runtime.md)、[入口](rules/06-entrypoint.md)
+4. [动作与生命周期](rules/03-actions.md)
 5. [验证与报告](rules/04-verify-and-report.md)
+6. [弹层与RN页面经验 (Wiki)](wiki/rn-dialogs.md)
+7. [金币与收益核对 (Wiki)](wiki/coin-rewards.md)
 
-`rules/` 是生成模块的手写源。修改规则中的代码后，从代码块重生成对应脚本；独立运行入口需同步更新其契约与参数边界。先离线验证再真机执行：
+## 通用操作调用约定
 
-```bash
-python3 skills/kuaishou-short-video/scripts/test_flow.py
-```
-
-实际执行通过项目环境注册器，路径须为绝对路径：
+执行外部任务时，通过已安装的 `my-scrcpy-common` 脚本执行原子动作与观察：
 
 ```bash
-python3 "$project/skills/my-scrcpy-use/scripts/run-with-env.py" \
-  --base-url "$base_url" --serial "$serial" -- \
-  python3 "$project/skills/kuaishou-short-video/scripts/main.py"
+# 1. 观察当前页面状态或获取 AI 视觉决策建议
+python3 "${COMMON_SKILL_DIR}/scripts/observe.py" --serial "${SERIAL}" --decision --goal "监测红包弹窗或定位去赚钱入口"
+
+# 2. 刷短视频并执行拟人化随机上滑
+python3 "${COMMON_SKILL_DIR}/scripts/watch_video.py" --serial "${SERIAL}" --min-stay 5 --max-stay 15 --count 5 --expected-package com.kuaishou.nebula
+
+# 3. 尝试退出弹层并对比前后页面变化
+python3 "${COMMON_SKILL_DIR}/scripts/try_return.py" --serial "${SERIAL}"
+
+# 4. 无法通过返回键退出时冷启回首页
+python3 "${COMMON_SKILL_DIR}/scripts/restart_app.py" --serial "${SERIAL}" --package com.kuaishou.nebula
 ```
 
-用户要求单独刷新视频时，可使用长时入口；时长可设为1秒至4小时，先读取“去赚钱”页金币，确认基线后进入首页，期间按15～30秒随机上滑、每60秒核验一次视频页、每分钟最多保存一张截图，结束后返回收益页复核金币；金币读数失败只记录、不中断观看计时，最终数值可另行复核。若任务要求领取观看视频奖励，须在任务中心找到与“待领取/继续看视频得金币”同卡的唯一“领金币”按钮，点击一次，并通过金币余额增加或明确的领取成功状态核验；目标卡片或唯一按钮无法确认时停止，不点击其他任务奖励。该机“任务中心”为 RN 页且弹层轮播（翻倍任务/瓜分百亿/签到/打卡/朋友推荐），返回键常被弹层吞掉，故弹层按“点文字按钮（立即打卡/立即签到/去看内容/去领取）→ 按返回键 → ADB force-stop + monkey 冷启回首页”逐级清理，不可回到首页时用冷启兜底；`去赚钱`、弹层按钮与视频页判定均按画面文字框中心点击（该机 XML bounds 与实际触摸区偏移，RN 页 XML 为下层原生树）：
+## 任务工作目录与产出
 
-```bash
-python3 "$project/skills/my-scrcpy-use/scripts/run-with-env.py" \
-  --base-url "$base_url" --serial "$serial" -- \
-  python3 "$project/skills/kuaishou-short-video/scripts/refresh_hour.py" --seconds 3600
-```
-
-领取观看视频奖励时，使用已确认的服务和设备并通过环境注册器执行：
-
-```bash
-python3 "$project/skills/my-scrcpy-use/scripts/run-with-env.py" \
-  --base-url "$base_url" --serial "$serial" -- \
-  python3 "$project/skills/kuaishou-short-video/scripts/claim_video_reward.py"
-```
-
-`project`、`base_url`、`serial` 均使用已确认值。默认执行完整任务；`--mode watch` 单独进入首页验证观看模式；`--watch-seconds` 默认120秒，范围(0,14400]（最多4小时）。运行时限和录像随时长扩展，证据截图每分钟最多保存一次；视频刷新入口每60秒核验页面，收益页判定为“任务中心 + 我的金币唯一读数”（该机每次进入任务中心会弹签到/打卡弹窗，可能遮住日常任务）；首页视频流按底部导航文字核验，必要时用 XML 复核顶部 tab。OCR默认使用真机对比验证过的macocr，可通过--ocr-engine显式选择。
-
-重生成方法：在仓库根目录执行以下命令，仅覆盖本技能生成文件：
-
-```bash
-python3 - <<'PY'
-from pathlib import Path
-import re
-root = Path('skills/kuaishou-short-video')
-for rule in sorted((root / 'rules').glob('*.md')):
-    for name, code in re.findall(r'```python path=(scripts/[^\n]+)\n(.*?)\n```', rule.read_text(), re.S):
-        target = root / name
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text('# Generated from rules/' + rule.name + '; do not edit.\n' + code + '\n')
-PY
-```
-
-真实执行只在用户授权后进行。观看满时长与平台签到完成分别报告，定位失败不得用固定坐标继续点击。
+所有任务定义、执行进度、操作记录与最终产出均保存在本地任务目录 `~/.mywebscrcppy/tasks/<task-id>/` 中。
+按 `task.json` 的产出约定声明生成 `report.md`、`logs/task.log` 及截图。

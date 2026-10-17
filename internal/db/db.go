@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -11,6 +12,10 @@ import (
 	"time"
 
 	_ "modernc.org/sqlite"
+)
+
+var (
+	ErrNotFound = errors.New("记录不存在")
 )
 
 // DeviceRecord 对应 SQLite 中的设备持久化记录
@@ -62,8 +67,8 @@ func (d *DB) Close() error {
 	return d.db.Close()
 }
 
-// SchemaVersion marks the independent external task-run schema.
-const SchemaVersion = 12500
+// SchemaVersion 标记数据库结构版本；12710 移除了旧任务上报表。
+const SchemaVersion = 12710
 
 func (d *DB) initializeSchema() error {
 	tx, err := d.db.Begin()
@@ -77,6 +82,20 @@ func (d *DB) initializeSchema() error {
 	}
 	if version == SchemaVersion {
 		return tx.Commit()
+	}
+	if version == 12500 {
+		// v1.27.1 定向升级：直接删除旧任务表与日志表，保留设备、配置与操作日志
+		if _, err := tx.Exec(`DROP TABLE IF EXISTS task_run_logs; DROP TABLE IF EXISTS task_runs;`); err != nil {
+			return fmt.Errorf("清理旧任务表失败: %w", err)
+		}
+		if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d", SchemaVersion)); err != nil {
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		log.Printf("[DB] 已将数据库从 12500 升级至 %d，定向清理旧任务表并保留其他数据", SchemaVersion)
+		return nil
 	}
 	if version != 0 {
 		return fmt.Errorf("不支持数据库结构版本 %d", version)
@@ -121,7 +140,7 @@ func (d *DB) initializeSchema() error {
  CREATE INDEX idx_devices_source ON devices(source);
  CREATE INDEX idx_devices_state ON devices(state);
  `
-	for _, schema := range []string{coreSchema, operationLogsSchema, taskRunsSchema, configsSchema} {
+	for _, schema := range []string{coreSchema, operationLogsSchema, configsSchema} {
 		if _, err := tx.Exec(schema); err != nil {
 			return err
 		}

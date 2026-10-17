@@ -186,27 +186,14 @@ func checkDirectoryOwnershipAndIntegrity(ctx context.Context, root *os.Root, tar
 		return false, "清单损坏或格式无效，已保留原文件", nil
 	}
 
-	// 5. Read expected files and manifest from package
-	expectedFiles, expectedManifest, err := getSkillFiles(skillID)
+	// 5. Read expected manifest from package
+	_, expectedManifest, err := getSkillFiles(skillID)
 	if err != nil {
 		return false, "", fmt.Errorf("获取内置技能文件失败: %w", err)
 	}
 
-	if manifest.ManagedBy != "mywebscrcpy" || manifest.SkillID != string(skillID) || manifest.Version != "1.0.0" {
-		return false, "目标目录所有者或技能版本不匹配，已保留原文件", nil
-	}
-
-	if manifest.ManagedBy != expectedManifest.ManagedBy ||
-		manifest.SkillID != expectedManifest.SkillID ||
-		manifest.Version != expectedManifest.Version ||
-		len(manifest.Files) != len(expectedManifest.Files) {
-		return false, "清单内容已被修改或与预期版本不符，已保留原文件", nil
-	}
-
-	for k, v := range expectedManifest.Files {
-		if manifest.Files[k] != v {
-			return false, fmt.Sprintf("清单中文件校验和已被修改: %s", k), nil
-		}
+	if manifest.ManagedBy != "mywebscrcpy" || manifest.SkillID != string(skillID) {
+		return false, "目标目录所有者或技能标识不匹配，已保留原文件", nil
 	}
 
 	// 6. Bounded traversal of target directory using iterative ReadDir
@@ -273,7 +260,8 @@ func checkDirectoryOwnershipAndIntegrity(ctx context.Context, root *os.Root, tar
 					}
 
 					if entry.IsDir() {
-						if cleanP != "scripts" {
+						topDir := strings.Split(cleanP, "/")[0]
+						if topDir != "scripts" && topDir != "rules" && topDir != "wiki" && topDir != "templates" {
 							return fmt.Errorf("发现非预期子目录: %s", cleanP)
 						}
 						dirsToVisit = append(dirsToVisit, cleanP)
@@ -289,14 +277,9 @@ func checkDirectoryOwnershipAndIntegrity(ctx context.Context, root *os.Root, tar
 						continue
 					}
 
-					expectedData, ok := expectedFiles[cleanP]
+					expectedHash, ok := manifest.Files[cleanP]
 					if !ok {
-						return fmt.Errorf("发现非预期文件: %s", cleanP)
-					}
-
-					// Bounded size check BEFORE reading: if size mismatches, no need to read
-					if info.Size() != int64(len(expectedData)) {
-						return fmt.Errorf("文件大小已变更: %s", cleanP)
+						return fmt.Errorf("发现非清单文件 (可能已被用户修改/添加): %s", cleanP)
 					}
 
 					actualData, err := readRegularFileBounded(targetRoot, cleanP, maxSkillFileSize)
@@ -304,8 +287,10 @@ func checkDirectoryOwnershipAndIntegrity(ctx context.Context, root *os.Root, tar
 						return fmt.Errorf("读取文件失败 %s: %w", cleanP, err)
 					}
 
-					if sha256.Sum256(actualData) != sha256.Sum256(expectedData) {
-						return fmt.Errorf("文件内容已变更: %s", cleanP)
+					hash := sha256.Sum256(actualData)
+					actualHash := fmt.Sprintf("%x", hash[:])
+					if actualHash != expectedHash {
+						return fmt.Errorf("文件内容已被用户修改: %s", cleanP)
 					}
 
 					foundFiles[cleanP] = true
@@ -322,21 +307,36 @@ func checkDirectoryOwnershipAndIntegrity(ctx context.Context, root *os.Root, tar
 			if errors.Is(readDirErr, context.Canceled) || errors.Is(readDirErr, context.DeadlineExceeded) {
 				return false, "操作已取消", readDirErr
 			}
-			return false, fmt.Sprintf("目录文件已被修改或非本应用管理: %v", readDirErr), nil
+			return false, fmt.Sprintf("目标目录已被修改，已保护用户文件: %v", readDirErr), nil
 		}
 	}
 
-	// 7. Verify all expected files are present
-	for expectedRel := range expectedFiles {
+	// 7. Verify all files declared in manifest are present
+	for expectedRel := range manifest.Files {
 		if !foundFiles[expectedRel] {
-			return false, fmt.Sprintf("缺少技能必要文件: %s", expectedRel), nil
+			return false, fmt.Sprintf("目标目录中清单文件缺失，已保护用户文件: %s", expectedRel), nil
 		}
 	}
 	if !foundFiles[".mywebscrcpy-manifest.json"] {
 		return false, "缺少清单文件: .mywebscrcpy-manifest.json", nil
 	}
 
-	return true, "", nil
+	// 8. 确认该安装完全未被用户修改。检查是否与当前最新内置版本完全一致：
+	if manifest.Version == expectedManifest.Version && len(manifest.Files) == len(expectedManifest.Files) {
+		identical := true
+		for k, v := range expectedManifest.Files {
+			if manifest.Files[k] != v {
+				identical = false
+				break
+			}
+		}
+		if identical {
+			return true, "", nil // 已安装且是最新版
+		}
+	}
+
+	// 未被用户修改但版本/内容与最新内置不同的受管技能 -> 可安全升级
+	return false, "upgradable", nil
 }
 
 // CheckSkillTargetStatus checks the installation status for a single target assistant.
@@ -392,6 +392,13 @@ func (m *Manager) CheckSkillTargetStatusContext(ctx context.Context, toolID AiTo
 			return TargetStatus{
 				Installed: false,
 				Status:    "not_installed",
+				Path:      absTargetDir,
+			}
+		}
+		if reason == "upgradable" {
+			return TargetStatus{
+				Installed: true,
+				Status:    "upgradable",
 				Path:      absTargetDir,
 			}
 		}
@@ -530,7 +537,7 @@ func (m *Manager) InstallSkill(ctx context.Context, skillID SkillID, targets []A
 
 		// Check current status
 		currentStatus := m.CheckSkillTargetStatusContext(ctx, toolID, skillID)
-		if currentStatus.Installed {
+		if currentStatus.Installed && currentStatus.Status != "upgradable" {
 			results[i] = SkillInstallTargetResult{
 				Target: toolID,
 				Status: "already_installed",
@@ -620,12 +627,23 @@ func (m *Manager) InstallSkill(ctx context.Context, skillID SkillID, targets []A
 				return err
 			}
 
-			// Ensure target does not exist before rename (prevent overwrite)
-			if fi, err := root.Lstat(targetRel); err == nil || !errors.Is(err, os.ErrNotExist) {
-				if fi != nil {
-					return fmt.Errorf("目标路径已存在，已保留原文件: %s", targetRel)
+			if currentStatus.Status == "upgradable" {
+				backupName := fmt.Sprintf(".tmp-backup-%s-%d", skillID, time.Now().UnixNano())
+				backupRel := filepath.Join(targetRelSkillsDir, backupName)
+				if err := renameInDirNoReplace(root, targetRelSkillsDir, string(skillID), backupName); err != nil {
+					return fmt.Errorf("备份旧版技能目录失败: %w", err)
 				}
-				return fmt.Errorf("目标路径状态检查失败: %w", err)
+				defer func() {
+					_ = root.RemoveAll(backupRel)
+				}()
+			} else {
+				// Ensure target does not exist before rename (prevent overwrite)
+				if fi, err := root.Lstat(targetRel); err == nil || !errors.Is(err, os.ErrNotExist) {
+					if fi != nil {
+						return fmt.Errorf("目标路径已存在，已保留原文件: %s", targetRel)
+					}
+					return fmt.Errorf("目标路径状态检查失败: %w", err)
+				}
 			}
 
 			// Re-verify parent symlinks before rename

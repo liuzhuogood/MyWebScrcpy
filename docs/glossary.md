@@ -49,7 +49,10 @@
 | 页面信息 | UI Package、uipage | 前台应用包名、Activity、焦点窗口、分辨率、DPI、旋转;接口 `/api/ui/page-info`,后端 `internal/uipage` |
 | UI XML | XML 树、UI dump | UIAutomator XML 快照;接口 `/api/ui/xml`,后端 `internal/uixml`,用于 XPath 与元素定位 |
 | OCR | 识文字、文字识别 | 接口 `POST /api/vision/ocr`;引擎优先级 Indra OCR → macOCR → PaddleOCR,自动模式仅契约错误时降级,见 `docs/system-config.md` |
-| 任务运行 | Task Runs、任务上报 | 外部自动化执行端上报生命周期、心跳、日志与 Markdown 报告,见 `docs/task-runs.md` |
+| 任务运行 | Task Runs、任务面板 | 外部自动化执行端在独立工作目录维护 `task.json`、`state.json` 与声明产出，服务提供主动扫描与产出呈现；取消旧任务上报 |
+| 设备总状态 | 总状态、设备状态 | 单轮设备状态、页面信息、截图、XML、OCR、模板匹配与关联任务；接口 `GET /api/device-state/{serial}` |
+| 总状态及决策 | AI 决策、状态决策 | 共用单轮采集并在服务端调用视觉 AI 模型进行决策建议；接口 `POST /api/device-state/{serial}/decision` |
+| 通用操作技能 | 通用技能、my-scrcpy-common | `skills/my-scrcpy-common`；共享规则、Wiki 与通用操作脚本（观察、刷视频、返回、启动/重启应用） |
 | 动作执行 | 拟人化注入、input 执行 | 两种模式:SDK 拟人化注入(贝塞尔曲线/落点微抖动)与 ADB Shell input 系统级穿透 |
 | 快手短视频技能 | 快手技能、快手极速版任务、观看视频模式 | `skills/kuaishou-short-video/SKILL.md`；红包守护、连续打卡白拿手机、连续签到的视频观看流程 |
 

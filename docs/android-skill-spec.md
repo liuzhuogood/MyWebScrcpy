@@ -9,36 +9,15 @@ skill-<任务名>/
   SKILL.md
   skill.yaml
   rules/
-    00-overview.md
-    01-preconditions.md
-    02-pages-and-locators.md
-    03-actions.md
-    04-verify-and-report.md
-  scripts/
-    main.py
-    lib/
-    requirements.txt
-  dryrun/
-    dryrun.yaml
-    cases/
-  runs/<run-id>/        # 运行时生成，gitignore
-  reports/
-    summary.md.tmpl
-  assets/
-    icon/icon-1024.png
-    icon/icon-512.png
-    icon/icon-192.png
-    screenshots/01-*.png
-    demo.mp4            # 可选
+  wiki/
+  templates/            # 按需
   display/
     manifest.yaml
     intro.md
     changelog.md
 ```
 
-约束：`rules/`为唯一手写源，编号`NN-name.md`；`scripts/`只由`rules/`生成，
-参数化`serial/base-url`；`dryrun`不通过不进真机；`runs/`存证据不提交；
-执行上报经`TaskReporter`，内容模板在`reports/`。
+约束：`rules/` 保存业务目标、页面判断、边界与成功条件；`wiki/` 保存经验证的页面知识与恢复经验；通用操作与观察脚本由 `my-scrcpy-common` 统一提供，应用技能不包含专用业务脚本与代码生成要求；任务执行与证据记录保存在本地工作目录 `~/.mywebscrcppy/tasks/<task-id>/` 中。
 
 ## 2. 说明目录与评审格式
 

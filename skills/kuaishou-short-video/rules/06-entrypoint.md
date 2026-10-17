@@ -1,81 +1,42 @@
-# 入口实现源
+# 快手任务入口与生命周期规范
 
-```python path=scripts/main.py
-import argparse
-import json
-import os
-from pathlib import Path
-import time
-import traceback
-import httpx
-from mywebscrcpy import Client, TaskReporter
-from lib.flow import Flow
-from lib.runtime import Runtime
+本文档定义快手日常任务的执行入口、工作目录约定与状态更新规则。
 
-def main():
-    parser = argparse.ArgumentParser(description="快手极速版任务与观看模式")
-    parser.add_argument("--mode", choices=("tasks", "watch"), default="tasks")
-    parser.add_argument("--watch-seconds", type=float, default=120)
-    parser.add_argument("--ocr-engine", choices=("macocr", "indraocr", "paddleocr", "auto"), default="macocr")
-    args = parser.parse_args()
-    if not 0 < args.watch_seconds <= 14400:
-        parser.error("观看时长必须在(0,14400]秒之间")
-    base, serial = os.environ["MYWEBSCRCPY_API_URL"], os.environ["MYWEBSCRCPY_SERIAL"]
-    root = Path(os.environ["MYWEBSCRCPY_RUN_DIR"]).resolve()
-    if not root.is_dir():
-        raise RuntimeError("执行目录不存在，请通过run-with-env.py运行")
-    with httpx.Client(base_url=base, timeout=10, trust_env=False) as http, Client(base) as client:
-        response = http.get("/api/openapi.json")
-        response.raise_for_status()
-        schema = response.json()
-        (root/"openapi.json").write_text(json.dumps(schema, ensure_ascii=False))
-        if not any(d.serial == serial and d.state == "device" for d in client.devices.list()):
-            raise RuntimeError("指定设备未连接")
-        with client.device(serial) as device, TaskReporter(
-                base, name="快手极速版"+("观看模式验证" if args.mode == "watch" else "短视频任务"),
-                device_serial=serial, source="codex") as report, report.capture_output():
-            runtime = Runtime(device, http, serial, root, args.ocr_engine,
-                              total_timeout=max(480, args.watch_seconds+240))
-            outcome, failure, cancelled = None, None, False
-            try:
-                recording_ms = max(600000, round((args.watch_seconds+300)*1000))
-                runtime.start_recording(recording_ms)
-                runtime.prepare(schema)
-                flow = Flow(runtime)
-                if args.mode == "watch":
-                    flow.wait(lambda v: True, 15)
-                    runtime.navigation("首页", time.monotonic()+20)
-                    outcome = flow.watch(args.watch_seconds)
-                else:
-                    outcome = flow.tasks(args.watch_seconds)
-            except BaseException as error:
-                failure, cancelled = error, isinstance(error, KeyboardInterrupt)
-                traceback.print_exc()
-                try:
-                    runtime.until = time.monotonic()+10
-                    runtime.read(runtime.until)
-                except Exception:
-                    traceback.print_exc()
-            finally:
-                try:
-                    runtime.stop_recording()
-                except Exception as error:
-                    traceback.print_exc()
-                    if failure is None:
-                        failure = error
-            status = "cancelled" if cancelled else ("failed" if failure is not None else "succeeded")
-            result = {"status": status, "outcome": outcome,
-                      "error_type": type(failure).__name__ if failure is not None else None}
-            (root/"result.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
-            print(json.dumps(result, ensure_ascii=False), flush=True)
-            summary = ("观看指定时长并返回赚钱页；平台签到状态另行核对。" if args.mode == "watch"
-                       else "任务流程完成，详见步骤结果。")
-            if failure is not None:
-                summary = "执行未完成，已保留异常与现场证据。"
-            report.finish(status, exit_code=1 if failure is not None else 0, summary=summary,
-                          report_markdown="结果："+json.dumps(result, ensure_ascii=False)[:170])
-            return 1 if failure is not None else 0
+## 1. 任务工作目录与初始化
 
-if __name__ == "__main__":
-    raise SystemExit(main())
-```
+1. **工作目录定位**：
+   - 任务在系统统一任务根目录（默认为 `~/.mywebscrcppy/tasks/<task-id>/`）下创建与执行，不使用不可发现的临时目录。
+   - 外部编排助手在启动任务前，先在任务目录下写入 `task.json` 声明任务定义与产出列表。
+
+2. **产出声明示例 (`task.json`)**：
+   ```json
+   {
+     "name": "快手极速版日常签到与视频任务",
+     "device_serial": "<SERIAL>",
+     "goal": "完成快手日常签到并浏览短视频获取奖励",
+     "success_condition": "成功完成签到且生成有效结果报告与日志",
+     "timeout_seconds": 300,
+     "source": "kuaishou-skill",
+     "outputs": [
+       {"id": "report", "category": "report", "format": "markdown", "path": "report.md", "required": true},
+       {"id": "log", "category": "log", "format": "text/utf-8", "path": "logs/task.log", "required": true},
+       {"id": "shots", "category": "screenshot", "format": "image/png", "path": "screenshots/", "required": false, "allowed_types": [".png", ".jpg"]},
+       {"id": "video", "category": "video", "format": "video/mp4", "path": "videos/recording.mp4", "required": false}
+     ]
+   }
+   ```
+
+## 2. 状态原子更新与操作流水
+
+1. **最新状态 (`state.json`)**：
+   - 阶段（stage）与进度（progress）变化时，写入临时文件并原子替换至 `state.json`。
+   - 状态包括：`pending`（待执行）、`running`（运行中）、`paused`（暂停）、`completed`（完成）、`failed`（失败）、`cancelled`（取消）。
+   - 结束时注明 `ended_reason`（如 `completed`、`timeout`、`device_offline` 等）。
+
+2. **操作流水 (`actions.jsonl`)**：
+   - 每一个动作（如点击、滑动、按键）执行后，向 `actions.jsonl` 追加一行 JSON 记录：
+     `{"timestamp": 1792226733000, "action": "click_sign_in", "result": "success"}`
+
+3. **结果报告 (`report.md`)**：
+   - 任务结束时生成完整的 Markdown 执行报告，记录签到结果、视频浏览统计、耗时及产出文件链接。
+   - 任务中心通过用户主动“扫描刷新”发现并展示该任务及其产出。不强制要求生成独立可执行 Python 块或上报旧接口。
