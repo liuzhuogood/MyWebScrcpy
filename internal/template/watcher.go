@@ -68,9 +68,11 @@ func (w *DirWatcher) Start() error {
 func (w *DirWatcher) Close() error {
 	var err error
 	w.closeOnce.Do(func() {
+		// 顺序不能颠倒：先让事件循环退出，再关闭 fsnotify。Windows 后端关闭后，
+		// 仍在进行的 Add/Remove 会一直等不到内部读取协程的应答，Close 将永久阻塞。
 		close(w.done)
-		err = w.watcher.Close()
 		w.wg.Wait()
+		err = w.watcher.Close()
 	})
 	return err
 }
@@ -100,6 +102,9 @@ func (w *DirWatcher) addWatch(dir string) {
 func (w *DirWatcher) removeWatch(dir string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if _, watched := w.watched[dir]; !watched {
+		return
+	}
 	delete(w.watched, dir)
 	_ = w.watcher.Remove(dir)
 }
