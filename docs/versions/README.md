@@ -10,7 +10,7 @@
 - **已被后续版本替代**：历史功能、入口或决定已由后续版本修正或移除，原勾选只表示当时实施。
 - **待实施**：仅有方案或文档，当前未完成代码实现。
 
-版本目录名、提交标题、正式 `VERSION` 和部署状态分别核对。当前正式 `VERSION` 为 `v1.27.0`；`v1.26.1` 为修复标签，与 `v1.27.0` 同次推送发布。v1.12 于 2026-10-09 调整为 Web 端重构；旧 `v1.12` 提交只有原方案文档；本次重构发布使用 `v1.12.0` 标签，提交和远端指向以 Git 记录为准。
+版本目录名、提交标题、正式 `VERSION` 和部署状态分别核对。当前正式 `VERSION` 为 `v1.27.1`；`v1.26.1` 已发布，`v1.27.0` 标签保留但发布被 Windows 回归测试拦截。v1.12 于 2026-10-09 调整为 Web 端重构；旧 `v1.12` 提交只有原方案文档；本次重构发布使用 `v1.12.0` 标签，提交和远端指向以 Git 记录为准。
 
 ## 主项目
 
@@ -58,8 +58,9 @@
 | [v1.25.1-fix](v1.25.1-fix/version.md) | 已发布 v1.25.1 | 修复 Windows CI 下 OCR 测试夹具，全平台回归测试、Release 资产、Docker 镜像与 SDK 均成功发布。 |
 | [v1.25.2-fix](v1.25.2-fix/version.md) | 已发布 v1.25.2 | 原生投屏小窗无边框与顶栏恢复、Indra OCR 接入及运行环境统一管理。 |
 | [v1.26.0-feature](v1.26.0-feature/version.md) | 已发布 v1.26.0 | HID 硬件模拟通道、点击注入模式、Python 环境平滑切换与并发保护、AI 集成与自动化技能市场规划原型。 |
-| [v1.26.1-fix](v1.26.1-fix/version.md) | 已打标签 v1.26.1，与 v1.27.0 同次推送 | 修复首页添加网络设备的反馈与即时呈现；同版包含 OCR 文字排版接口与快手极速版短视频任务技能。 |
-| [v1.27.0-feature](v1.27.0-feature/version.md) | 已打标签 v1.27.0；发布由 Actions 构建 | AI 集成接入指引与技能市场正式实现（后端 `skillsmarket`、前端页面与路由、技能包 ZIP 下载与多助手原子安装）；助手客户端加载、真机业务与 Windows/Linux 原生运行未验收。 |
+| [v1.26.1-fix](v1.26.1-fix/version.md) | 已发布 v1.26.1 | 修复首页添加网络设备的反馈与即时呈现；同版包含 OCR 文字排版接口与快手极速版短视频任务技能。2026-10-17 [GitHub Actions](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/39015414870) 的五个平台构建、Windows 桌面任务、Release 与 Docker 全部成功；[Release](https://github.com/liuzhuogood/MyWebScrcpy/releases/tag/v1.26.1) 已发布 10 个资产。 |
+| [v1.27.0-feature](v1.27.0-feature/version.md) | 已打标签；发布被 Windows 回归测试拦截，转 v1.27.1 | AI 集成接入指引与技能市场正式实现（后端 `skillsmarket`、前端页面与路由、技能包 ZIP 下载与多助手原子安装）。标签已推送但 `desktop (windows-latest)` 的 Go 回归失败，未生成 Release；助手客户端加载、真机业务与 Windows/Linux 原生运行未验收。 |
+| [v1.27.1-fix](v1.27.1-fix/version.md) | 已打标签 v1.27.1；发布由 Actions 构建 | 修复技能包 `request_client.py` 在 Windows 默认代码页（cp1252）下打印中文帮助抛 `UnicodeEncodeError` 的问题，并把该编码固定进回归测试；其余内容与 v1.27.0 相同。 |
 
 ## Vue 前端迁移版本
 

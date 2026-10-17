@@ -50,5 +50,5 @@
 ## 发布状态
 
 - `VERSION` 已同步为 `v1.27.0`（`node scripts/sync-version.mjs --check` 通过），前端、桌面与 Python SDK 的版本号同步一致；`web/openapi.json` 中健康检查与自动更新接口的版本示例一并更新为 `1.27.0`。
-- 标签 `v1.27.0` 指向本次发布提交；本次推送同时包含此前已打标签的 `v1.26.1`，两个标签各自取本目录下同名 `version.md` 作为 Release notes。
-- 推送 `v*` 标签后由 GitHub Actions 触发多平台 CLI、Windows GUI、macOS DMG 与 Docker 镜像的构建与发布。
+- 标签 `v1.27.0` 已推送，同次推送的 `v1.26.1` 构建与 Release 成功。
+- `v1.27.0` 的构建在 `desktop (windows-latest)` 的 Go 回归测试失败（`internal/skillsmarket.TestExtractedZipPythonClientExecutable` 在 cp1252 代码页下抛 `UnicodeEncodeError`），`release` 与 `docker` 任务被跳过，**未生成 Release**；标签保留，修复与重新发布见 [v1.27.1-fix](../v1.27.1-fix/version.md)。
