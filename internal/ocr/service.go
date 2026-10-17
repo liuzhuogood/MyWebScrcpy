@@ -69,6 +69,17 @@ type DetectResponse struct {
 	FallbackReason []string `json:"fallback_reason,omitempty"`
 }
 
+type TextArtResponse struct {
+	Status         string   `json:"status"` // matched | not_found
+	Matched        bool     `json:"matched"`
+	TextArt        string   `json:"text_art"`
+	Text           string   `json:"text"`
+	Boxes          []Box    `json:"boxes"`
+	Engine         string   `json:"engine"`
+	ElapsedMS      int64    `json:"elapsed_ms"`
+	FallbackReason []string `json:"fallback_reason,omitempty"`
+}
+
 type StatusResponse struct {
 	IndraInstalled  bool   `json:"indra_installed"`
 	IndraRunning    bool   `json:"indra_running"`

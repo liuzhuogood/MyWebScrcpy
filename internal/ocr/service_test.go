@@ -251,6 +251,53 @@ func TestOCRDetectAndRoutes(t *testing.T) {
 	if detResp.Boxes[0].Text != "开始游戏" {
 		t.Errorf("首个文字框错误: %s", detResp.Boxes[0].Text)
 	}
+
+	// 测试 /api/vision/ocr-text-art
+	var artBody bytes.Buffer
+	artWriter := multipart.NewWriter(&artBody)
+	artPart, _ := artWriter.CreateFormFile("file", "test.png")
+	_, _ = artPart.Write(pngBytes)
+	_ = artWriter.WriteField("serial", "test-device")
+	_ = artWriter.WriteField("engine", "paddleocr")
+	_ = artWriter.Close()
+
+	artReq := httptest.NewRequest(http.MethodPost, "/api/vision/ocr-text-art", &artBody)
+	artReq.Header.Set("Content-Type", artWriter.FormDataContentType())
+	artRec := httptest.NewRecorder()
+
+	mux.ServeHTTP(artRec, artReq)
+	if artRec.Code != http.StatusOK {
+		t.Fatalf("ocr-text-art 接口返回错误: %d, body: %s", artRec.Code, artRec.Body.String())
+	}
+
+	var artResp TextArtResponse
+	if err := json.NewDecoder(artRec.Body).Decode(&artResp); err != nil {
+		t.Fatalf("解析 TextArtResponse 失败: %v", err)
+	}
+	if !strings.Contains(artResp.TextArt, "开始游戏") {
+		t.Errorf("ocr-text-art 未包含预期的文字排版画: %q", artResp.TextArt)
+	}
+
+	// 测试 Accept: text/plain
+	var plainBody bytes.Buffer
+	plainWriter := multipart.NewWriter(&plainBody)
+	plainPart, _ := plainWriter.CreateFormFile("file", "test.png")
+	_, _ = plainPart.Write(pngBytes)
+	_ = plainWriter.WriteField("engine", "paddleocr")
+	_ = plainWriter.Close()
+
+	plainReq := httptest.NewRequest(http.MethodPost, "/api/vision/ocr-text-art", &plainBody)
+	plainReq.Header.Set("Content-Type", plainWriter.FormDataContentType())
+	plainReq.Header.Set("Accept", "text/plain")
+	plainRec := httptest.NewRecorder()
+
+	mux.ServeHTTP(plainRec, plainReq)
+	if plainRec.Code != http.StatusOK {
+		t.Fatalf("plain 模式返回错误: %d", plainRec.Code)
+	}
+	if !strings.Contains(plainRec.Body.String(), "开始游戏") {
+		t.Errorf("plain 模式未包含预期内容: %q", plainRec.Body.String())
+	}
 }
 
 func TestProcessLifetime_StartSurvivesHTTPAndStopWaitsExit(t *testing.T) {

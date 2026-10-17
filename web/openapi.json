@@ -1989,6 +1989,82 @@
         }
       }
     },
+    "/api/vision/ocr-text-art": {
+      "post": {
+        "tags": [
+          "OCR"
+        ],
+        "summary": "识别文字并渲染为纯文本布局画（文字图片）",
+        "description": "将图片或设备当前屏幕中的文字进行 OCR 识别，并根据文字框的位置坐标排版渲染成可直接复制、阅读的纯文本画。支持上传文件，或指定 serial 由后端自动截图。",
+        "requestBody": {
+          "description": "支持 multipart/form-data 或 application/json",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/OCRDetectUpload"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "serial": { "type": "string" },
+                  "engine": { "type": "string" },
+                  "columns": { "type": "integer" },
+                  "rows": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "渲染成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "matched": { "type": "boolean" },
+                    "text_art": { "type": "string" },
+                    "text": { "type": "string" },
+                    "boxes": { "type": "array", "items": { "$ref": "#/components/schemas/OCRBox" } },
+                    "engine": { "type": "string" },
+                    "elapsed_ms": { "type": "integer" }
+                  }
+                }
+              },
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OCRError"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "OCR 或截图失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OCRError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ocr/status": {
       "get": {
         "tags": [
