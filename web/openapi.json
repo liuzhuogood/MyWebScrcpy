@@ -1943,14 +1943,19 @@
           "OCR"
         ],
         "summary": "检测图片中的文字",
-        "description": "上传已截取的图片进行 OCR，返回文字、文字框及实际使用的引擎。auto 按 Indra OCR、macOCR、PaddleOCR 顺序尝试；本接口不会自动截取设备画面。bbox 仅将上传图片中的文字框映射回完整画面坐标，不裁剪图片。keywords 过滤文字框，text 仍为完整识别文本。mark=true 且 serial 有值时，可将匹配框发布到对应投屏。",
+        "description": "上传图片或提供 serial 由服务端截图，返回文字、文字框和采样信息。省略 stabilization_ms 或设为 0 保持单次识别；正数必须有非空 serial 且禁止上传 file。服务端在采样窗口内串行获取新截图，轮次启动间隔至少 50 ms、最多 101 轮，窗口结束不启动新轮；已启动轮与全部采样共用整个请求的 30 秒总预算（从设备请求或上传 parallel 请求开始计算，不是每轮重置）。auto 仍按 Indra OCR → macOCR → PaddleOCR 串行降级，成功空结果不降级；parallel 每轮并发调用 3 个引擎，融合成功结果，engine=parallel，成功引擎列于 engines_used。每个并行引擎单独使用 5 秒 deadline，受整个请求剩余预算约束；慢引擎超时记入 fallback_reason，其他引擎成功仍正常返回，不等待耗尽整体预算。部分引擎失败通过 fallback_reason 返回，全部失败（包括全部单引擎超时）返回 502；只有整体预算或请求上下文超时返回 504。设备截图请求（含单次）与上传图片的 parallel 请求共用最多 2 个高开销识别请求名额；超载 429、总预算超时 504、取消 408。上传文件仅识别一次（samples=1），不进行连续截图。 bbox 在设备模式裁剪截图，在上传模式仅将文字框映射回完整画面。keywords 过滤文字框，text 保留完整识别文本；mark=true 时发布最终识别框到指定投屏。",
         "requestBody": {
           "required": true,
-          "description": "使用 multipart/form-data；file 为图片文件，其他字段均为表单文本。",
+          "description": "支持 application/json 设备模式（serial 必填），或 multipart/form-data 上传 file / 提供 serial；无 file 的 multipart 也支持设备模式。",
           "content": {
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/OCRDetectUpload"
+              }
+            },
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OCRDetectRequest"
               }
             }
           }
@@ -1967,7 +1972,7 @@
             }
           },
           "400": {
-            "description": "不是 multipart/form-data、表单损坏、缺少 file 或图片内容为空",
+            "description": "请求格式错误，缺少 file 和有效 serial，图片为空，bbox 无效，或 stabilization_ms 非整数、为 null、超出 0..5000、与 file 同时使用正数。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1977,7 +1982,37 @@
             }
           },
           "502": {
-            "description": "OCR 上游请求或识别失败",
+            "description": "OCR 或设备截图失败；parallel 全部引擎失败（包括全部引擎各自 5 秒 deadline 耗尽）也返回 502，整体请求超时则返回 504。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OCRError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "请求已取消。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OCRError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "高开销识别请求已达 2 个上限，请稍后重试。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OCRError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "整个请求的 30 秒总预算耗尽或请求上下文超时。",
             "content": {
               "application/json": {
                 "schema": {
@@ -1995,9 +2030,9 @@
           "OCR"
         ],
         "summary": "识别文字并渲染为纯文本布局画（文字图片）",
-        "description": "将图片或设备当前屏幕中的文字进行 OCR 识别，并根据文字框的位置坐标排版渲染成可直接复制、阅读的纯文本画。支持上传文件，或指定 serial 由后端自动截图。",
+        "description": "将图片或设备截图识别为文字，并按文字框空间位置渲染文本画。省略 stabilization_ms 或设为 0 保持单次识别；正数必须有非空 serial 且禁止上传 file。服务端在采样窗口内串行获取新截图，轮次启动间隔至少 50 ms、最多 101 轮，窗口结束不启动新轮；已启动轮与全部采样共用整个请求的 30 秒总预算（从设备请求或上传 parallel 请求开始计算，不是每轮重置）。auto 仍按 Indra OCR → macOCR → PaddleOCR 串行降级，成功空结果不降级；parallel 每轮并发调用 3 个引擎，融合成功结果，engine=parallel，成功引擎列于 engines_used。每个并行引擎单独使用 5 秒 deadline，受整个请求剩余预算约束；慢引擎超时记入 fallback_reason，其他引擎成功仍正常返回，不等待耗尽整体预算。部分引擎失败通过 fallback_reason 返回，全部失败（包括全部单引擎超时）返回 502；只有整体预算或请求上下文超时返回 504。设备截图请求（含单次）与上传图片的 parallel 请求共用最多 2 个高开销识别请求名额；超载 429、总预算超时 504、取消 408。上传文件仅识别一次（samples=1），不进行连续截图。 支持 JSON、multipart 和无请求体的 query 调用；仅在不使用 JSON/multipart 请求体时读取 query，query 设备模式必须提供 serial。Accept 包含 text/plain 时返回纯文本，否则返回含 samples、engines_used 的 JSON。",
         "requestBody": {
-          "description": "支持 multipart/form-data 或 application/json",
+          "description": "可使用 multipart/form-data 或 application/json；也可省略请求体，通过 query 提供 serial、engine、stabilization_ms、columns、rows。",
           "content": {
             "multipart/form-data": {
               "schema": {
@@ -2006,24 +2041,11 @@
             },
             "application/json": {
               "schema": {
-                "type": "object",
-                "properties": {
-                  "serial": {
-                    "type": "string"
-                  },
-                  "engine": {
-                    "type": "string"
-                  },
-                  "columns": {
-                    "type": "integer"
-                  },
-                  "rows": {
-                    "type": "integer"
-                  }
-                }
+                "$ref": "#/components/schemas/OCRTextArtRequest"
               }
             }
-          }
+          },
+          "required": false
         },
         "responses": {
           "200": {
@@ -2031,33 +2053,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "status": {
-                      "type": "string"
-                    },
-                    "matched": {
-                      "type": "boolean"
-                    },
-                    "text_art": {
-                      "type": "string"
-                    },
-                    "text": {
-                      "type": "string"
-                    },
-                    "boxes": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/OCRBox"
-                      }
-                    },
-                    "engine": {
-                      "type": "string"
-                    },
-                    "elapsed_ms": {
-                      "type": "integer"
-                    }
-                  }
+                  "$ref": "#/components/schemas/OCRTextArtResponse"
                 }
               },
               "text/plain": {
@@ -2068,7 +2064,7 @@
             }
           },
           "400": {
-            "description": "请求参数错误",
+            "description": "请求格式错误，缺少 file 和有效 serial，图片为空，bbox 无效，或 stabilization_ms 非整数、为 null、超出 0..5000、与 file 同时使用正数。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2078,7 +2074,37 @@
             }
           },
           "502": {
-            "description": "OCR 或截图失败",
+            "description": "OCR 或设备截图失败；parallel 全部引擎失败（包括全部引擎各自 5 秒 deadline 耗尽）也返回 502，整体请求超时则返回 504。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OCRError"
+                }
+              }
+            }
+          },
+          "408": {
+            "description": "请求已取消。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OCRError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "高开销识别请求已达 2 个上限，请稍后重试。",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OCRError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "整个请求的 30 秒总预算耗尽或请求上下文超时。",
             "content": {
               "application/json": {
                 "schema": {
@@ -2087,7 +2113,73 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "query",
+            "required": false,
+            "description": "query 模式必填；JSON/multipart 模式通过请求体提供。",
+            "schema": {
+              "type": "string",
+              "pattern": "\\S",
+              "description": "ADB 设备序列号，必须含非空白字符；由服务端获取新截图。"
+            }
+          },
+          {
+            "name": "engine",
+            "in": "query",
+            "required": false,
+            "description": "仅用于无 JSON/multipart 请求体的 query 模式。",
+            "schema": {
+              "type": "string",
+              "description": "省略时使用服务配置。auto 按 Indra OCR → macOCR → PaddleOCR 串行降级，成功空结果不降级；parallel 同时调用三引擎并融合成功结果。 parallel 每个引擎单独使用 5 秒 deadline，慢引擎超时写入 fallback_reason，保留其他成功结果；整个请求的 30 秒总预算不变。",
+              "enum": [
+                "auto",
+                "parallel",
+                "indraocr",
+                "macocr",
+                "paddleocr"
+              ],
+              "example": "auto"
+            }
+          },
+          {
+            "name": "stabilization_ms",
+            "in": "query",
+            "required": false,
+            "description": "仅用于无 JSON/multipart 请求体的 query 模式。",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5000,
+              "default": 0,
+              "description": "设备连续采样窗口，单位毫秒。省略或 0 只识别一次；正数必须提供非空 serial 且禁止 file。窗口内由服务端串行截图采样，轮次启动间隔至少 50 ms，最多 101 轮；窗口结束不启动新轮，已启动轮仍计入整个请求的 30 秒总预算。"
+            }
+          },
+          {
+            "name": "columns",
+            "in": "query",
+            "required": false,
+            "description": "仅用于无 JSON/multipart 请求体的 query 模式。",
+            "schema": {
+              "type": "integer",
+              "default": 90,
+              "description": "文本画目标列数；省略或不大于 0 时为 90。"
+            }
+          },
+          {
+            "name": "rows",
+            "in": "query",
+            "required": false,
+            "description": "仅用于无 JSON/multipart 请求体的 query 模式。",
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "description": "文本画目标行数；省略或不大于 0 时由渲染器选择，当前为 90。"
+            }
+          }
+        ]
       }
     },
     "/api/ocr/status": {
@@ -6985,16 +7077,17 @@
         "properties": {
           "file": {
             "type": "string",
-            "description": "待识别的图片文件；需要先由调用方截图或裁剪。",
-            "format": "binary"
+            "description": "待识别的非空图片文件；与正数 stabilization_ms 互斥。上传时即使有 serial 也不获取设备截图；serial 可用于发布识别框。",
+            "format": "binary",
+            "minLength": 1
           },
           "serial": {
             "type": "string",
-            "description": "可选设备序列号，用于 mark=true 时将识别框发布到投屏。"
+            "description": "不上传 file 时必须提供含非空白字符的 serial，由服务端截图；上传 file 时可用于 mark=true 发布识别框。"
           },
           "bbox": {
             "type": "string",
-            "description": "上传图片在完整画面中的归一化区域 [x,y,w,h]，以 JSON 数组文本提交；仅用于结果坐标映射。省略时使用 [0,0,1,1]。",
+            "description": "归一化区域 [x,y,w,h]，以 JSON 数组文本提交；省略或空数组为全屏。设备模式先裁剪截图；上传模式仅将已有图片中的文字框映射回完整画面，不裁剪上传文件。",
             "example": "[0,0,1,1]"
           },
           "keywords": {
@@ -7004,9 +7097,10 @@
           },
           "engine": {
             "type": "string",
-            "description": "识别引擎；省略时使用服务配置。auto 按 Indra OCR、macOCR、PaddleOCR 顺序尝试。",
+            "description": "省略时使用服务配置。auto 按 Indra OCR → macOCR → PaddleOCR 串行降级，成功空结果不降级；parallel 同时调用三引擎并融合成功结果。 parallel 每个引擎单独使用 5 秒 deadline，慢引擎超时写入 fallback_reason，保留其他成功结果；整个请求的 30 秒总预算不变。",
             "enum": [
               "auto",
+              "parallel",
               "indraocr",
               "macocr",
               "paddleocr"
@@ -7022,11 +7116,70 @@
             "type": "integer",
             "description": "识别框显示毫秒数；省略或不大于 0 时为 3000。",
             "default": 3000
+          },
+          "stabilization_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5000,
+            "default": 0,
+            "description": "设备连续采样窗口，单位毫秒。省略或 0 只识别一次；正数必须提供非空 serial 且禁止 file。窗口内由服务端串行截图采样，轮次启动间隔至少 50 ms，最多 101 轮；窗口结束不启动新轮，已启动轮仍计入整个请求的 30 秒总预算。"
+          },
+          "columns": {
+            "type": "integer",
+            "default": 90,
+            "description": "文本画目标列数；省略或不大于 0 时为 90。"
+          },
+          "rows": {
+            "type": "integer",
+            "default": 0,
+            "description": "文本画目标行数；省略或不大于 0 时由渲染器选择，当前为 90。"
           }
         },
-        "required": [
-          "file"
-        ]
+        "description": "上传图片或指定 serial 由服务端截图；文件保持单次识别，可选择 parallel 引擎。除 file 外字段以表单文本传递，stabilization_ms 使用整数字面量。",
+        "anyOf": [
+          {
+            "required": [
+              "file"
+            ]
+          },
+          {
+            "required": [
+              "serial"
+            ],
+            "properties": {
+              "serial": {
+                "type": "string",
+                "pattern": "\\S"
+              }
+            }
+          }
+        ],
+        "if": {
+          "required": [
+            "stabilization_ms"
+          ],
+          "properties": {
+            "stabilization_ms": {
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "serial"
+          ],
+          "properties": {
+            "serial": {
+              "type": "string",
+              "pattern": "\\S"
+            }
+          },
+          "not": {
+            "required": [
+              "file"
+            ]
+          }
+        }
       },
       "OCRBox": {
         "type": "object",
@@ -7118,8 +7271,9 @@
           },
           "engine": {
             "type": "string",
-            "description": "实际使用的识别引擎",
+            "description": "parallel 模式固定为 parallel；其他模式为实际成功的引擎，多轮采样时为最后一轮的引擎，完整成功引擎列表见 engines_used。",
             "enum": [
+              "parallel",
               "indraocr",
               "macocr",
               "paddleocr"
@@ -7133,10 +7287,31 @@
           },
           "fallback_reason": {
             "type": "array",
-            "description": "尝试前一个 OCR 引擎失败的原因；没有失败时省略。",
+            "description": "auto 串行降级或 parallel 部分引擎失败的原因，包含并行单引擎 5 秒 deadline 超时；其他引擎成功结果仍可正常返回。多轮采样汇总并去重，没有失败时省略。",
             "items": {
               "type": "string"
             }
+          },
+          "samples": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 101,
+            "description": "实际完成的截图采样轮数；单次设备截图或上传文件为 1，parallel 的三引擎调用仍计为一轮。"
+          },
+          "engines_used": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "indraocr",
+                "macocr",
+                "paddleocr"
+              ]
+            },
+            "description": "实际识别成功的引擎，跨采样轮去重；不包含失败引擎或 parallel 模式名。"
           }
         },
         "required": [
@@ -7145,7 +7320,9 @@
           "text",
           "boxes",
           "engine",
-          "elapsed_ms"
+          "elapsed_ms",
+          "samples",
+          "engines_used"
         ]
       },
       "OCRStatusResponse": {
@@ -7285,7 +7462,7 @@
           },
           "engine": {
             "type": "string",
-            "description": "默认识别引擎，支持 auto、indraocr、macocr、paddleocr。",
+            "description": "默认识别引擎，支持 auto、parallel、indraocr、macocr、paddleocr。auto 为优先级串行降级，parallel 为三引擎并发融合。",
             "example": "auto"
           },
           "indraocr_url": {
@@ -9023,6 +9200,242 @@
             "type": "integer"
           }
         }
+      },
+      "OCRDetectRequest": {
+        "type": "object",
+        "description": "设备截图识别请求；JSON 不传 file。",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "ADB 设备序列号，必须含非空白字符；由服务端获取新截图。"
+          },
+          "bbox": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "归一化裁剪区域 [x,y,w,h]；省略或空数组为全屏。设备模式先裁剪截图，再将文字框映射回完整画面。",
+            "example": [
+              0,
+              0,
+              1,
+              1
+            ]
+          },
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "按不区分大小写的子串过滤文字框；命中任意一个即保留，text 保留完整识别文本。"
+          },
+          "engine": {
+            "type": "string",
+            "description": "省略时使用服务配置。auto 按 Indra OCR → macOCR → PaddleOCR 串行降级，成功空结果不降级；parallel 同时调用三引擎并融合成功结果。 parallel 每个引擎单独使用 5 秒 deadline，慢引擎超时写入 fallback_reason，保留其他成功结果；整个请求的 30 秒总预算不变。",
+            "enum": [
+              "auto",
+              "parallel",
+              "indraocr",
+              "macocr",
+              "paddleocr"
+            ],
+            "example": "auto"
+          },
+          "stabilization_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5000,
+            "default": 0,
+            "description": "设备连续采样窗口，单位毫秒。省略或 0 只识别一次；正数必须提供非空 serial 且禁止 file。窗口内由服务端串行截图采样，轮次启动间隔至少 50 ms，最多 101 轮；窗口结束不启动新轮，已启动轮仍计入整个请求的 30 秒总预算。"
+          },
+          "mark": {
+            "type": "boolean",
+            "description": "是否将识别框发布到指定设备投屏。",
+            "default": false
+          },
+          "mark_duration_ms": {
+            "type": "integer",
+            "description": "识别框显示毫秒数；省略或不大于 0 时为 3000。",
+            "default": 3000
+          }
+        },
+        "required": [
+          "serial"
+        ],
+        "not": {
+          "required": [
+            "file"
+          ]
+        }
+      },
+      "OCRTextArtRequest": {
+        "type": "object",
+        "description": "设备截图识别并渲染文本画；采样与引擎规则同 OCRDetectRequest。",
+        "properties": {
+          "serial": {
+            "type": "string",
+            "pattern": "\\S",
+            "description": "ADB 设备序列号，必须含非空白字符；由服务端获取新截图。"
+          },
+          "bbox": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "归一化裁剪区域 [x,y,w,h]；省略或空数组为全屏。设备模式先裁剪截图，再将文字框映射回完整画面。",
+            "example": [
+              0,
+              0,
+              1,
+              1
+            ]
+          },
+          "keywords": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "按不区分大小写的子串过滤文字框；命中任意一个即保留，text 保留完整识别文本。"
+          },
+          "engine": {
+            "type": "string",
+            "description": "省略时使用服务配置。auto 按 Indra OCR → macOCR → PaddleOCR 串行降级，成功空结果不降级；parallel 同时调用三引擎并融合成功结果。 parallel 每个引擎单独使用 5 秒 deadline，慢引擎超时写入 fallback_reason，保留其他成功结果；整个请求的 30 秒总预算不变。",
+            "enum": [
+              "auto",
+              "parallel",
+              "indraocr",
+              "macocr",
+              "paddleocr"
+            ],
+            "example": "auto"
+          },
+          "stabilization_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 5000,
+            "default": 0,
+            "description": "设备连续采样窗口，单位毫秒。省略或 0 只识别一次；正数必须提供非空 serial 且禁止 file。窗口内由服务端串行截图采样，轮次启动间隔至少 50 ms，最多 101 轮；窗口结束不启动新轮，已启动轮仍计入整个请求的 30 秒总预算。"
+          },
+          "mark": {
+            "type": "boolean",
+            "description": "是否将识别框发布到指定设备投屏。",
+            "default": false
+          },
+          "mark_duration_ms": {
+            "type": "integer",
+            "description": "识别框显示毫秒数；省略或不大于 0 时为 3000。",
+            "default": 3000
+          },
+          "columns": {
+            "type": "integer",
+            "default": 90,
+            "description": "文本画目标列数；省略或不大于 0 时为 90。"
+          },
+          "rows": {
+            "type": "integer",
+            "default": 0,
+            "description": "文本画目标行数；省略或不大于 0 时由渲染器选择，当前为 90。"
+          }
+        },
+        "required": [
+          "serial"
+        ],
+        "not": {
+          "required": [
+            "file"
+          ]
+        }
+      },
+      "OCRTextArtResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "是否有匹配文字框",
+            "enum": [
+              "matched",
+              "not_found"
+            ],
+            "example": "matched"
+          },
+          "matched": {
+            "type": "boolean",
+            "description": "是否至少有一个经过关键词筛选的文字框",
+            "example": true
+          },
+          "text": {
+            "type": "string",
+            "description": "完整识别文本，不受关键词过滤影响",
+            "example": "开始游戏\n设置"
+          },
+          "boxes": {
+            "type": "array",
+            "description": "经过关键词筛选的文字框；无匹配时为空数组。",
+            "items": {
+              "$ref": "#/components/schemas/OCRBox"
+            }
+          },
+          "engine": {
+            "type": "string",
+            "description": "parallel 模式固定为 parallel；其他模式为实际成功的引擎，多轮采样时为最后一轮的引擎，完整成功引擎列表见 engines_used。",
+            "enum": [
+              "parallel",
+              "indraocr",
+              "macocr",
+              "paddleocr"
+            ],
+            "example": "macocr"
+          },
+          "elapsed_ms": {
+            "type": "integer",
+            "description": "识别总耗时，毫秒",
+            "example": 120
+          },
+          "fallback_reason": {
+            "type": "array",
+            "description": "auto 串行降级或 parallel 部分引擎失败的原因，包含并行单引擎 5 秒 deadline 超时；其他引擎成功结果仍可正常返回。多轮采样汇总并去重，没有失败时省略。",
+            "items": {
+              "type": "string"
+            }
+          },
+          "samples": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 101,
+            "description": "实际完成的截图采样轮数；单次设备截图或上传文件为 1，parallel 的三引擎调用仍计为一轮。"
+          },
+          "engines_used": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "indraocr",
+                "macocr",
+                "paddleocr"
+              ]
+            },
+            "description": "实际识别成功的引擎，跨采样轮去重；不包含失败引擎或 parallel 模式名。"
+          },
+          "text_art": {
+            "type": "string",
+            "description": "按文字框空间位置渲染的文本画。"
+          }
+        },
+        "required": [
+          "status",
+          "matched",
+          "text",
+          "boxes",
+          "engine",
+          "elapsed_ms",
+          "samples",
+          "engines_used",
+          "text_art"
+        ]
       }
     },
     "securitySchemes": {

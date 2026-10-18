@@ -117,3 +117,21 @@ result = device.ocr(indraocr_url="http://your-host:8032/upload")
 ```
 
 `INDRAOCR_URL` 环境变量也可设置 Indra 地址，默认 `http://127.0.0.1:8032/upload`。已有 `MACOCR_URL`、`MACOCR_AUTH`、`PADDLEOCR_URL` 及其关键字参数继续有效。
+
+`engine="parallel"` 同轮并行调用上述三个配置引擎，最多三个在途请求；每个引擎单独最多等待 5 秒，并受调用剩余 `timeout` 预算限制。部分引擎失败、忙或超时时，返回可用引擎的融合结果，并在 `fallback_reason` 中列出原因；全部失败时抛出 `RuntimeError`。成功识别为空仍属于有效结果。`auto` 保持原有串行优先级，显式引擎只调用指定服务。
+
+```python
+# 单帧、多引擎投票
+result = device.ocr(engine="parallel", timeout=10)
+# 500ms 内连续获取 Vision 新帧，再综合各轮结果
+result = device.ocr(engine="parallel", stabilization_ms=500, timeout=10)
+print(result.text, result.fallback_reason)
+```
+
+`stabilization_ms` 必须是 `0..5000` 的整数（不接受布尔值或小数），默认 `0` 保持原有单帧行为；正值适用于所有引擎模式，要求 Vision 有持续的新帧，不复用回放或旧帧。采样逐轮串行，轮次启动间隔至少 50ms，最多 101 轮。窗口结束后不再启动识别，已经启动的一轮可在 `timeout` 总预算内完成；取帧、各轮及 auto 降级共享剩余预算。窗口内没有有效样本或识别超时会抛错，不足多轮时可以返回单轮有效结果。
+
+融合按位置 IoU ≥ 0.3 分组去重，每轮每引擎最多一票，跨轮每轮最多一票；文字按票数决定，同票采用更新观察，坐标仅取获胜文字框的中位数，不跨引擎比较置信度。时序结果的位置必须出现在最新轮并至少覆盖半数轮，输出文字也必须在最新轮出现，避免旧页面文字残留。关键词筛选在时序融合之后执行。新采样路径按实际像素裁剪区域映射回原图，小数 ROI 的取整和边缘裁剪不会沿用原始 bbox 造成偏差。
+
+并行 OCR 与新采样路径共用进程内的 6 worker 执行池，最多接收 6 个未完成任务，满载立即报 `OCR workers busy`，不会无界排队。SDK 使用同步 HTTP 上传；等待预算到期后立即返回或抛错，丢弃迟到结果。已进入底层 HTTP 的请求无法强制中断，会由其 socket 超时结束；这些残留任务仍持有容量，直到实际结束才释放，也不会追加采样或发布标记。未开始的任务执行前会检查期限，过期不会发起上传。
+
+`OCRResult.samples` 是有效采样轮数，`engines_used` 列出成功返回结果的引擎（空识别也计入，失败引擎不计入）。新增字段位于构造参数末尾，默认分别为 `1`、`[]`，已有位置参数构造方式不变。

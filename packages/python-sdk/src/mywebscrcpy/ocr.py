@@ -62,6 +62,8 @@ class OCRResult:
     frame_id: int = 0
     elapsed_ms: int = 0
     fallback_reason: list[str] = field(default_factory=list)
+    samples: int = 1
+    engines_used: list[str] = field(default_factory=list)
 
     def find(self, keyword: str) -> list[OCRBox]:
         """按关键词匹配文字框。"""
@@ -123,23 +125,32 @@ def perform_ocr(
     paddleocr_url: str | None = None,
     indraocr_url: str | None = None,
     timeout: float = 10.0,
+    _deadline: Any = None,
 ) -> tuple[dict[str, Any], str, list[str]]:
     """调用底层 OCR 引擎识别图像并返回结果、所用引擎与降级原因。"""
-    if engine not in {"auto", "indraocr", "macocr", "paddleocr"}:
-        raise ValueError("engine 必须是 auto、indraocr、macocr 或 paddleocr")
+    if engine not in {"auto", "parallel", "indraocr", "macocr", "paddleocr"}:
+        raise ValueError("engine 必须是 auto、parallel、indraocr、macocr 或 paddleocr")
 
     mac_url = macocr_url or os.getenv("MACOCR_URL", DEFAULT_MACOCR_URL)
     mac_auth = macocr_auth or os.getenv("MACOCR_AUTH", "")
     paddle_url = paddleocr_url or os.getenv("PADDLEOCR_URL", DEFAULT_PADDLEOCR_URL)
 
     indra_url = indraocr_url if indraocr_url is not None else os.getenv("INDRAOCR_URL", DEFAULT_INDRAOCR_URL)
+    if engine == "parallel":
+        from .ocr_consensus import parallel_ocr
+        return parallel_ocr(image, [("indraocr", indra_url, ""), ("macocr", mac_url, mac_auth),
+                                    ("paddleocr", paddle_url, "")], timeout)
+
+    def request_timeout():
+        return _deadline.remaining() if _deadline is not None else timeout
+
     errors: list[str] = []
     result: dict[str, Any] | None = None
     engine_used = engine
 
     if engine in {"auto", "indraocr"}:
         try:
-            res = upload_image(image, indra_url, "", timeout=timeout)
+            res = upload_image(image, indra_url, "", timeout=request_timeout())
             _validate_indra(res)
             result, engine_used = res, "indraocr"
         except Exception as exc:
@@ -150,7 +161,7 @@ def perform_ocr(
 
     if result is None and engine in {"auto", "macocr"}:
         try:
-            res = upload_image(image, mac_url, mac_auth, timeout=timeout)
+            res = upload_image(image, mac_url, mac_auth, timeout=request_timeout())
             if res.get("success") is False:
                 raise RuntimeError(str(res.get("message") or "macOCR 返回失败"))
             result = res
@@ -162,7 +173,7 @@ def perform_ocr(
 
     if result is None:
         try:
-            result = upload_image(image, paddle_url, "", timeout=timeout)
+            result = upload_image(image, paddle_url, "", timeout=request_timeout())
             engine_used = "paddleocr"
         except Exception as exc:
             errors.append(f"PaddleOCR: {exc}")

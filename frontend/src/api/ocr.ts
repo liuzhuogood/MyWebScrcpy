@@ -19,6 +19,8 @@ export interface OCRDetectResponse {
   engine: string
   elapsed_ms: number
   fallback_reason?: string[]
+  samples?: number
+  engines_used?: string[]
 }
 
 export interface OCRStatusResponse {
