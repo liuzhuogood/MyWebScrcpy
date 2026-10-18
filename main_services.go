@@ -84,6 +84,7 @@ func configureAuxiliaryServices(dataDir string, database *db.DB, hub *ws.Hub, mu
 		},
 		API: mux, Vision: http.HandlerFunc(hub.ServeMatchingVisionWS),
 	})
+	matchingManager.RegisterRoutes(mux)
 	inputConfig := inputconfig.New(database)
 	automationService := automation.NewService(hub, templateStorage, ocrService, inputConfig, dependencies.ManagedADB)
 	automationService.RegisterRoutes(mux)
