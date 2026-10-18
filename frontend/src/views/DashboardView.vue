@@ -6,7 +6,6 @@ import { useElementSize, useFullscreen } from '@vueuse/core'
 import DashTile from '@/components/dashboard/DashTile.vue'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -54,12 +53,11 @@ function isDeviceVisible(serial: string): boolean {
 }
 
 function toggleDeviceVisibility(serial: string) {
-  const idx = hiddenSerials.value.indexOf(serial)
-  if (idx >= 0) {
-    hiddenSerials.value.splice(idx, 1)
+  if (hiddenSerials.value.includes(serial)) {
+    hiddenSerials.value = hiddenSerials.value.filter(s => s !== serial)
   }
   else {
-    hiddenSerials.value.push(serial)
+    hiddenSerials.value = [...hiddenSerials.value, serial]
   }
   saveHiddenSerials()
 }
@@ -210,24 +208,46 @@ onUnmounted(() => {
                 暂无在线设备
               </div>
 
-              <div v-else class="max-h-64 space-y-1 overflow-y-auto pr-1">
+              <div v-else class="max-h-72 space-y-1 overflow-y-auto pr-1">
                 <div
                   v-for="d in devices"
                   :key="d.serial"
-                  class="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-muted/50 transition-colors select-none"
+                  class="flex cursor-pointer items-center justify-between gap-2.5 rounded-md px-2.5 py-1.5 text-xs transition-colors select-none"
+                  :class="isDeviceVisible(d.serial) ? 'bg-muted/40 hover:bg-muted/70 text-foreground' : 'text-muted-foreground/60 hover:bg-muted/30'"
+                  :title="isDeviceVisible(d.serial) ? '点击在大屏中隐藏' : '点击在大屏中显示'"
                   @click="toggleDeviceVisibility(d.serial)"
                 >
-                  <Checkbox
-                    :checked="isDeviceVisible(d.serial)"
-                    class="pointer-events-none"
-                  />
-                  <div class="min-w-0 flex-1">
-                    <div class="truncate text-xs font-medium" :title="d.serial">
-                      {{ deviceStore.displayName(d) }}
+                  <div class="flex min-w-0 items-center gap-2">
+                    <span
+                      class="inline-block h-2 w-2 shrink-0 rounded-full"
+                      :class="d.state === 'device' ? 'bg-emerald-500' : 'bg-amber-500'"
+                    />
+                    <div class="min-w-0">
+                      <div class="truncate font-medium leading-tight">
+                        {{ deviceStore.displayName(d) }}
+                      </div>
+                      <div class="truncate font-mono text-[10px] text-muted-foreground/70">
+                        {{ d.serial }}
+                      </div>
                     </div>
-                    <div class="truncate font-mono text-[10px] text-muted-foreground">
-                      {{ d.serial }}
-                    </div>
+                  </div>
+
+                  <!-- 显隐状态图标与提示：显示时高亮 Eye 图标，隐藏时暗色 EyeOff 图标 -->
+                  <div class="shrink-0">
+                    <span
+                      v-if="isDeviceVisible(d.serial)"
+                      class="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary"
+                    >
+                      <Eye class="h-3.5 w-3.5" />
+                      显示
+                    </span>
+                    <span
+                      v-else
+                      class="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground/70"
+                    >
+                      <EyeOff class="h-3.5 w-3.5" />
+                      隐藏
+                    </span>
                   </div>
                 </div>
               </div>
