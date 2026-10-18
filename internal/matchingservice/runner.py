@@ -5,8 +5,12 @@ import os
 import signal
 import sys
 import threading
+import time
+import urllib.parse
+import urllib.request
 
 from mywebscrcpy import Client, FrameTimeout, SDKError
+from mywebscrcpy.contracts import Deadline
 from mywebscrcpy.dependencies import vision_dependencies
 
 STOP = threading.Event()
@@ -15,6 +19,7 @@ logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
 URL = os.environ['MYWEBSCRCPY_MATCHING_URL']
 TOKEN = os.environ['MYWEBSCRCPY_MATCHING_TOKEN']
 HEADERS = {'Authorization': 'Bearer ' + TOKEN}
+FRAME_UPLOAD_URL = URL.rstrip('/') + '/api/vision/frame'
 
 
 def emit(kind, **values):
@@ -30,8 +35,33 @@ class Worker:
         self.lock = threading.Lock()
         self.last_state = None
         self.last_error = None
+        self.last_frame_uploaded_at = 0.0
         self.thread = threading.Thread(target=self.run, name='match-' + serial, daemon=True)
         self.thread.start()
+
+    def upload_frame_if_due(self, device, cv2):
+        now = time.monotonic()
+        if now - self.last_frame_uploaded_at < 1.0:
+            return
+        try:
+            deadline = Deadline(1.0)
+            frame = device._session(deadline, video=True).current_frame(deadline)
+            if frame is None or getattr(frame, 'image', None) is None:
+                return
+            ok, buf = cv2.imencode('.jpg', frame.image, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            if not ok:
+                return
+            req = urllib.request.Request(
+                FRAME_UPLOAD_URL + '?' + urllib.parse.urlencode({'serial': self.serial}),
+                data=buf.tobytes(),
+                headers={'Authorization': 'Bearer ' + TOKEN, 'Content-Type': 'image/jpeg'},
+                method='POST',
+            )
+            with urllib.request.urlopen(req, timeout=1.0) as resp:
+                _ = resp.read()
+            self.last_frame_uploaded_at = now
+        except Exception:
+            pass
 
     def state(self, state, error=''):
         if (state, error) != self.last_state:
@@ -41,6 +71,7 @@ class Worker:
         return False
 
     def run(self):
+        _, cv2, _ = vision_dependencies()
         while not self.stop.is_set() and not STOP.is_set():
             try:
                 with Client(URL, headers=HEADERS) as client:
@@ -54,6 +85,7 @@ class Worker:
                                         self.state('waiting')
                                     while not self.stop.is_set() and not STOP.is_set():
                                         next(watch)
+                                        self.upload_frame_if_due(device, cv2)
                                         self.state('matching')
                                         self.last_error = None
                             except FrameTimeout:

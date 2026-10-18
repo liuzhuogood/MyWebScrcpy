@@ -18,17 +18,19 @@ import (
 	"mywebscrcpy/internal/ocr"
 	"mywebscrcpy/internal/serviceprefs"
 	"mywebscrcpy/internal/servicepython"
+	"mywebscrcpy/internal/visionframes"
 	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/ws"
 )
 
 type auxiliaryServices struct {
-	templates   *template.Service
-	storage     *template.Storage
-	ocr         *ocr.Service
-	matching    *matchingservice.Manager
-	preferences *serviceprefs.Manager
-	automation  *automation.Service
+	templates    *template.Service
+	storage      *template.Storage
+	ocr          *ocr.Service
+	matching     *matchingservice.Manager
+	preferences  *serviceprefs.Manager
+	automation   *automation.Service
+	visionFrames *visionframes.Store
 }
 
 func configureAuxiliaryServices(dataDir string, database *db.DB, hub *ws.Hub, mux *http.ServeMux) *auxiliaryServices {
@@ -58,6 +60,10 @@ func configureAuxiliaryServices(dataDir string, database *db.DB, hub *ws.Hub, mu
 		return serviceSettings.Control(servicepython.IndraOCR, enabled, action)
 	})
 	ocrService.RegisterRoutes(mux)
+	// 投屏帧缓存：浏览器/匹配服务 worker 解码后的最新画面帧，供设备总状态消费
+	visionFrames := visionframes.NewStore()
+	visionFrames.RegisterRoutes(mux)
+
 	matchingManager := matchingservice.New(matchingservice.Options{
 		Python: func() (string, func(), error) { return pythonServices.Acquire(servicepython.Matching) },
 		PreparePython: func(ctx context.Context, stage func(string)) (string, func(), error) {
@@ -82,7 +88,7 @@ func configureAuxiliaryServices(dataDir string, database *db.DB, hub *ws.Hub, mu
 			asset, err := templateStorage.GetTemplate(id)
 			return err == nil && (asset.Serial == serial || asset.Serial == template.GlobalSerial)
 		},
-		API: mux, Vision: http.HandlerFunc(hub.ServeMatchingVisionWS),
+		API: mux, Vision: http.HandlerFunc(hub.ServeMatchingVisionWS), Frame: visionFrames.Handler(),
 	})
 	matchingManager.RegisterRoutes(mux)
 	inputConfig := inputconfig.New(database)
@@ -90,12 +96,13 @@ func configureAuxiliaryServices(dataDir string, database *db.DB, hub *ws.Hub, mu
 	automationService.RegisterRoutes(mux)
 
 	return &auxiliaryServices{
-		templates:   templateService,
-		storage:     templateStorage,
-		ocr:         ocrService,
-		matching:    matchingManager,
-		preferences: serviceSettings,
-		automation:  automationService,
+		templates:    templateService,
+		storage:      templateStorage,
+		ocr:          ocrService,
+		matching:     matchingManager,
+		preferences:  serviceSettings,
+		automation:   automationService,
+		visionFrames: visionFrames,
 	}
 }
 

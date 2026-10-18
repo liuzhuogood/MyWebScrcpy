@@ -58,25 +58,38 @@ func (m *Manager) bridge(ctx context.Context, token string) (*http.Server, strin
 			http.Error(w, "unauthorized", 401)
 			return
 		}
+		devices := m.options.Devices()
+		serial := r.URL.Query().Get("serial")
+		var active bool
+		for _, s := range devices {
+			if s == serial {
+				active = true
+				break
+			}
+		}
+		if r.Method == http.MethodPost && r.URL.Path == "/api/vision/frame" {
+			if m.options.Frame == nil {
+				http.Error(w, "not found", 404)
+				return
+			}
+			if !active {
+				http.Error(w, "device forbidden", 403)
+				return
+			}
+			r.Header.Del("Authorization")
+			m.options.Frame.ServeHTTP(w, r)
+			return
+		}
 		if r.Method != "GET" {
 			http.Error(w, "not found", 404)
 			return
 		}
-		devices := m.options.Devices()
 		if r.URL.Path == "/api/matching-runtime/devices" {
 			if devices == nil {
 				devices = []string{}
 			}
 			writeJSON(w, 200, devices)
 			return
-		}
-		serial := r.URL.Query().Get("serial")
-		active := false
-		for _, s := range devices {
-			if s == serial {
-				active = true
-				break
-			}
 		}
 		if !active {
 			http.Error(w, "device forbidden", 403)

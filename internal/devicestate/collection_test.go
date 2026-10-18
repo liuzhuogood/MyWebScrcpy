@@ -15,6 +15,7 @@ import (
 
 	"mywebscrcpy/internal/ocr"
 	"mywebscrcpy/internal/uipage"
+	"mywebscrcpy/internal/visionframes"
 )
 
 func TestCollectStateWithoutUIDump(t *testing.T) {
@@ -22,16 +23,11 @@ func TestCollectStateWithoutUIDump(t *testing.T) {
 		t.Skip("fixture uses a POSIX shell executable")
 	}
 	dir := t.TempDir()
-	imagePath := filepath.Join(dir, "screenshot.png")
 	logPath := filepath.Join(dir, "commands.log")
-	if err := os.WriteFile(imagePath, createTestPNG(4, 6, color.White), 0600); err != nil {
-		t.Fatal(err)
-	}
 	quote := func(path string) string { return "'" + strings.ReplaceAll(path, "'", "'\\''") + "'" }
 	adb := filepath.Join(dir, "adb")
 	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + quote(logPath) + "\n" +
 		"case \"$*\" in\n" +
-		"  '-s phone exec-out screencap -p') cat " + quote(imagePath) + ";;\n" +
 		"  '-s phone get-state') printf 'device\\n';;\n" +
 		"  *) exit 1;;\nesac\n"
 	if err := os.WriteFile(adb, []byte(script), 0700); err != nil {
@@ -53,7 +49,11 @@ func TestCollectStateWithoutUIDump(t *testing.T) {
 	}))
 	defer ocrServer.Close()
 	t.Setenv("INDRAOCR_URL", ocrServer.URL)
-	svc := NewService(adb, page, ocr.NewService(nil, nil), nil, nil, nil)
+	frames := visionframes.NewStore()
+	if _, err := frames.Put("phone", createTestJPEG(4, 6, color.White)); err != nil {
+		t.Fatal(err)
+	}
+	svc := NewService(adb, page, ocr.NewService(nil, nil), nil, nil, nil, frames)
 	state, err := svc.CollectState(t.Context(), "phone", "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -61,8 +61,8 @@ func TestCollectStateWithoutUIDump(t *testing.T) {
 	if !state.ContextStable || pageReads != 2 {
 		t.Fatalf("pre/post page validation missing: stable=%v reads=%d", state.ContextStable, pageReads)
 	}
-	if state.Screenshot.Width != 4 || state.Screenshot.Height != 6 || state.Screenshot.DataBase64 == "" {
-		t.Fatalf("screenshot not collected: %+v", state.Screenshot)
+	if state.Screenshot.Width != 4 || state.Screenshot.Height != 6 || !strings.HasPrefix(state.Screenshot.DataBase64, "data:image/jpeg;base64,") {
+		t.Fatalf("screenshot not collected from stream frame: %+v", state.Screenshot)
 	}
 	if ocrCalls != 1 || state.OCR.Engine != "indraocr" || state.OCR.Text != "fixture text" {
 		t.Fatalf("OCR not preserved: calls=%d result=%+v", ocrCalls, state.OCR)
@@ -84,8 +84,8 @@ func TestCollectStateWithoutUIDump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "-s phone exec-out screencap -p\n-s phone get-state\n"
+	want := "-s phone get-state\n"
 	if string(commands) != want {
-		t.Fatalf("unexpected ADB workflow: %s", commands)
+		t.Fatalf("unexpected ADB workflow (screencap should be gone): %s", commands)
 	}
 }

@@ -257,6 +257,7 @@ func main() {
 		auxiliary.storage,
 		taskRunService,
 		aiClient,
+		auxiliary.visionFrames,
 	)
 	deviceStateHandler := devicestate.NewHandler(deviceStateService, aiClient)
 	deviceStateHandler.RegisterRoutes(mux)

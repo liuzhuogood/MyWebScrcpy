@@ -1,10 +1,11 @@
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { inspectorConsumesInput } from '@/inspector/guard'
 import { type OpPayload, type OpType } from '@/inspector/opLog'
 import { DeviceAudio, type AudioStatus } from './audio'
 import { ScrcpyDecoder } from './decoder'
 import { PictureInPicture } from './pip'
 import { useClipboardSync } from './useClipboardSync'
+import { useFrameUploader } from './useFrameUploader'
 import { useScreenPower } from './useScreenPower'
 import { usePlayerSettings } from '@/composables/usePlayerSettings'
 import {
@@ -105,6 +106,9 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   })
 
   const packer = new ControlPacker()
+  // 投屏出画面后才开始上传帧；断流/组件卸载自动停止，热更新与重连后自愈
+  const frameUploader = useFrameUploader(serial, canvasRef, () => live.value)
+  watch(live, v => (v ? frameUploader.start() : frameUploader.stop()), { immediate: true })
   const { clipboardSync, onDeviceClipboard } = useClipboardSync({
     send: b => send(b),
     packer,

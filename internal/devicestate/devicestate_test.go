@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"image"
 	"image/color"
+	"image/jpeg"
 	"image/png"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,7 @@ import (
 	"mywebscrcpy/internal/taskrun"
 	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/uipage"
+	"mywebscrcpy/internal/visionframes"
 )
 
 func createTestPNG(w, h int, c color.Color) []byte {
@@ -31,6 +33,18 @@ func createTestPNG(w, h int, c color.Color) []byte {
 	}
 	var buf bytes.Buffer
 	_ = png.Encode(&buf, img)
+	return buf.Bytes()
+}
+
+func createTestJPEG(w, h int, c color.Color) []byte {
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.Set(x, y, c)
+		}
+	}
+	var buf bytes.Buffer
+	_ = jpeg.Encode(&buf, img, nil)
 	return buf.Bytes()
 }
 
@@ -71,6 +85,7 @@ func setupTestDeviceStateEnvironment(t *testing.T) (*Service, *AIClient, *db.DB,
 		tmplStorage,
 		taskSvc,
 		aiClient,
+		visionframes.NewStore(),
 	)
 
 	return svc, aiClient, database, taskSvc, tmplStorage, tempDir
@@ -472,7 +487,7 @@ func TestDeviceStateEdgeCasesAndProbeChecks(t *testing.T) {
 	}
 
 	// 5. 采集失败时 ContextStable 为 false，DeviceInfo 不为空
-	failedSvc := NewService("/nonexistent/test-adb", nil, nil, nil, nil, nil)
+	failedSvc := NewService("/nonexistent/test-adb", nil, nil, nil, nil, nil, visionframes.NewStore())
 	observed, err := failedSvc.CollectState(context.Background(), "dev-failed", "", nil)
 	if err != nil {
 		t.Fatalf("CollectState 返回非预期外层错误: %v", err)

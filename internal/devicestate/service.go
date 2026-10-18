@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"image"
-	"image/png"
+	"image/jpeg"
 	"strings"
 	"sync"
 	"time"
@@ -18,10 +18,13 @@ import (
 	"mywebscrcpy/internal/taskrun"
 	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/uipage"
+	"mywebscrcpy/internal/visionframes"
 )
 
 const (
 	CollectionBudget = 20 * time.Second
+	// frameMaxAge 投屏帧的有效期；前端按 1fps 上传，超期视为投屏已停止。
+	frameMaxAge = 5 * time.Second
 )
 
 // Service 提供统一设备总状态采集服务
@@ -32,6 +35,7 @@ type Service struct {
 	templateStorage *template.Storage
 	taskRunService  *taskrun.Service
 	aiClient        *AIClient
+	frames          *visionframes.Store
 
 	deviceLocks sync.Map // map[string]*sync.Mutex，同设备串行采集
 }
@@ -43,6 +47,7 @@ func NewService(
 	templateStorage *template.Storage,
 	taskRunService *taskrun.Service,
 	aiClient *AIClient,
+	frames *visionframes.Store,
 ) *Service {
 	return &Service{
 		adbPath:         adbPath,
@@ -51,6 +56,7 @@ func NewService(
 		templateStorage: templateStorage,
 		taskRunService:  taskRunService,
 		aiClient:        aiClient,
+		frames:          frames,
 	}
 }
 
@@ -100,45 +106,42 @@ func (s *Service) CollectState(ctx context.Context, serial, taskID string, templ
 		}
 	}
 
-	// 2. 屏幕截图采集 (screencap -p)
-	cmd := dependencies.CommandContext(collectCtx, s.adbPath, "-s", serial, "exec-out", "screencap", "-p")
-	out, err := cmd.Output()
+	// 2. 屏幕画面采集：取投屏视频流最新帧（浏览器解码，分辨率与投屏一致）
 	var sceneImg image.Image
-	if err != nil {
+	var frameBytes []byte
+	frame, hasFrame := s.frames.Latest(serial, frameMaxAge)
+	if !hasFrame {
 		sources["screenshot"] = SourceStatus{
 			Status:    "failed",
 			Timestamp: time.Now().UnixMilli(),
-			Error:     err.Error(),
+			Error:     fmt.Sprintf("投屏视频流无最新帧（%v 内未上传），请保持该设备投屏播放", frameMaxAge),
 		}
-		partialFailures = append(partialFailures, fmt.Sprintf("ADB 屏幕截屏失败: %v", err))
+		partialFailures = append(partialFailures, "投屏视频流无最新帧，跳过截图/OCR/模板匹配")
+	} else if decoded, dErr := jpeg.Decode(bytes.NewReader(frame.JPEG)); dErr != nil {
+		sources["screenshot"] = SourceStatus{
+			Status:    "failed",
+			Timestamp: time.Now().UnixMilli(),
+			Error:     dErr.Error(),
+		}
+		partialFailures = append(partialFailures, fmt.Sprintf("投屏帧解码失败: %v", dErr))
 	} else {
-		decoded, dErr := png.Decode(bytes.NewReader(out))
-		if dErr != nil {
-			sources["screenshot"] = SourceStatus{
-				Status:    "failed",
-				Timestamp: time.Now().UnixMilli(),
-				Error:     dErr.Error(),
-			}
-			partialFailures = append(partialFailures, fmt.Sprintf("屏幕截图解码 PNG 失败: %v", dErr))
-		} else {
-			sceneImg = decoded
-			b := decoded.Bounds()
-			state.Screenshot = ScreenshotInfo{
-				DataBase64: fmt.Sprintf("data:image/png;base64,%s", base64.StdEncoding.EncodeToString(out)),
-				Width:      b.Dx(),
-				Height:     b.Dy(),
-				SizeBytes:  len(out),
-			}
-			sources["screenshot"] = SourceStatus{
-				Status:    "success",
-				Timestamp: time.Now().UnixMilli(),
-			}
+		sceneImg = decoded
+		frameBytes = frame.JPEG
+		state.Screenshot = ScreenshotInfo{
+			DataBase64: fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(frame.JPEG)),
+			Width:      frame.Width,
+			Height:     frame.Height,
+			SizeBytes:  len(frame.JPEG),
+		}
+		sources["screenshot"] = SourceStatus{
+			Status:    "success",
+			Timestamp: time.Now().UnixMilli(),
 		}
 	}
 
 	// 3. OCR 识别
-	if s.ocrService != nil && len(out) > 0 {
-		ocrResp, oErr := s.ocrService.Detect(collectCtx, out, ocr.DetectRequest{Serial: serial, Engine: "auto"})
+	if s.ocrService != nil && len(frameBytes) > 0 {
+		ocrResp, oErr := s.ocrService.Detect(collectCtx, frameBytes, ocr.DetectRequest{Serial: serial, Engine: "auto"})
 		if oErr != nil {
 			state.OCR.Error = oErr.Error()
 			sources["ocr"] = SourceStatus{

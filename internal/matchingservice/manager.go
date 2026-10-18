@@ -45,6 +45,8 @@ type Options struct {
 	TemplateReadable func(string, string) bool
 	API              http.Handler
 	Vision           http.Handler
+	// Frame 接收 worker 回传的投屏最新帧（POST /api/vision/frame）。
+	Frame http.Handler
 }
 type run struct {
 	cmd       *exec.Cmd
