@@ -7,4 +7,4 @@
 3. 按区域与文字票数去重、取稳定坐标，并限定最新轮可见文字；新增 samples、engines_used，覆盖超时、取消、并发容量、旋转与迟到标注防护。
 4. 同步 OpenAPI、Python SDK、系统文档和现有引擎选择入口；Python SDK 新增按时长的新帧识别及有界后台容量。
 
-正式 `VERSION` 保持 v1.27.2，尚未合回 main、部署或发布。具体提交与验证结果见 [会话记录](session.md)。
+正式 `VERSION` 保持 v1.27.2，已合回本地 main，未推送 main、部署或发布。具体提交与验证结果见 [会话记录](session.md)。
