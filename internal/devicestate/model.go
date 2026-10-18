@@ -59,20 +59,6 @@ type TemplateMatchItem struct {
 	PixelH       int     `json:"pixel_h"`
 }
 
-// AssociatedTaskInfo 关联任务摘要
-type AssociatedTaskInfo struct {
-	TaskID          string  `json:"task_id,omitempty"`
-	Name            string  `json:"name,omitempty"`
-	Goal            string  `json:"goal,omitempty"`
-	Status          string  `json:"status,omitempty"`
-	Progress        float64 `json:"progress,omitempty"`
-	Stage           string  `json:"stage,omitempty"`
-	OutputsSummary  string  `json:"outputs_summary,omitempty"`
-	Conflict        bool    `json:"conflict,omitempty"`
-	ConflictMessage string  `json:"conflict_message,omitempty"`
-	ScannedAt       int64   `json:"scanned_at,omitempty"`
-}
-
 // DeviceState 统一设备总状态响应
 type DeviceState struct {
 	ObservationID   string                  `json:"observation_id"`
@@ -84,7 +70,6 @@ type DeviceState struct {
 	Screenshot      ScreenshotInfo          `json:"screenshot"`
 	OCR             OCRData                 `json:"ocr"`
 	TemplateMatches []TemplateMatchItem     `json:"template_matches"`
-	AssociatedTask  *AssociatedTaskInfo     `json:"associated_task,omitempty"`
 	Sources         map[string]SourceStatus `json:"sources,omitempty"`
 	PartialFailures []string                `json:"partial_failures,omitempty"`
 }
@@ -110,9 +95,8 @@ type TotalStateAndDecision struct {
 	Decision    AIDecisionResult `json:"decision"`
 }
 
-// ServiceConfig 系统服务配置（含 AI 与任务根目录）
+// ServiceConfig 系统服务配置（含 AI 视觉决策服务）
 type ServiceConfig struct {
-	TaskRootDir      string `json:"task_root_dir"`
 	AIChatEndpoint   string `json:"ai_chat_endpoint"`
 	AIModel          string `json:"ai_model"`
 	AIApiKeyMasked   string `json:"ai_api_key_masked"`

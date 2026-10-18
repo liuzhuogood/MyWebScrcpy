@@ -32,7 +32,7 @@ func TestAppRoutesAndStaticAssets(t *testing.T) {
 		{"GET", "/player?serial=device-1", 200, `id="app"`},
 		{"GET", "/dashboard", 200, `id="app"`},
 		{"GET", "/scripts", 404, ""},
-		{"GET", "/tasks", 200, `id="app"`},
+		{"GET", "/tasks", 404, ""},
 		{"GET", "/dependencies", 200, `id="app"`},
 		{"GET", "/ai-integration", 200, `id="app"`},
 		{"GET", "/ai-integration/skills/mywebscrcpy-device-base", 200, `id="app"`},

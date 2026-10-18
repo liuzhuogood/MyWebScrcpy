@@ -17,11 +17,8 @@ def resolve_base_url(arg_base: str | None) -> str:
     return url.rstrip("/")
 
 
-def get_state(client: ApiClient, serial: str, task_id: str | None = None) -> dict:
-    query = []
-    if task_id:
-        query.append(("task_id", task_id))
-    res = client.request("GET", f"/api/device-state/{serial}", query=query)
+def get_state(client: ApiClient, serial: str) -> dict:
+    res = client.request("GET", f"/api/device-state/{serial}")
     if res.status == 200:
         try:
             return json.loads(res.body.decode("utf-8"))
@@ -81,7 +78,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", "--base-url", dest="base", default=None, help="服务地址 (或由环境变量 MYWEBSCRCPY_BASE_URL 指定)")
     parser.add_argument("--serial", required=True, help="设备序列号")
-    parser.add_argument("--task-id", help="关联任务ID")
     parser.add_argument("--wait-seconds", type=float, default=0.8, help="按键后等待页面渲染秒数 (默认 0.8)")
     parser.add_argument("--json", action="store_true", help="以 JSON 格式输出对比结果")
     args = parser.parse_args()
@@ -106,7 +102,7 @@ def main() -> int:
     client = ApiClient(base_url)
 
     # 1. 动作前只读观测：前置状态失败则禁止发键
-    pre_state = get_state(client, args.serial, args.task_id)
+    pre_state = get_state(client, args.serial)
     if not pre_state or not pre_state.get("observation_id"):
         msg = "获取前置设备状态失败或观测无效，禁止发送按键"
         if args.json:
@@ -128,7 +124,7 @@ def main() -> int:
     time.sleep(args.wait_seconds)
 
     # 3. 动作后重新观测
-    post_state = get_state(client, args.serial, args.task_id)
+    post_state = get_state(client, args.serial)
 
     # 4. 前后业务对比
     status, diff_summary = analyze_diff(pre_state, post_state)

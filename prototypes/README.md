@@ -6,7 +6,7 @@
 pnpm --dir frontend proto
 ```
 
-打开 <http://127.0.0.1:5174/>。每个原型可以用地址中的 `#<目录名>` 直接访问，例如 `http://127.0.0.1:5174/#task-center-v1`。
+打开 <http://127.0.0.1:5174/>。每个原型可以用地址中的 `#<目录名>` 直接访问，例如 `http://127.0.0.1:5174/#ai-integration-v2`。
 
 复用 `frontend/node_modules`，没有安装依赖时先运行 `pnpm --dir frontend install --frozen-lockfile`。预览使用独立 Vue 实例和端口，不加载正式应用、Store 或后台代理；这属于开发运行隔离，不是执行任意代码的安全沙盒。
 

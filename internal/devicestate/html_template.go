@@ -200,7 +200,7 @@ const htmlPageTemplate = `<!DOCTYPE html>
         </dl>
       </div>
 
-      <!-- 右列：决策结果、关联任务、OCR与模板匹配 -->
+      <!-- 右列：决策结果、OCR与模板匹配 -->
       <div style="display: flex; flex-direction: column; gap: 16px;">
         {{ if .HasDecision }}
           <div class="card">
@@ -256,32 +256,6 @@ const htmlPageTemplate = `<!DOCTYPE html>
           </div>
         {{ end }}
 
-        <!-- 关联任务卡片 -->
-        <div class="card">
-          <h2>关联任务</h2>
-          {{ if .DeviceState.AssociatedTask }}
-            {{ if .DeviceState.AssociatedTask.Conflict }}
-              <div class="badge badge-warning" style="padding: 6px 10px; border-radius: 4px;">
-                {{ .DeviceState.AssociatedTask.ConflictMessage }}
-              </div>
-            {{ else if .DeviceState.AssociatedTask.TaskID }}
-              <dl>
-                <dt>任务名称</dt>
-                <dd><strong>{{ .DeviceState.AssociatedTask.Name }}</strong> ({{ .DeviceState.AssociatedTask.TaskID }})</dd>
-                <dt>任务目标</dt>
-                <dd>{{ .DeviceState.AssociatedTask.Goal }}</dd>
-                <dt>执行状态</dt>
-                <dd><span class="badge badge-primary">{{ .DeviceState.AssociatedTask.Status }}</span> {{ .DeviceState.AssociatedTask.Stage }}</dd>
-                <dt>产出摘要</dt>
-                <dd>{{ .DeviceState.AssociatedTask.OutputsSummary }}</dd>
-              </dl>
-            {{ else }}
-              <div class="meta-text">当前设备无运行中的任务</div>
-            {{ end }}
-          {{ else }}
-            <div class="meta-text">当前设备无关联任务</div>
-          {{ end }}
-        </div>
 
         <!-- 模板匹配卡片 -->
         <div class="card">

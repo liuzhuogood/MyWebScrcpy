@@ -24,7 +24,6 @@ import (
 	"mywebscrcpy/internal/matchingservice"
 	"mywebscrcpy/internal/operationlog"
 	"mywebscrcpy/internal/skillsmarket"
-	"mywebscrcpy/internal/taskrun"
 	"mywebscrcpy/internal/uipage"
 	"mywebscrcpy/internal/uixml"
 	"mywebscrcpy/internal/updater"
@@ -239,15 +238,6 @@ func main() {
 	dependencyManager.BeforePythonChange = auxiliary.stopPythonServices
 	defer auxiliary.Close()
 
-	var taskRunService *taskrun.Service
-	if database == nil {
-		registerUnavailableTaskRoutes(mux)
-	} else {
-		taskRunService = taskrun.NewService(database)
-		taskRunHandler := taskrun.NewHandler(taskRunService)
-		taskRunHandler.RegisterRoutes(mux)
-	}
-
 	// 统一设备总状态与 AI 决策 API
 	aiClient := devicestate.NewAIClient(database)
 	deviceStateService := devicestate.NewService(
@@ -255,7 +245,6 @@ func main() {
 		uiPage,
 		auxiliary.ocr,
 		auxiliary.storage,
-		taskRunService,
 		aiClient,
 		auxiliary.visionFrames,
 	)
@@ -503,17 +492,4 @@ func writeJarToTemp() (string, error) {
 		return "", err
 	}
 	return f.Name(), nil
-}
-
-// Preserve the device app's existing non-persistent mode when SQLite cannot be opened.
-func registerUnavailableTaskRoutes(mux *http.ServeMux) {
-	log.Print("任务数据库不可用，任务运行接口暂停")
-	unavailable := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusServiceUnavailable)
-		_ = json.NewEncoder(w).Encode(map[string]string{"error": "数据库不可用，请检查服务日志"})
-	}
-	for _, prefix := range []string{"/api/task-runs", "/api/task-runs/"} {
-		mux.HandleFunc(prefix, unavailable)
-	}
 }

@@ -15,7 +15,7 @@ func TestUpdateGateKeepsStatusAvailableAndBlocksBusiness(t *testing.T) {
 	for _, test := range []struct {
 		path string
 		code int
-	}{{"/api/tasks", 503}, {"/ws", 503}, {"/api/version/status", 204}, {"/api/desktop/health", 204}} {
+	}{{"/api/devices", 503}, {"/ws", 503}, {"/api/version/status", 204}, {"/api/desktop/health", 204}} {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest("GET", test.path, nil))
 		if response.Code != test.code {

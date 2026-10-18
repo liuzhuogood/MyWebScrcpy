@@ -69,10 +69,6 @@ func (c *AIClient) GetConfig() (ServiceConfig, error) {
 	if err != nil {
 		return ServiceConfig{}, fmt.Errorf("读取超时配置失败: %w", err)
 	}
-	taskRoot, err := c.database.GetConfig("task_root_dir")
-	if err != nil {
-		return ServiceConfig{}, fmt.Errorf("读取任务根目录配置失败: %w", err)
-	}
 
 	timeout := DefaultAITimeoutSeconds
 	if timeoutStr != "" {
@@ -94,7 +90,6 @@ func (c *AIClient) GetConfig() (ServiceConfig, error) {
 	}
 
 	return ServiceConfig{
-		TaskRootDir:      taskRoot,
 		AIChatEndpoint:   endpoint,
 		AIModel:          model,
 		AIApiKeyMasked:   maskedKey,
@@ -281,11 +276,7 @@ func (c *AIClient) Decide(ctx context.Context, state *DeviceState, requestedGoal
 	goal := strings.TrimSpace(requestedGoal)
 	goalNotice := ""
 	if goal == "" {
-		if state.AssociatedTask != nil && strings.TrimSpace(state.AssociatedTask.Goal) != "" {
-			goal = state.AssociatedTask.Goal
-		} else {
-			goalNotice = "【提示：当前未提供显式任务目标，也没有关联任务的目标；请仅对当前界面元素、可能的操作入口与页面状态进行中立客观分析，不要臆造或猜测用户想要达成的目标。】"
-		}
+		goalNotice = "【提示：当前未提供显式任务目标；请仅对当前界面元素、可能的操作入口与页面状态进行中立客观分析，不要臆造或猜测用户想要达成的目标。】"
 	}
 
 	// 5. 组装 Prompt

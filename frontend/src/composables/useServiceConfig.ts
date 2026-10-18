@@ -1,7 +1,6 @@
 import { ref } from 'vue'
 
 export interface ServiceConfig {
-  task_root_dir: string
   ai_chat_endpoint: string
   ai_model: string
   ai_api_key?: string
@@ -12,7 +11,6 @@ export interface ServiceConfig {
 
 export function useServiceConfig() {
   const config = ref<ServiceConfig>({
-    task_root_dir: '',
     ai_chat_endpoint: '',
     ai_model: '',
     ai_timeout_seconds: 30,
@@ -54,7 +52,6 @@ export function useServiceConfig() {
     saving.value = true
     try {
       const payload: Partial<ServiceConfig> = {
-        task_root_dir: config.value.task_root_dir.trim(),
         ai_chat_endpoint: config.value.ai_chat_endpoint.trim(),
         ai_model: config.value.ai_model.trim(),
         ai_timeout_seconds: Number(config.value.ai_timeout_seconds) || 30,

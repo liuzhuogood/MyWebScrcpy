@@ -6,8 +6,6 @@ ADB、Python 可选择应用管理的内置副本，或 PATH / 绝对路径指�
 
 当前 `dependencies/config.json` 的 schema 为 2，仅包含 `adb`、`python` 的 `source` 和 `path`。v1.25 遇到 schema 1 时直接重置选择，不迁移 Pi 或归档旧配置；新配置重启后保留。未知版本报错，不覆盖文件。全局 Pi、个人技能和用户业务脚本不参与清理。
 
-任务上报只需服务地址与设备序列号，见 [任务运行集成](task-runs.md)。
-
 模板匹配、Indra OCR 和 PaddleOCR 本地服务在点击启动时检查依赖；缺少包或版本不满足当前应用要求时，先安装或升级，再复查版本、导入和服务就绪状态。依赖已满足时直接启动，不重复安装。模板匹配使用与应用一致的 SDK 版本，PaddleOCR 使用随应用提供的 requirements.txt 约束。
 
 三项服务分别使用 `dependencies/services/` 下的独立虚拟环境，基于当前选定的 Python 创建，避免修改该解释器的全局模块。源码运行可安装本地 SDK；安装包运行从 PyPI 安装应用要求的 SDK 版本，尚未发布的版本会明确报错。Indra OCR 和 PaddleOCR 服务脚本与依赖清单随 Go 程序内嵌，启动不依赖工作目录中存在源码。

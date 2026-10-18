@@ -57,7 +57,7 @@ func newAppHandler(appRoot fs.FS) http.Handler {
 		}
 		switch {
 		case r.URL.Path == "/" || r.URL.Path == "/index.html" || r.URL.Path == "/player" ||
-			r.URL.Path == "/dashboard" || r.URL.Path == "/files" || r.URL.Path == "/tasks" ||
+			r.URL.Path == "/dashboard" || r.URL.Path == "/files" ||
 			r.URL.Path == "/dependencies" || r.URL.Path == "/ai-integration" ||
 			skillsmarket.IsSkillDetailRoutePath(r.URL.Path):
 			if indexErr != nil {

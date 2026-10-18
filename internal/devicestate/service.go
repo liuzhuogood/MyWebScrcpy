@@ -15,7 +15,6 @@ import (
 
 	"mywebscrcpy/internal/dependencies"
 	"mywebscrcpy/internal/ocr"
-	"mywebscrcpy/internal/taskrun"
 	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/uipage"
 	"mywebscrcpy/internal/visionframes"
@@ -33,7 +32,6 @@ type Service struct {
 	uiPage          *uipage.Service
 	ocrService      *ocr.Service
 	templateStorage *template.Storage
-	taskRunService  *taskrun.Service
 	aiClient        *AIClient
 	frames          *visionframes.Store
 
@@ -45,7 +43,6 @@ func NewService(
 	uiPage *uipage.Service,
 	ocrService *ocr.Service,
 	templateStorage *template.Storage,
-	taskRunService *taskrun.Service,
 	aiClient *AIClient,
 	frames *visionframes.Store,
 ) *Service {
@@ -54,7 +51,6 @@ func NewService(
 		uiPage:          uiPage,
 		ocrService:      ocrService,
 		templateStorage: templateStorage,
-		taskRunService:  taskRunService,
 		aiClient:        aiClient,
 		frames:          frames,
 	}
@@ -66,7 +62,7 @@ func (s *Service) lockChanForDevice(serial string) chan struct{} {
 }
 
 // CollectState 执行单轮设备状态采集，预算 20 秒，同设备串行
-func (s *Service) CollectState(ctx context.Context, serial, taskID string, templateIDs []string) (*DeviceState, error) {
+func (s *Service) CollectState(ctx context.Context, serial string, templateIDs []string) (*DeviceState, error) {
 	if serial == "" {
 		return nil, fmt.Errorf("missing device serial")
 	}
@@ -186,35 +182,9 @@ func (s *Service) CollectState(ctx context.Context, serial, taskID string, templ
 		}
 	}
 
-	// 4. 关联任务解析
-	associatedTask, matchedSkillDir := s.resolveAssociatedTask(serial, taskID)
-	state.AssociatedTask = associatedTask
-	if s.taskRunService == nil {
-		sources["task"] = SourceStatus{
-			Status:    "unavailable",
-			Timestamp: time.Now().UnixMilli(),
-		}
-	} else if associatedTask != nil && associatedTask.Conflict {
-		sources["task"] = SourceStatus{
-			Status:    "failed",
-			Timestamp: time.Now().UnixMilli(),
-			Error:     associatedTask.ConflictMessage,
-		}
-	} else if associatedTask == nil || associatedTask.TaskID == "" {
-		sources["task"] = SourceStatus{
-			Status:    "empty",
-			Timestamp: time.Now().UnixMilli(),
-		}
-	} else {
-		sources["task"] = SourceStatus{
-			Status:    "success",
-			Timestamp: time.Now().UnixMilli(),
-		}
-	}
-
-	// 5. 三类模板加载与匹配
+	// 4. 模板加载与匹配
 	if sceneImg != nil {
-		allTemplates, tmplErrs := s.collectAllTemplates(serial, matchedSkillDir)
+		allTemplates, tmplErrs := s.collectAllTemplates(serial)
 		if len(tmplErrs) > 0 {
 			partialFailures = append(partialFailures, tmplErrs...)
 		}
@@ -318,88 +288,7 @@ func (s *Service) CollectState(ctx context.Context, serial, taskID string, templ
 	return state, nil
 }
 
-func (s *Service) resolveAssociatedTask(serial, explicitTaskID string) (*AssociatedTaskInfo, string) {
-	if s.taskRunService == nil {
-		return nil, ""
-	}
-
-	// 显式指定 task_id 时直接读取该任务目录
-	if explicitTaskID != "" {
-		detail, err := s.taskRunService.GetTaskDetail(explicitTaskID)
-		if err != nil {
-			return &AssociatedTaskInfo{
-				TaskID:          explicitTaskID,
-				Conflict:        true,
-				ConflictMessage: fmt.Sprintf("指定任务 %s 读取失败: %v", explicitTaskID, err),
-			}, ""
-		}
-		if detail.TaskDef.DeviceSerial != serial {
-			return &AssociatedTaskInfo{
-				TaskID:          explicitTaskID,
-				Conflict:        true,
-				ConflictMessage: fmt.Sprintf("指定任务 %s 所属设备 (%s) 与当前设备 (%s) 不一致", explicitTaskID, detail.TaskDef.DeviceSerial, serial),
-			}, ""
-		}
-		summary := fmt.Sprintf("%d 个声明产出", len(detail.Outputs))
-		if detail.OutputsComplete {
-			summary += " · 必需产出完整"
-		} else {
-			summary += " · 必需产出待补齐"
-		}
-		return &AssociatedTaskInfo{
-			TaskID:         explicitTaskID,
-			Name:           detail.TaskDef.Name,
-			Goal:           detail.TaskDef.Goal,
-			Status:         detail.State.Status,
-			Progress:       detail.State.Progress,
-			Stage:          detail.State.Stage,
-			OutputsSummary: summary,
-		}, detail.TaskDef.SkillDir
-	}
-
-	// 未指定时按最近扫描索引关联
-	runningTaskID, hasConflict, count, scannedAt := s.taskRunService.FindRunningTaskForDevice(serial)
-	if hasConflict {
-		return &AssociatedTaskInfo{
-			Conflict:        true,
-			ConflictMessage: fmt.Sprintf("发现 %d 个关联该设备的运行任务，请指定 task_id (索引扫描于 %s)", count, formatTime(scannedAt)),
-			ScannedAt:       scannedAt,
-		}, ""
-	}
-	if count == 0 || runningTaskID == "" {
-		return &AssociatedTaskInfo{
-			ScannedAt: scannedAt,
-		}, ""
-	}
-
-	// 唯一运行中任务
-	detail, err := s.taskRunService.GetTaskDetail(runningTaskID)
-	if err != nil {
-		return &AssociatedTaskInfo{
-			TaskID:    runningTaskID,
-			ScannedAt: scannedAt,
-		}, ""
-	}
-
-	summary := fmt.Sprintf("%d 个声明产出", len(detail.Outputs))
-	if detail.OutputsComplete {
-		summary += " · 必需产出完整"
-	} else {
-		summary += " · 必需产出待补齐"
-	}
-	return &AssociatedTaskInfo{
-		TaskID:         runningTaskID,
-		Name:           detail.TaskDef.Name,
-		Goal:           detail.TaskDef.Goal,
-		Status:         detail.State.Status,
-		Progress:       detail.State.Progress,
-		Stage:          detail.State.Stage,
-		OutputsSummary: summary,
-		ScannedAt:      scannedAt,
-	}, detail.TaskDef.SkillDir
-}
-
-func (s *Service) collectAllTemplates(serial, skillDir string) ([]LoadedTemplate, []string) {
+func (s *Service) collectAllTemplates(serial string, skillDirs ...string) ([]LoadedTemplate, []string) {
 	var templates []LoadedTemplate
 	var errs []string
 
@@ -454,10 +343,12 @@ func (s *Service) collectAllTemplates(serial, skillDir string) ([]LoadedTemplate
 	}
 
 	// 3. 关联技能模板
-	if skillDir != "" {
-		skillTmpls, sErrs := LoadSkillTemplates(skillDir)
-		templates = append(templates, skillTmpls...)
-		errs = append(errs, sErrs...)
+	for _, skillDir := range skillDirs {
+		if skillDir != "" {
+			skillTmpls, sErrs := LoadSkillTemplates(skillDir)
+			templates = append(templates, skillTmpls...)
+			errs = append(errs, sErrs...)
+		}
 	}
 
 	return templates, errs
@@ -467,11 +358,4 @@ func randomHex(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
-}
-
-func formatTime(ms int64) string {
-	if ms <= 0 {
-		return "未扫描"
-	}
-	return time.UnixMilli(ms).Format("15:04:05")
 }

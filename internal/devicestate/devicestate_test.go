@@ -15,10 +15,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 
 	"mywebscrcpy/internal/db"
-	"mywebscrcpy/internal/taskrun"
 	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/uipage"
 	"mywebscrcpy/internal/visionframes"
@@ -48,7 +46,7 @@ func createTestJPEG(w, h int, c color.Color) []byte {
 	return buf.Bytes()
 }
 
-func setupTestDeviceStateEnvironment(t *testing.T) (*Service, *AIClient, *db.DB, *taskrun.Service, *template.Storage, string) {
+func setupTestDeviceStateEnvironment(t *testing.T) (*Service, *AIClient, *db.DB, *template.Storage, string) {
 	t.Helper()
 	tempDir := t.TempDir()
 
@@ -66,11 +64,6 @@ func setupTestDeviceStateEnvironment(t *testing.T) (*Service, *AIClient, *db.DB,
 		t.Fatal(err)
 	}
 
-	tasksDir := filepath.Join(tempDir, "tasks")
-	_ = os.MkdirAll(tasksDir, 0755)
-	taskSvc := taskrun.NewService(database)
-	_, _ = taskSvc.SetRootDir(tasksDir)
-
 	aiClient := NewAIClient(database)
 
 	// 使用注入 Runner 的 uiPage 服务
@@ -83,16 +76,15 @@ func setupTestDeviceStateEnvironment(t *testing.T) (*Service, *AIClient, *db.DB,
 		uiPageSvc,
 		nil,
 		tmplStorage,
-		taskSvc,
 		aiClient,
 		visionframes.NewStore(),
 	)
 
-	return svc, aiClient, database, taskSvc, tmplStorage, tempDir
+	return svc, aiClient, database, tmplStorage, tempDir
 }
 
 func TestAcceptHeaderContentNegotiation(t *testing.T) {
-	svc, aiClient, _, _, _, _ := setupTestDeviceStateEnvironment(t)
+	svc, aiClient, _, _, _ := setupTestDeviceStateEnvironment(t)
 	handler := NewHandler(svc, aiClient)
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -136,7 +128,7 @@ func TestAcceptHeaderContentNegotiation(t *testing.T) {
 }
 
 func TestThreeSourceTemplatesIsolation(t *testing.T) {
-	svc, _, _, taskSvc, tmplStorage, tempDir := setupTestDeviceStateEnvironment(t)
+	svc, _, _, tmplStorage, tempDir := setupTestDeviceStateEnvironment(t)
 
 	// 创建全局模板: "same-name"
 	pngBytes := createTestPNG(10, 10, color.RGBA{R: 255, A: 255})
@@ -163,27 +155,13 @@ func TestThreeSourceTemplatesIsolation(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(skillTmplDir, "meta.json"), []byte(`{"name":"same-name","threshold":0.95}`), 0644)
 	_ = os.WriteFile(filepath.Join(skillTmplDir, "template.png"), pngBytes, 0644)
 
-	// 创建关联任务
-	tasksRoot, _ := taskSvc.GetRootDir()
-	taskDir := filepath.Join(tasksRoot, "task-skill-1")
-	_ = os.MkdirAll(taskDir, 0755)
-	taskDef := taskrun.TaskDef{
-		Name:         "关联技能任务",
-		DeviceSerial: "phone-a",
-		SkillDir:     skillDir,
-	}
-	defBytes, _ := json.Marshal(taskDef)
-	_ = os.WriteFile(filepath.Join(taskDir, "task.json"), defBytes, 0644)
-	stateBytes, _ := json.Marshal(taskrun.TaskState{Status: "running", UpdatedAt: time.Now().UnixMilli()})
-	_ = os.WriteFile(filepath.Join(taskDir, "state.json"), stateBytes, 0644)
-
-	// 扫描使索引感知该任务
-	_, _ = taskSvc.Scan(t.Context())
-
 	// 采集总状态
-	state, err := svc.CollectState(t.Context(), "phone-a", "", nil)
+	state, err := svc.CollectState(t.Context(), "phone-a", nil)
 	if err != nil {
 		t.Fatalf("CollectState 失败: %v", err)
+	}
+	if state == nil || state.Serial != "phone-a" {
+		t.Fatalf("采集状态无效: %+v", state)
 	}
 
 	// 验证模板合并列表：全局、设备、技能三类模板均加载，同名分别保留
@@ -201,11 +179,6 @@ func TestThreeSourceTemplatesIsolation(t *testing.T) {
 	}
 	if sourceCount["global"] != 1 || sourceCount["device"] != 1 || sourceCount["skill"] != 1 {
 		t.Fatalf("三类模板来源隔离计数错误: %+v", sourceCount)
-	}
-
-	// 验证关联任务正确解析
-	if state.AssociatedTask == nil || state.AssociatedTask.TaskID != "task-skill-1" {
-		t.Fatalf("关联任务解析错误: %+v", state.AssociatedTask)
 	}
 }
 
@@ -258,7 +231,7 @@ func TestAIDecisionHTTPFixture(t *testing.T) {
 	}))
 	defer mockAIServer.Close()
 
-	_, aiClient, dbInstance, _, _, _ := setupTestDeviceStateEnvironment(t)
+	_, aiClient, dbInstance, _, _ := setupTestDeviceStateEnvironment(t)
 
 	// 配置 AI 端点与模型
 	_ = dbInstance.SetConfig(ConfigKeyAIEndpoint, mockAIServer.URL)
@@ -329,7 +302,7 @@ func TestAIConcurrencyLimitAndTimeout(t *testing.T) {
 	}))
 	defer slowServer.Close()
 
-	svc, aiClient, dbInstance, _, _, _ := setupTestDeviceStateEnvironment(t)
+	svc, aiClient, dbInstance, _, _ := setupTestDeviceStateEnvironment(t)
 	_ = dbInstance.SetConfig(ConfigKeyAIEndpoint, slowServer.URL)
 	_ = dbInstance.SetConfig(ConfigKeyAIModel, "mock-model")
 	_ = dbInstance.SetConfig(ConfigKeyAITimeout, "1") // 1 秒超时
@@ -363,7 +336,7 @@ func TestAIConcurrencyLimitAndTimeout(t *testing.T) {
 }
 
 func TestServiceConfigMasking(t *testing.T) {
-	_, aiClient, dbInstance, taskSvc, _, _ := setupTestDeviceStateEnvironment(t)
+	_, aiClient, dbInstance, _, _ := setupTestDeviceStateEnvironment(t)
 
 	// 1. 设置真实密钥
 	_ = dbInstance.SetConfig(ConfigKeyAIEndpoint, "https://api.openai.com/v1/chat/completions")
@@ -410,8 +383,6 @@ func TestServiceConfigMasking(t *testing.T) {
 	if newActualKey != "sk-new-secret-999999" {
 		t.Fatalf("新密钥未保存成功: %s", newActualKey)
 	}
-
-	_ = taskSvc
 }
 
 func TestDeviceStateEdgeCasesAndProbeChecks(t *testing.T) {
@@ -487,8 +458,8 @@ func TestDeviceStateEdgeCasesAndProbeChecks(t *testing.T) {
 	}
 
 	// 5. 采集失败时 ContextStable 为 false，DeviceInfo 不为空
-	failedSvc := NewService("/nonexistent/test-adb", nil, nil, nil, nil, nil, visionframes.NewStore())
-	observed, err := failedSvc.CollectState(context.Background(), "dev-failed", "", nil)
+	failedSvc := NewService("/nonexistent/test-adb", nil, nil, nil, nil, visionframes.NewStore())
+	observed, err := failedSvc.CollectState(context.Background(), "dev-failed", nil)
 	if err != nil {
 		t.Fatalf("CollectState 返回非预期外层错误: %v", err)
 	}

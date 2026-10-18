@@ -19,7 +19,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", "--base-url", dest="base", default=None, help="服务地址 (或由环境变量 MYWEBSCRCPY_BASE_URL 指定)")
     parser.add_argument("--serial", required=True, help="设备序列号")
-    parser.add_argument("--task-id", help="指定关联任务目录ID")
     parser.add_argument("--template-ids", help="指定模板ID（逗号分隔）")
     parser.add_argument("--decision", action="store_true", help="调用 AI 视觉决策模型")
     parser.add_argument("--goal", help="本轮决策目标（仅在 --decision 时生效）")
@@ -39,15 +38,11 @@ def main():
 
     if not args.decision:
         query = []
-        if args.task_id:
-            query.append(("task_id", args.task_id))
         if args.template_ids:
             query.append(("template_ids", args.template_ids))
         res = client.request("GET", f"/api/device-state/{args.serial}", query=query)
     else:
         body_dict = {}
-        if args.task_id:
-            body_dict["task_id"] = args.task_id
         if args.template_ids:
             body_dict["template_ids"] = args.template_ids
         if args.goal:
@@ -90,12 +85,6 @@ def main():
     page_info = state.get("page_info") or {}
     print(f"前台应用: {page_info.get('package_name', '')} / {page_info.get('activity', '')}")
     print(f"观测稳定性: {'稳定' if state.get('context_stable') else '不稳定'}")
-
-    assoc = state.get("associated_task")
-    if assoc and assoc.get("task_id"):
-        print(f"关联任务: {assoc.get('name')} ({assoc.get('task_id')}) - {assoc.get('status')} · {assoc.get('outputs_summary')}")
-    elif assoc and assoc.get("conflict"):
-        print(f"关联冲突: {assoc.get('conflict_message')}")
 
     ocr_data = state.get("ocr", {})
     if ocr_data.get("boxes"):

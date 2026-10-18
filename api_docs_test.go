@@ -83,11 +83,6 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"/api/templates/import",
 		"/api/templates/{id}",
 		"/api/templates/{id}/image",
-		// 任务运行
-		"/api/task-runs/scan",
-		"/api/task-runs",
-		"/api/task-runs/{id}",
-		"/api/task-runs/{id}/outputs/{output_id}",
 		// 设备状态与AI决策
 		"/api/device-state/{serial}",
 		"/api/device-state/{serial}/decision",
@@ -158,9 +153,6 @@ func TestOpenAPISpecDocumentsRegisteredAPIs(t *testing.T) {
 		"SkillInstallRequest",
 		"SkillInstallTargetResult",
 		"SkillInstallResponse",
-		"TaskSummary",
-		"TaskDetail",
-		"ScanResult",
 		"DeviceTotalState",
 		"TotalStateAndDecision",
 		"ServiceConfig",
@@ -247,7 +239,6 @@ func TestAutomationOpenAPISpecFiltering(t *testing.T) {
 		"/api/v1/actions/tap",
 		"/api/vision/ocr",
 		"/api/templates",
-		"/api/task-runs",
 	}
 	for _, p := range mustInclude {
 		if _, ok := spec.Paths[p]; !ok {
@@ -257,6 +248,7 @@ func TestAutomationOpenAPISpecFiltering(t *testing.T) {
 
 	// 必须排除非自动化运维/元接口
 	mustExclude := []string{
+		"/api/task-runs",
 		"/api/dependencies",
 		"/api/version/upgrade",
 		"/api/version/status",

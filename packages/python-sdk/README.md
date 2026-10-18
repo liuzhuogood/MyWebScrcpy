@@ -107,11 +107,7 @@ SDK 版本与仓库根目录 `VERSION` 一致，Python 包版本去掉 `v` 前�
 
 GitHub Actions 的 `Publish Python SDK` 工作流在主分支的版本、SDK 或发布配置变更时运行，也支持 `v*` 标签和手动触发；构建检查及安装测试通过后发布未发布的版本，已存在的完整版本会跳过。仓库需在 Settings → Secrets and variables → Actions 配置 `PYPI_API_TOKEN`，值为有此项目发布权限的 PyPI API Token。只修改 SDK 而不更新版本号不会覆盖 PyPI 上已有的版本。
 
-## 外部任务上报
-
-`TaskReporter(base_url, name=..., device_serial=..., source="codex")` 支持状态、心跳、实时日志和结果上报，无需专用上报令牌。完整示例与失败处理见 [任务运行集成](../../docs/task-runs.md) 和 `examples/report_task_run.py`。本版发布前请从本仓库安装 SDK。
-
-### OCR 引擎
+## OCR 引擎
 
 `device.ocr()` 自动按 Indra OCR、macOCR、PaddleOCR 顺序尝试；服务识别成功但没有文字时不会降级。使用前在 MyWebScrcpy 系统配置中启动本地 Indra OCR。显式指定引擎时只调用该服务。
 

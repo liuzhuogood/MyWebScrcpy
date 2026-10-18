@@ -53,8 +53,8 @@ func TestCollectStateWithoutUIDump(t *testing.T) {
 	if _, err := frames.Put("phone", createTestJPEG(4, 6, color.White)); err != nil {
 		t.Fatal(err)
 	}
-	svc := NewService(adb, page, ocr.NewService(nil, nil), nil, nil, nil, frames)
-	state, err := svc.CollectState(t.Context(), "phone", "", nil)
+	svc := NewService(adb, page, ocr.NewService(nil, nil), nil, nil, frames)
+	state, err := svc.CollectState(t.Context(), "phone", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

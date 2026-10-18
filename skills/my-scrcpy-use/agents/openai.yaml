@@ -1,5 +1,0 @@
-interface:
-  display_name: "MyWebScrcpy 使用"
-  short_description: "按当前接口文档调用 API，并按需查阅自动化脚本、任务执行与设备操作规范"
-  icon_small: "./assets/icon/icon-192.png"
-  icon_large: "./assets/icon/icon-1024.png"

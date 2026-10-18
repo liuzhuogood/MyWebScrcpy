@@ -50,7 +50,6 @@ func (h *Handler) handleGetTotalState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	taskID := r.URL.Query().Get("task_id")
 	var templateIDs []string
 	if tmplRaw := r.URL.Query().Get("template_ids"); tmplRaw != "" {
 		for _, id := range strings.Split(tmplRaw, ",") {
@@ -60,7 +59,7 @@ func (h *Handler) handleGetTotalState(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	state, err := h.service.CollectState(r.Context(), serial, taskID, templateIDs)
+	state, err := h.service.CollectState(r.Context(), serial, templateIDs)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("采集设备总状态失败: %v", err), http.StatusInternalServerError)
 		return
@@ -85,7 +84,6 @@ func (h *Handler) handleGetStateAndDecision(w http.ResponseWriter, r *http.Reque
 	}
 
 	var req struct {
-		TaskID      string `json:"task_id"`
 		TemplateIDs string `json:"template_ids"`
 		Goal        string `json:"goal"`
 	}
@@ -103,10 +101,6 @@ func (h *Handler) handleGetStateAndDecision(w http.ResponseWriter, r *http.Reque
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "goal 长度超出限制 (最多 1000 字符)"})
 		return
 	}
-	if req.TaskID != "" && (strings.Contains(req.TaskID, "/") || strings.Contains(req.TaskID, "\\") || strings.Contains(req.TaskID, "..")) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "task_id 格式不合法"})
-		return
-	}
 
 	var templateIDs []string
 	if req.TemplateIDs != "" {
@@ -118,7 +112,7 @@ func (h *Handler) handleGetStateAndDecision(w http.ResponseWriter, r *http.Reque
 	}
 
 	// 1. 单轮采集设备状态
-	state, err := h.service.CollectState(r.Context(), serial, req.TaskID, templateIDs)
+	state, err := h.service.CollectState(r.Context(), serial, templateIDs)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("采集设备总状态失败: %v", err), http.StatusInternalServerError)
 		return
@@ -157,11 +151,6 @@ func (h *Handler) handleGetServiceConfig(w http.ResponseWriter, r *http.Request)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
-	}
-	if h.service.taskRunService != nil {
-		if root, err := h.service.taskRunService.GetRootDir(); err == nil {
-			cfg.TaskRootDir = root
-		}
 	}
 	writeJSON(w, http.StatusOK, cfg)
 }
@@ -207,25 +196,8 @@ func (h *Handler) handleSaveServiceConfig(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
-	if body.TaskRootDir != "" && h.service.taskRunService != nil {
-		if err := h.service.taskRunService.ValidateRootDir(body.TaskRootDir); err != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-			return
-		}
-	}
 
-	// 1. 如果修改了任务根目录
-	if body.TaskRootDir != "" && h.service.taskRunService != nil {
-		cur, _ := h.service.taskRunService.GetRootDir()
-		if cur != body.TaskRootDir {
-			if _, err := h.service.taskRunService.SetRootDir(body.TaskRootDir); err != nil {
-				writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-				return
-			}
-		}
-	}
-
-	// 2. 保存 AI 配置
+	// 保存 AI 配置
 	if h.aiClient != nil {
 		if err := h.aiClient.SaveConfig(body); err != nil {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
@@ -233,6 +205,6 @@ func (h *Handler) handleSaveServiceConfig(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	// 3. 返回最新脱敏配置
+	// 返回最新脱敏配置
 	h.handleGetServiceConfig(w, r)
 }

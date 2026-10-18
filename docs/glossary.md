@@ -17,10 +17,10 @@
 | 投屏详情页 | 投屏页、投屏操控页、播放器页、控制页 | 路由 `/player?serial=<序列号>` · `frontend/src/views/PlayerView.vue` |
 | 大屏监控页 | 大屏、监控墙、dashboard | 路由 `/dashboard` · `frontend/src/views/DashboardView.vue` |
 | 文件管理页 | 文件页、文件管理器 | 路由 `/files?serial=<序列号>` · `frontend/src/views/FilesView.vue`;亦内嵌于投屏详情页抽屉(`DevicePlayer.vue`,embedded) |
-| 任务运行页 | 任务面板、任务页、Task Runs | 路由 `/tasks` · `frontend/src/views/TasksView.vue` |
 | 依赖管理页 | 依赖页 | 路由 `/dependencies` · `frontend/src/views/DependenciesView.vue` |
 | AI 集成页 | 与 AI 集成、AI 集成、接入指南 | 路由 `/ai-integration` · `frontend/src/views/AiIntegrationView.vue` |
 | 技能详情页 | 技能详情、技能二级页面 | 路由 `/ai-integration/skills/:id` · `frontend/src/views/SkillDetailView.vue` |
+| 手机客户端 | Flutter 手机端、移动 App | `mobile/`；Flutter Android/iOS 客户端，原生设备列表并以 WebView 打开现有投屏详情页 |
 | 全量接口文档 | 全量 API 文档、接口文档 | 静态页 `/api-docs.html` · 完整 OpenAPI 3.1.0 接口规范页，源文件 `/api/openapi.json` |
 | 自动化接口文档 | 自动化 API 文档、自动化文档 | 静态页 `/api-docs-automation.html` · 自动化专用核心接口规范页，源文件 `/api/openapi-automation.json`，配置位于 `configs/automation-apis.json` |
 
@@ -53,11 +53,10 @@
 | OCR | 识文字、文字识别 | 接口 `POST /api/vision/ocr`；支持文件上传与设备截图，`auto` 按 Indra OCR → macOCR → PaddleOCR 串行降级，`parallel` 为独立的三引擎并发融合模式；见 `docs/system-config.md` |
 | OCR 连续采样 | OCR 防抖、稳定识别 | `internal/ocr/detect.go`；设备请求的 `stabilization_ms=1..5000` 启用服务端连续截图，轮次启动间隔至少 50 ms、最多 101 轮；省略或 0 保持单次，上传文件不启用 |
 | OCR 文本画 | 文字图片、text-art | 接口 `POST /api/vision/ocr-text-art`；按 OCR 文字框位置渲染纯文本布局，共用 OCR 引擎与采样规则，支持 JSON、multipart 和 query；JSON 返回 `samples`、`engines_used` 等识别信息，`Accept: text/plain` 返回文本画 |
-| 任务运行 | Task Runs、任务面板 | 外部自动化执行端在独立工作目录维护 `task.json`、`state.json` 与声明产出，服务提供主动扫描与产出呈现；取消旧任务上报 |
-| 设备总状态 | 总状态、设备状态 | 单轮设备状态、页面信息、投屏帧截图、OCR、模板匹配与关联任务；截图取自投屏视频流最新帧(无投屏时该源失败)；接口 `GET /api/device-state/{serial}` |
+| 设备总状态 | 总状态、设备状态 | 单轮设备状态、页面信息、投屏帧截图、OCR、模板匹配；截图取自投屏视频流最新帧(无投屏时该源失败)；接口 `GET /api/device-state/{serial}` |
 | 投屏帧缓存 | 画面帧、visionframes | 浏览器解码后的投屏画面帧,前端经 `POST /api/vision/frame` 低频上传,后端按 serial 缓存最新一帧;后端 `internal/visionframes` |
 | 总状态及决策 | AI 决策、状态决策 | 共用单轮采集并在服务端调用视觉 AI 模型进行决策建议；接口 `POST /api/device-state/{serial}/decision` |
-| 通用操作技能 | 通用技能、my-scrcpy-common | `skills/my-scrcpy-common`；共享规则、Wiki 与通用操作脚本（观察、刷视频、返回、启动/重启应用） |
+| 通用操作技能 | 通用技能、my-scrcpy-common | `skills/my-scrcpy-common`；共享规则、Wiki 与通用操作脚本（观察、刷视频、返回、启动/重启应用、解锁屏幕） |
 | 动作执行 | 拟人化注入、input 执行 | 两种模式:SDK 拟人化注入(贝塞尔曲线/落点微抖动)与 ADB Shell input 系统级穿透 |
 | 快手短视频技能 | 快手技能、快手极速版任务、观看视频模式 | `skills/kuaishou-short-video/SKILL.md`；红包守护、连续打卡白拿手机、连续签到的视频观看流程 |
 
@@ -72,7 +71,6 @@
 | `uipage` / `uixml` | 页面信息、UI XML 快照 |
 | `vision` / `ocr` / `template` / `matchingservice` / `automation` | 视觉接口、OCR 引擎调度、模板管理、模板匹配服务进程、Go 原生自动化与视觉条件判断 |
 | `files` | 文件管理后端 |
-| `taskrun` | 任务运行后端 |
 | `operationlog` | 操作日志 |
 | `dependencies` / `servicepython` / `serviceprefs` | ADB/Python 依赖管理、Python 服务进程管理、服务开关偏好持久化 |
 | `updater` / `desktop` / `db` / `debug` | 应用更新、桌面模式、数据库访问、调试 |

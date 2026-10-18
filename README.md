@@ -49,7 +49,6 @@
 - 自动重连
 - 大屏监控模式（多设备同屏展示，支持小/中/大三档尺寸）
 - 文件管理：浏览目录、搜索筛选、上传下载、移动、重命名、批量删除和撤销
-- 独立通用任务运行面板 (Task Runs)：由外部自动化执行端 (Codex/外部进程) 上报生命周期、心跳保活、实时日志与 Markdown 报告，支持失联派生与日志导出
 - 单二进制文件，内嵌 scrcpy-server 和前端资源
 
 ## API 文档
@@ -152,7 +151,7 @@ pnpm --dir frontend dev
 ```
 
 打开 `http://localhost:5173/`。开发服务器将 HTTP API 和 WebSocket 请求代理到 `http://localhost:8080`。
-发布时使用 `bash scripts/build.sh`：前端、scrcpy-server.jar 嵌入 Go 程序。首页顶端“系统配置”支持主题切换、ADB/Python 依赖管理及路径设置。外部自动化集成见 [任务运行集成技能](.agents/skills/my-scrcpy-task-run/SKILL.md)。
+发布时使用 `bash scripts/build.sh`：前端、scrcpy-server.jar 嵌入 Go 程序。首页顶端“系统配置”支持主题切换、ADB/Python 依赖管理及路径设置。
 直接运行 `go build` 不会更新前端产物。跨平台构建示例：
 
 ```bash
@@ -397,5 +396,3 @@ MIT
 ### v1.25 数据重置
 
 v1.25 首次打开旧数据库时直接重建，不迁移旧脚本、任务历史、设备记录或模型配置，不提供旧脚本导出。新数据库只初始化一次，后续重启保留新记录。旧依赖选择配置重置为仅含 ADB、Python 的配置；不清理全局 Pi 或用户业务文件。
-
-外部运行通过 [TaskReporter](docs/task-runs.md) 直接上报，无需专用令牌。

@@ -92,21 +92,6 @@ async function handleServiceSave() {
               </div>
             </div>
 
-            <!-- 任务工作目录 -->
-            <div class="space-y-3 rounded-lg border p-4">
-              <div>
-                <label for="task-root-dir" class="text-sm font-medium">任务工作目录</label>
-                <p class="mt-1 text-xs text-muted-foreground">外部任务记录与产出的存放根目录（默认 ~/.mywebscrcppy/tasks/）</p>
-              </div>
-              <Input
-                id="task-root-dir"
-                v-model="serviceConfig.config.value.task_root_dir"
-                placeholder="~/.mywebscrcppy/tasks/"
-                autocomplete="off"
-                class="w-full font-mono text-xs"
-              />
-            </div>
-
             <!-- AI 视觉决策服务 -->
             <div class="space-y-3 rounded-lg border p-4">
               <div>

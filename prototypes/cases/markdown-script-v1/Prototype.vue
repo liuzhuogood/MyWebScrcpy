@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import {
-  Activity,
   AlertCircle,
   Bot,
   Calendar,
@@ -15,15 +14,12 @@ import {
   FileCode,
   FileEdit,
   Image as ImageIcon,
-  Play,
   Plus,
   RefreshCw,
   Search,
   Send,
   Settings2,
-  Smartphone,
   Sparkles,
-  Square,
   User,
 } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
@@ -49,19 +45,6 @@ interface ScriptItem {
   updatedAt: string
   compiledVersion: string
   compiledPython: string
-}
-
-// 任务管理器运行实例
-interface RunningTask {
-  id: string
-  scriptId: string
-  scriptName: string
-  deviceSerial: string
-  pid: number
-  status: 'running' | 'stopping' | 'completed' | 'failed'
-  startedAt: string
-  elapsedSec: number
-  timeoutSec: number
 }
 
 interface TemplateAsset {
@@ -188,66 +171,6 @@ function fillPrompt(text: string) {
   sendAiPrompt()
 }
 
-// 模拟任务管理器活跃列表
-const activeTasks = ref<RunningTask[]>([
-  {
-    id: 'task_run_101',
-    scriptId: 's_01',
-    scriptName: '微信自动签到任务',
-    deviceSerial: '10.0.0.30:5555',
-    pid: 89412,
-    status: 'running',
-    startedAt: '15:32:10',
-    elapsedSec: 42,
-    timeoutSec: 180,
-  },
-])
-const taskManagerDialogOpen = ref(false)
-
-// 任务管理器操作：终止进程
-function killTask(task: RunningTask) {
-  task.status = 'stopping'
-  setTimeout(() => {
-    activeTasks.value = activeTasks.value.filter(t => t.id !== task.id)
-  }, 400)
-}
-
-// 模拟立即运行脚本（带设备级锁检查）
-const runNotice = ref<{ type: 'locked' | 'success', text: string } | null>(null)
-function executeScriptWithLock() {
-  const targetDevice = parsedMeta.value.targetDevice === 'auto' ? '10.0.0.30:5555' : parsedMeta.value.targetDevice
-  const existingRunning = activeTasks.value.find(t => t.deviceSerial === targetDevice && t.status === 'running')
-
-  if (existingRunning) {
-    runNotice.value = {
-      type: 'locked',
-      text: `设备 [${targetDevice}] 当前正被任务「${existingRunning.scriptName}」(PID: ${existingRunning.pid}) 占用中，已触发互斥保护！请先等待其完成或在任务管理器中结束。`,
-    }
-    return
-  }
-
-  // 无占用：生成新 PID 并注册到任务管理器
-  const randomPid = Math.floor(10000 + Math.random() * 80000)
-  const newTask: RunningTask = {
-    id: `task_${Date.now()}`,
-    scriptId: currentScript.value?.id || 's_new',
-    scriptName: currentScript.value?.name || '自动化脚本',
-    deviceSerial: targetDevice,
-    pid: randomPid,
-    status: 'running',
-    startedAt: new Date().toLocaleTimeString(),
-    elapsedSec: 0,
-    timeoutSec: parsedMeta.value.timeoutSec,
-  }
-  activeTasks.value.unshift(newTask)
-  runNotice.value = {
-    type: 'success',
-    text: `成功在设备 [${targetDevice}] 启动进程 (PID: ${randomPid})，已注册至任务管理器！`,
-  }
-  setTimeout(() => {
-    runNotice.value = null
-  }, 4000)
-}
 const templateAssets = ref<TemplateAsset[]>([
   {
     id: 'tmpl_wechat_tab',
@@ -648,14 +571,6 @@ function copyPythonCode() {
           </SelectContent>
         </Select>
 
-        <Button variant="outline" class="relative" @click="taskManagerDialogOpen = true">
-          <Activity class="h-4 w-4 mr-1 text-emerald-500" />
-          任务管理器
-          <Badge v-if="activeTasks.length > 0" variant="default" class="ml-1.5 h-4 px-1 text-[10px] bg-emerald-600">
-            {{ activeTasks.length }}
-          </Badge>
-        </Button>
-
         <Button variant="outline" @click="templateDialogOpen = true">
           <ImageIcon class="h-4 w-4 mr-1 text-blue-500" />
           模板库管理
@@ -966,38 +881,18 @@ function copyPythonCode() {
             </div>
 
             <!-- 生成触发按钮 -->
-            <div class="mt-2 space-y-1.5">
-              <div class="grid grid-cols-2 gap-1.5">
-                <Button
-                  size="sm"
-                  class="h-7 text-xs font-normal"
-                  :variant="isUpToDate ? 'outline' : 'default'"
-                  :disabled="isGenerating"
-                  @click="triggerSkillGeneration"
-                >
-                  <RefreshCw v-if="isGenerating" class="h-3 w-3 mr-1 animate-spin" />
-                  <Sparkles v-else class="h-3 w-3 mr-1 text-amber-400" />
-                  {{ isGenerating ? '编译中...' : (isUpToDate ? '重新生成' : '触发生成') }}
-                </Button>
-
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  class="h-7 text-xs font-normal"
-                  :disabled="!currentScript?.compiledPython"
-                  @click="executeScriptWithLock"
-                >
-                  <Play class="h-3 w-3 mr-1 text-emerald-500" />
-                  立即运行(托管)
-                </Button>
-              </div>
-
-              <!-- 执行提示与锁冲突预警 -->
-              <div v-if="runNotice" class="p-1.5 rounded text-[10px] leading-tight flex items-start gap-1" :class="runNotice.type === 'locked' ? 'bg-destructive/15 text-destructive border border-destructive/20' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'">
-                <AlertCircle v-if="runNotice.type === 'locked'" class="h-3 w-3 shrink-0 mt-0.5" />
-                <CheckCircle2 v-else class="h-3 w-3 shrink-0 mt-0.5" />
-                <span class="flex-1">{{ runNotice.text }}</span>
-              </div>
+            <div class="mt-2">
+              <Button
+                size="sm"
+                class="w-full h-7 text-xs font-normal"
+                :variant="isUpToDate ? 'outline' : 'default'"
+                :disabled="isGenerating"
+                @click="triggerSkillGeneration"
+              >
+                <RefreshCw v-if="isGenerating" class="h-3 w-3 mr-1 animate-spin" />
+                <Sparkles v-else class="h-3 w-3 mr-1 text-amber-400" />
+                {{ isGenerating ? '编译中...' : (isUpToDate ? '重新生成' : '触发生成') }}
+              </Button>
             </div>
           </div>
 
@@ -1060,81 +955,6 @@ function copyPythonCode() {
 
         <DialogFooter>
           <Button variant="outline" @click="templateDialogOpen = false">
-            关闭
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <!-- ================= 任务管理器 (生命周期管理与进程锁) 弹窗 ================= -->
-    <Dialog :open="taskManagerDialogOpen" @update:open="taskManagerDialogOpen = $event">
-      <DialogContent class="sm:max-w-[680px]">
-        <DialogHeader>
-          <DialogTitle class="flex items-center gap-2">
-            <Activity class="h-5 w-5 text-emerald-500" />
-            任务管理器 (设备执行锁与进程监控)
-          </DialogTitle>
-          <DialogDescription>
-            每台手机同一时间仅允许运行一个任务。所有活动进程 PID 登记在此，支持随时强制结束任务释放设备锁。
-          </DialogDescription>
-        </DialogHeader>
-
-        <div class="py-2 space-y-3">
-          <div class="flex items-center justify-between text-xs text-muted-foreground px-1">
-            <span>活跃执行任务: {{ activeTasks.length }} 个</span>
-            <span>状态说明：执行中即对目标设备施加独占排他锁</span>
-          </div>
-
-          <div v-if="activeTasks.length > 0" class="border rounded-lg divide-y">
-            <div
-              v-for="task in activeTasks"
-              :key="task.id"
-              class="p-3 flex items-center justify-between gap-4 hover:bg-muted/30 transition-colors"
-            >
-              <div class="flex items-start gap-3 min-w-0 flex-1">
-                <div class="p-2 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 shrink-0 mt-0.5">
-                  <Smartphone class="h-4 w-4" />
-                </div>
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs font-semibold truncate">{{ task.scriptName }}</span>
-                    <Badge variant="outline" class="text-[10px] px-1 py-0 border-emerald-500 text-emerald-600">
-                      PID: {{ task.pid }}
-                    </Badge>
-                  </div>
-                  <div class="text-[11px] text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                    <span>目标设备: <code class="font-mono">{{ task.deviceSerial }}</code></span>
-                    <span>启动时间: {{ task.startedAt }}</span>
-                    <span>运行时长: {{ task.elapsedSec }}s / {{ task.timeoutSec }}s</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 操作区：结束任务 -->
-              <div class="shrink-0 flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  class="h-7 text-xs px-2.5"
-                  :disabled="task.status === 'stopping'"
-                  @click="killTask(task)"
-                >
-                  <Square class="h-3 w-3 mr-1 fill-current" />
-                  {{ task.status === 'stopping' ? '正在终止...' : '结束进程' }}
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <div v-else class="py-12 border rounded-lg text-center text-muted-foreground text-xs space-y-2">
-            <CheckCircle2 class="h-8 w-8 mx-auto text-emerald-500/40" />
-            <div>当前没有正在执行的后台任务</div>
-            <p class="text-[11px]">所有连接设备均处于空闲就绪状态，可随时发起调度</p>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" @click="taskManagerDialogOpen = false">
             关闭
           </Button>
         </DialogFooter>

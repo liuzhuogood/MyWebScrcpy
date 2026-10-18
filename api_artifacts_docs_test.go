@@ -9,6 +9,9 @@ import (
 func TestTaskRunDocumentationRemovesLegacyAPIs(t *testing.T) {
 	var spec struct {
 		Paths      map[string]json.RawMessage `json:"paths"`
+	Tags       []struct {
+			Name string `json:"name"`
+		} `json:"tags"`
 		Components struct {
 			Schemas map[string]json.RawMessage `json:"schemas"`
 		} `json:"components"`
@@ -17,25 +20,19 @@ func TestTaskRunDocumentationRemovesLegacyAPIs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1. 验证已废弃清理的旧接口不再出现在规范中
+	// 1. 验证已废弃清理的旧接口及任务管理接口不再出现在规范中
 	for path := range spec.Paths {
 		if strings.HasPrefix(path, "/api/scripts") ||
 			strings.HasPrefix(path, "/api/md-scripts") ||
-			strings.HasPrefix(path, "/api/tasks/") ||
-			strings.HasPrefix(path, "/api/legacy/") ||
-			path == "/api/task-runs/{id}/heartbeat" ||
-			path == "/api/task-runs/{id}/logs" ||
-			path == "/api/task-runs/{id}/finish" {
+			strings.HasPrefix(path, "/api/tasks") ||
+			strings.HasPrefix(path, "/api/task-runs") ||
+			strings.HasPrefix(path, "/api/legacy/") {
 			t.Errorf("removed API still documented: %s", path)
 		}
 	}
 
-	// 2. 验证 v1.27.1 批准的新端点均已注册在规范中
+	// 2. 验证保留的核心端点均已注册在规范中
 	requiredPaths := []string{
-		"/api/task-runs/scan",
-		"/api/task-runs",
-		"/api/task-runs/{id}",
-		"/api/task-runs/{id}/outputs/{output_id}",
 		"/api/device-state/{serial}",
 		"/api/device-state/{serial}/decision",
 		"/api/system/service-config",
@@ -46,29 +43,21 @@ func TestTaskRunDocumentationRemovesLegacyAPIs(t *testing.T) {
 		}
 	}
 
-	// 3. 验证 TaskSummary 结构属性
-	var summarySchema struct {
-		Properties map[string]json.RawMessage `json:"properties"`
+	// 3. 验证任务管理相关 Schema 已彻底移除
+	removedSchemas := []string{
+		"TaskSummary", "TaskDetail", "TaskDef", "TaskState", "TaskListResponse", "ScanResult",
+		"TaskRun", "TaskRunLog", "CreateTaskRunRequest", "FinishTaskRunRequest", "TaskRunError",
 	}
-	if err := json.Unmarshal(spec.Components.Schemas["TaskSummary"], &summarySchema); err != nil {
-		t.Fatalf("unmarshal TaskSummary schema: %v", err)
-	}
-	for _, field := range []string{"id", "status", "business_result", "outputs_complete", "goal", "updated_at", "is_stale"} {
-		if _, ok := summarySchema.Properties[field]; !ok {
-			t.Errorf("TaskSummary missing field: %s", field)
+	for _, schemaName := range removedSchemas {
+		if _, ok := spec.Components.Schemas[schemaName]; ok {
+			t.Errorf("removed schema %s still documented in OpenAPI spec", schemaName)
 		}
 	}
 
-	// 4. 验证 TaskDetail 结构属性
-	var detailSchema struct {
-		Properties map[string]json.RawMessage `json:"properties"`
-	}
-	if err := json.Unmarshal(spec.Components.Schemas["TaskDetail"], &detailSchema); err != nil {
-		t.Fatalf("unmarshal TaskDetail schema: %v", err)
-	}
-	for _, field := range []string{"id", "task_def", "state", "outputs", "outputs_complete", "is_stale"} {
-		if _, ok := detailSchema.Properties[field]; !ok {
-			t.Errorf("TaskDetail missing field: %s", field)
+	// 4. 验证 Task Runs 标签已移除
+	for _, tag := range spec.Tags {
+		if strings.EqualFold(tag.Name, "Task Runs") {
+			t.Errorf("removed tag %s still present in OpenAPI spec", tag.Name)
 		}
 	}
 }
