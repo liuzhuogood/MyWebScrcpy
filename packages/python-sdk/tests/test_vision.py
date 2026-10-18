@@ -167,6 +167,38 @@ class VisionTests(unittest.TestCase):
             thread = device._vision._thread
         self.assertFalse(thread.is_alive())
 
+    def test_video_stream_context_yields_first_frame_and_closes_receiver(self):
+        fixture = self.fixture()
+        with fixture.client() as client, client.device('phone') as device:
+            with client.startVideoStream('phone', timeout=2) as stream:
+                first = stream.first_frame
+                self.assertEqual(first.session_id, 'session')
+                self.assertEqual((first.width, first.height), (96, 64))
+                self.assertEqual(stream.current_frame(timeout=1).session_id, 'session')
+                self.assertFalse(stream.closed)
+            self.assertTrue(stream.closed)
+            self.assertIsNone(device._vision)
+
+    def test_video_stream_can_sync_first_frame_through_sdk(self):
+        fixture = self.fixture()
+        with fixture.client() as client:
+            uploads = []
+            original = client._sync_vision_frame
+            client._sync_vision_frame = lambda serial, frame: uploads.append((serial, frame.frame_id)) or True
+            with client.startVideoStream('phone', timeout=2, sync_vision_frame=True) as stream:
+                self.assertTrue(stream.synced_to_vision_frame)
+            self.assertEqual(uploads, [('phone', stream.first_frame.frame_id)])
+
+    def test_video_stream_context_closes_when_body_raises(self):
+        fixture = self.fixture()
+        with fixture.client() as client, client.device('phone') as device:
+            with self.assertRaisesRegex(RuntimeError, 'body failure'):
+                with client.start_video_stream('phone', timeout=2) as stream:
+                    self.assertFalse(stream.closed)
+                    raise RuntimeError('body failure')
+            self.assertTrue(stream.closed)
+            self.assertIsNone(device._vision)
+
     def test_action_failures_and_unknown_outcomes_never_retry(self):
         for options, error in [({'fail_action': True}, ActionError), ({'no_reply': True}, ActionTimeout)]:
             fixture = self.fixture(**options)

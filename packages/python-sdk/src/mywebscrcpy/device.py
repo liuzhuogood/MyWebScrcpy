@@ -2,6 +2,7 @@ import logging
 import math
 import threading
 import time
+from contextlib import contextmanager
 
 from .contracts import Deadline
 from .errors import ActionTimeout, FrameTimeout, MatchTimeout
@@ -11,6 +12,23 @@ from .errors import CommandError, ProtocolError, SDKError
 from .models import CommandResult, PageInfo
 
 logger = logging.getLogger(__name__)
+
+
+class VideoStream:
+    """Active stream exposed by Device.startVideoStream()."""
+
+    def __init__(self, session, first_frame):
+        self._session = session
+        self.first_frame = first_frame
+        self.session_id = session.session_id
+        self.synced_to_vision_frame = False
+
+    @property
+    def closed(self):
+        return self._session._closed
+
+    def current_frame(self, timeout=10):
+        return self._session.current_frame(Deadline(_seconds(timeout)))
 
 
 def _seconds(value):
@@ -29,6 +47,7 @@ class Device:
         self.serial = serial
         self._closed = False
         self._vision = None
+        self._video_stream = None
         self._watch = None
         self._lock = threading.RLock()
         self._stop = threading.Event()
@@ -101,6 +120,38 @@ class Device:
 
     def frame(self, timeout=10):
         return self._frame(Deadline(timeout))
+
+    @contextmanager
+    def startVideoStream(self, timeout=15, *, sync_vision_frame=False):
+        """Open a video stream, yield its first decoded frame, then close it."""
+        from .vision import Vision
+
+        self._check_open()
+        deadline = Deadline(_seconds(timeout))
+        session = Vision(self._client, self.serial, deadline, video=True)
+        with self._lock:
+            self._check_open()
+            if self._video_stream is not None and not self._video_stream.closed:
+                raise SDKError("Device 已有活动的视频流")
+            self._vision = session
+            stream = VideoStream(session, None)
+            self._video_stream = stream
+        try:
+            first_frame = session.current_frame(deadline)
+            stream.first_frame = first_frame
+            if sync_vision_frame:
+                stream.synced_to_vision_frame = self._client._sync_vision_frame(self.serial, first_frame)
+            logger.info("Vision video stream started: serial=%s session_id=%s", self.serial, session.session_id)
+            yield stream
+        finally:
+            session.close()
+            with self._lock:
+                if self._vision is session:
+                    self._vision = None
+                if self._video_stream is stream:
+                    self._video_stream = None
+
+    start_video_stream = startVideoStream
 
     def match(self, template_id, timeout=10):
         from .matcher import Matcher

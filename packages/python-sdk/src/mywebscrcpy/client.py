@@ -44,6 +44,12 @@ class Client:
         self._devices.add(device)
         return device
 
+    def startVideoStream(self, serial: str, timeout: float = 15, *, sync_vision_frame: bool = False):
+        """Start one device video stream as a context manager."""
+        return self.device(serial).startVideoStream(timeout=timeout, sync_vision_frame=sync_vision_frame)
+
+    start_video_stream = startVideoStream
+
     def _check_open(self):
         if self._closed:
             raise SDKError("Client 已关闭")
@@ -56,7 +62,7 @@ class Client:
         self._check_open()
         deadline = Deadline(timeout)
         try:
-            response = self._http.request(method, path, params=params, json=body, files=files, data=data, timeout=deadline.remaining())
+            response = self._http.request(method, path, params=params, json=body, files=files, data=data, timeout=deadline.remaining(), headers={'Content-Type': 'image/jpeg'} if data is not None else None)
         except httpx.RequestError as error:
             logger.warning("HTTP connection failed: method=%s path=%s type=%s", method, path, type(error).__name__)
             raise ConnectionError(f"{method} {path}: {type(error).__name__}") from error
@@ -80,6 +86,24 @@ class Client:
 
     def _json(self, method, path, **options):
         return self._decode(self._response(method, path, **options))
+
+    def _sync_vision_frame(self, serial, frame):
+        from .dependencies import vision_dependencies
+        import urllib.parse
+
+        _, cv2, _ = vision_dependencies()
+        success, encoded = cv2.imencode('.jpg', frame.image)
+        if not success:
+            logger.warning("Vision first frame JPEG encoding failed: serial=%s", serial)
+            return False
+        path = '/api/vision/frame?serial=' + urllib.parse.quote(serial, safe='')
+        try:
+            response = self._response('POST', path, data=encoded.tobytes(), timeout=5,
+                                      body=None, files=None)
+            return response.status_code == 200
+        except SDKError as error:
+            logger.warning("Vision first frame sync failed: serial=%s type=%s", serial, type(error).__name__)
+            return False
 
     def close(self):
         if not self._closed:

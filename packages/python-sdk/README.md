@@ -31,6 +31,9 @@ with Client('http://HOST:PORT') as client:
     templates = client.templates.list(serial='DEVICE_SERIAL')
     with client.device('DEVICE_SERIAL') as device:
         frame = device.frame(timeout=10)
+        with client.startVideoStream('DEVICE_SERIAL', timeout=15) as stream:
+            first_frame = stream.first_frame
+            latest_frame = stream.current_frame(timeout=10)
         matches = device.match('CONFIRMED_TEMPLATE_ID', timeout=10)
         print(matches)
         # 只有显式动作才操作设备；先确认目标模板 ID。
@@ -39,6 +42,8 @@ with Client('http://HOST:PORT') as client:
 ```
 
 `frame()` 等待调用后到达的新画面。重放的缓存关键帧只初始化解码，不满足取帧请求；静止画面可能超时。`match()` 正常未命中返回 `[]`，`wait_for()` 到期抛 `MatchTimeout`。仅支持模板主图片与 `TM_CCOEFF_NORMED`；未知算法、禁用模板、其他设备模板明确报错。多参考图不会自动聚合。
+
+`client.startVideoStream(serial)`（亦可写作 `start_video_stream(serial)`）返回上下文管理器，进入时连接视频流并验证首帧，提供 `first_frame` 与 `current_frame(timeout=...)`；退出时关闭本次连接。`sync_vision_frame=True` 会把首帧上传至设备总状态帧缓存。
 
 OCR 可直接用于脚本判断当前画面或等待文字出现：
 
