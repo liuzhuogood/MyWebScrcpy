@@ -63,7 +63,7 @@
 | [v1.27.1-fix](v1.27.1-fix/version.md) | 已打标签；发布被 Windows 模板监听互锁拦截，转 v1.27.2 | 修复技能包 `request_client.py` 在 Windows 默认代码页（cp1252）下打印中文帮助抛 `UnicodeEncodeError` 的问题（该修复在 Windows 上已生效）；同一次任务里 `internal/template` 因既有 fsnotify 互锁测试超时，未生成 Release。 |
 | [v1.27.1-feature](v1.27.1-feature/version.md) | 界面验收通过；三项功能缺口待修复 | 任务目录手动扫描、总状态及决策、通用技能和应用规则精简；左右分栏、图片网格与页内原图预览已验证。按用户授权本地合入 main，沿用当前 1.27.2 版本；超时、ESC 动态 XML、AI 配置保存仍待修复，见验收记录。 |
 | [v1.27.2-fix](v1.27.2-fix/version.md) | 已发布 v1.27.2 | 修复 `DirWatcher.Close` 在 Windows 上先关 fsnotify、后等事件循环造成的互锁（关闭时目录事件在途会永久阻塞），并让 `removeWatch` 只处理登记过的目录；新增关闭场景回归测试。其余内容与 v1.27.0 相同。2026-10-17 [GitHub Actions](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/39018862813) 全部成功；[Release](https://github.com/liuzhuogood/MyWebScrcpy/releases/tag/v1.27.2) 已发布 10 个资产。 |
-| [v1.28.0-feature](v1.28.0-feature/version.md) | 需求已记录；待设计与实施 | OCR 在 0.5 秒内多次识别并综合以减少抖动；保留 auto 串行选择行为，新增独立并行模式，综合多个可用引擎结果。 |
+| [v1.28.0-feature](v1.28.0-feature/version.md) | 已实现；待真机验收 | OCR 接口新增 stabilization_ms（0～5000ms），在指定窗口内多次识别并综合；保留 auto 串行逻辑，新增独立 parallel 模式，API、SDK 与引擎选择入口同步。 |
 
 ## Vue 前端迁移版本
 

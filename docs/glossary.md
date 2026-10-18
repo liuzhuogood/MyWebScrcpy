@@ -48,7 +48,9 @@
 | 模板 / 模板匹配 | 识图、找图、模板图 | 选区截图存为模板,交 Python 匹配服务执行;不参与投屏视频处理,见 `docs/python-matching-service.md` |
 | 页面信息 | UI Package、uipage | 前台应用包名、Activity、焦点窗口、分辨率、DPI、旋转;接口 `/api/ui/page-info`,后端 `internal/uipage` |
 | UI XML | XML 树、UI dump | UIAutomator XML 快照;接口 `/api/ui/xml`,后端 `internal/uixml`,用于 XPath 与元素定位 |
-| OCR | 识文字、文字识别 | 接口 `POST /api/vision/ocr`;引擎优先级 Indra OCR → macOCR → PaddleOCR,自动模式仅契约错误时降级,见 `docs/system-config.md` |
+| OCR | 识文字、文字识别 | 接口 `POST /api/vision/ocr`；支持文件上传与设备截图，`auto` 按 Indra OCR → macOCR → PaddleOCR 串行降级，`parallel` 为独立的三引擎并发融合模式；见 `docs/system-config.md` |
+| OCR 连续采样 | OCR 防抖、稳定识别 | `internal/ocr/detect.go`；设备请求的 `stabilization_ms=1..5000` 启用服务端连续截图，轮次启动间隔至少 50 ms、最多 101 轮；省略或 0 保持单次，上传文件不启用 |
+| OCR 文本画 | 文字图片、text-art | 接口 `POST /api/vision/ocr-text-art`；按 OCR 文字框位置渲染纯文本布局，共用 OCR 引擎与采样规则，支持 JSON、multipart 和 query；JSON 返回 `samples`、`engines_used` 等识别信息，`Accept: text/plain` 返回文本画 |
 | 任务运行 | Task Runs、任务面板 | 外部自动化执行端在独立工作目录维护 `task.json`、`state.json` 与声明产出，服务提供主动扫描与产出呈现；取消旧任务上报 |
 | 设备总状态 | 总状态、设备状态 | 单轮设备状态、页面信息、截图、XML、OCR、模板匹配与关联任务；接口 `GET /api/device-state/{serial}` |
 | 总状态及决策 | AI 决策、状态决策 | 共用单轮采集并在服务端调用视觉 AI 模型进行决策建议；接口 `POST /api/device-state/{serial}/decision` |

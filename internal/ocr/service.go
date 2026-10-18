@@ -51,15 +51,18 @@ type Box struct {
 }
 
 type DetectRequest struct {
-	Serial         string    `json:"serial"`
-	BBox           []float64 `json:"bbox"` // [x, y, w, h] 归一化，默认为全屏 [0, 0, 1, 1]
-	Mark           bool      `json:"mark"`
-	MarkDurationMS int64     `json:"mark_duration_ms"`
-	Keywords       []string  `json:"keywords"`
-	Engine         string    `json:"engine"` // auto, indraocr, macocr, paddleocr
+	Serial          string    `json:"serial"`
+	BBox            []float64 `json:"bbox"` // [x, y, w, h] 归一化，默认为全屏 [0, 0, 1, 1]
+	Mark            bool      `json:"mark"`
+	MarkDurationMS  int64     `json:"mark_duration_ms"`
+	Keywords        []string  `json:"keywords"`
+	Engine          string    `json:"engine"` // auto, parallel, indraocr, macocr, paddleocr
+	StabilizationMS int64     `json:"stabilization_ms"`
 }
 
 type DetectResponse struct {
+	Samples        int      `json:"samples"`
+	EnginesUsed    []string `json:"engines_used"`
 	Status         string   `json:"status"` // matched | not_found
 	Matched        bool     `json:"matched"`
 	Text           string   `json:"text"`
@@ -70,6 +73,8 @@ type DetectResponse struct {
 }
 
 type TextArtResponse struct {
+	Samples        int      `json:"samples"`
+	EnginesUsed    []string `json:"engines_used"`
 	Status         string   `json:"status"` // matched | not_found
 	Matched        bool     `json:"matched"`
 	TextArt        string   `json:"text_art"`
@@ -104,28 +109,34 @@ type StatusResponse struct {
 
 type Service struct {
 	// Each local engine owns its process, preparation state and runtime lease.
-	profile          string
-	indra            *Service
-	mu               sync.RWMutex
-	db               *db.DB
-	hub              *ws.Hub
-	paddleCmd        *exec.Cmd
-	paddleRunning    bool
-	paddleDone       chan struct{}
-	paddleReadyCh    chan struct{}
-	paddleReady      bool
-	paddlePort       int
-	httpClient       *http.Client
-	installed        bool
-	installedMissing string
-	installedPy      string
-	installedAt      time.Time
-	lastStartErr     string
-	runtime          pythonRuntime
-	prepareCancel    context.CancelFunc
-	prepareDone      chan struct{}
-	preparePhase     string
-	control          func(bool, func() error) error
+	captureScreen         func(context.Context, string) ([]byte, error)
+	detectSlots           chan struct{}
+	parallelEngineTimeout time.Duration
+	markMu                sync.Mutex
+	markRevision          uint64
+	markRequests          map[string]uint64
+	profile               string
+	indra                 *Service
+	mu                    sync.RWMutex
+	db                    *db.DB
+	hub                   *ws.Hub
+	paddleCmd             *exec.Cmd
+	paddleRunning         bool
+	paddleDone            chan struct{}
+	paddleReadyCh         chan struct{}
+	paddleReady           bool
+	paddlePort            int
+	httpClient            *http.Client
+	installed             bool
+	installedMissing      string
+	installedPy           string
+	installedAt           time.Time
+	lastStartErr          string
+	runtime               pythonRuntime
+	prepareCancel         context.CancelFunc
+	prepareDone           chan struct{}
+	preparePhase          string
+	control               func(bool, func() error) error
 }
 
 func NewService(database *db.DB, hub *ws.Hub) *Service {
@@ -136,11 +147,14 @@ func NewService(database *db.DB, hub *ws.Hub) *Service {
 
 func newLocalService(database *db.DB, hub *ws.Hub, profile string, port int) *Service {
 	return &Service{
-		profile:    profile,
-		db:         database,
-		hub:        hub,
-		paddlePort: port,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		profile:               profile,
+		captureScreen:         captureDeviceScreen,
+		detectSlots:           make(chan struct{}, 2),
+		parallelEngineTimeout: 5 * time.Second,
+		db:                    database,
+		hub:                   hub,
+		paddlePort:            port,
+		httpClient:            &http.Client{Timeout: 30 * time.Second},
 	}
 }
 
@@ -666,7 +680,7 @@ func (s *Service) uploadToOCR(ctx context.Context, pngBytes []byte, ocrURL, auth
 	return result, nil
 }
 
-func (s *Service) Detect(ctx context.Context, imgBytes []byte, req DetectRequest) (*DetectResponse, error) {
+func (s *Service) detectSingle(ctx context.Context, imgBytes []byte, req DetectRequest, strict bool) (*DetectResponse, error) {
 	started := time.Now()
 	s.mu.RLock()
 	macURL := s.getConfig("MACOCR_URL", DefaultMacOCRURL)
@@ -733,6 +747,11 @@ func (s *Service) Detect(ctx context.Context, imgBytes []byte, req DetectRequest
 		}
 	}
 
+	if strict {
+		if err := validateIndraResult(result); err != nil {
+			return nil, fmt.Errorf("%s OCR 响应无效: %w", engineUsed, err)
+		}
+	}
 	imgConfig, _, err := image.DecodeConfig(bytes.NewReader(imgBytes))
 	imgW, imgH := imgConfig.Width, imgConfig.Height
 	if err != nil || imgW <= 0 || imgH <= 0 {

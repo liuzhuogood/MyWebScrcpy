@@ -4,6 +4,7 @@ import time
 import unittest
 from dataclasses import replace
 from fractions import Fraction
+from unittest.mock import patch
 
 import av
 import cv2
@@ -120,6 +121,31 @@ class VisionTests(unittest.TestCase):
     def fixture(self, **options):
         fixture = Fixture(**options); self.addCleanup(fixture.close)
         return fixture
+
+    def test_stabilized_parallel_ocr_uses_real_h264_frames_and_marks_latest(self):
+        fixture = self.fixture()
+        response = {"ocr_result": "继续", "ocr_boxes": [
+            dict(text="继续", confidence=.8, x=10, y=10, w=30, h=10)]}
+        with fixture.client() as client, client.device('phone') as device, \
+                patch('mywebscrcpy.ocr.upload_image', return_value=response) as upload:
+            result = device.ocr(engine='parallel', stabilization_ms=350, timeout=2, mark=True)
+            self.assertTrue(result.matched)
+            self.assertEqual(result.boxes[0].text, '继续')
+            self.assertGreaterEqual(upload.call_count, 6)
+            self.assertEqual(upload.call_count % 3, 0)
+            end = time.monotonic() + .3
+            while not fixture.sent and time.monotonic() < end:
+                time.sleep(.005)
+            self.assertEqual(fixture.sent[-1]['frame_id'], result.frame_id)
+            self.assertEqual(fixture.sent[-1]['objects'][0]['label'], '继续')
+
+    def test_stabilized_ocr_rejects_real_replayed_snapshot(self):
+        fixture = self.fixture(static=True, replayed=True, snapshot=True)
+        with fixture.client() as client, client.device('phone') as device, \
+                patch('mywebscrcpy.ocr.upload_image') as upload:
+            with self.assertRaises(FrameTimeout):
+                device.ocr(stabilization_ms=150, timeout=.5)
+            upload.assert_not_called()
 
     def test_real_h264_decode_match_and_explicit_click(self):
         fixture = self.fixture()

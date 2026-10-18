@@ -335,6 +335,9 @@ onUnmounted(() => { disposed = true; if (pollTimer) clearTimeout(pollTimer) })
             >
               自动降级 (auto)
             </Button>
+            <Button size="sm" :variant="engine === 'parallel' ? 'default' : 'outline'" class="text-xs" @click="engine = 'parallel'">
+              并行
+            </Button>
             <Button size="sm" :variant="engine === 'indraocr' ? 'default' : 'outline'" class="text-xs" @click="engine = 'indraocr'">
               Indra OCR
             </Button>

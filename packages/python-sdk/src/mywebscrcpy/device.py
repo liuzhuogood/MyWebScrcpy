@@ -143,9 +143,18 @@ class Device:
         macocr_auth: str | None = None,
         paddleocr_url: str | None = None,
         indraocr_url: str | None = None,
+        stabilization_ms: int = 0,
         timeout: float = 10,
     ):
         from .ocr import OCRBox, OCRResult, crop_image, perform_ocr
+        if type(stabilization_ms) is not int or not 0 <= stabilization_ms <= 5000:
+            raise ValueError("stabilization_ms 必须是 0 到 5000 的整数")
+        if stabilization_ms:
+            from .ocr_sampling import stabilized_ocr
+            return stabilized_ocr(self, stabilization_ms=stabilization_ms, bbox=bbox,
+                keywords=keywords, mark=mark, mark_duration_ms=mark_duration_ms,
+                timeout=timeout, engine=engine, macocr_url=macocr_url, macocr_auth=macocr_auth,
+                paddleocr_url=paddleocr_url, indraocr_url=indraocr_url)
         deadline = Deadline(timeout)
         started = time.monotonic()
         frame = self._session(deadline, video=True).current_frame(deadline)
@@ -221,6 +230,8 @@ class Device:
             frame_id=frame.frame_id,
             elapsed_ms=round((time.monotonic() - started) * 1000),
             fallback_reason=errors,
+            samples=1,
+            engines_used=result["engines_used"] if engine_used == "parallel" else [engine_used],
         )
 
         if mark and boxes:

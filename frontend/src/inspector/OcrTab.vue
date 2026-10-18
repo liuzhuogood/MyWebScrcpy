@@ -11,7 +11,7 @@ import { useInspector } from './useInspector'
 
 const ins = useInspector()
 const ocr = ins.ocr
-const engineNames: Record<string, string> = { indraocr: 'Indra OCR', macocr: 'macOCR', paddleocr: 'PaddleOCR' }
+const engineNames: Record<string, string> = { parallel: '并行', indraocr: 'Indra OCR', macocr: 'macOCR', paddleocr: 'PaddleOCR' }
 
 function copyText(text: string) {
   navigator.clipboard.writeText(text).then(
@@ -29,6 +29,7 @@ onUnmounted(ocr.panelHidden)
         <SelectTrigger class="w-full text-xs" aria-label="识别引擎"><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="auto">自动</SelectItem>
+          <SelectItem value="parallel">并行</SelectItem>
           <SelectItem value="indraocr">Indra OCR</SelectItem>
           <SelectItem value="macocr">macOCR</SelectItem>
           <SelectItem value="paddleocr">PaddleOCR</SelectItem>
