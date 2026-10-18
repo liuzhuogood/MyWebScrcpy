@@ -2,7 +2,6 @@
 import { AppWindow, ExternalLink, Home, Loader2, Maximize, Minimize, Power, TriangleAlert } from 'lucide-vue-next'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { Device } from '@/api/devices'
 import { ScrcpyDecoder } from '@/scrcpy/decoder'
@@ -19,7 +18,15 @@ import {
 } from '@/scrcpy/protocol'
 import { useDeviceStore } from '@/stores/devices'
 
-const props = defineProps<{ device: Device }>()
+const props = withDefaults(
+  defineProps<{
+    device: Device
+    mode?: 'card' | 'fit'
+  }>(),
+  {
+    mode: 'card',
+  },
+)
 const deviceStore = useDeviceStore()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -393,12 +400,32 @@ onUnmounted(() => {
 <template>
   <div
     :ref="setPhoneRef"
-    class="dash-phone relative flex flex-col overflow-hidden rounded-xl border bg-card"
-    :class="{ 'landscape': isLandscape }"
+    class="dash-phone group relative flex flex-col overflow-hidden"
+    :class="[
+      mode === 'fit'
+        ? 'h-full w-full min-h-0 min-w-0 rounded-none border border-neutral-800/80 bg-black'
+        : 'rounded-xl border bg-card',
+      { 'landscape': isLandscape && mode !== 'fit' },
+    ]"
   >
     <!-- 画面区 -->
-      <div ref="wrapRef" class="relative flex min-h-40 items-center justify-center bg-muted/30">
+    <div
+      ref="wrapRef"
+      class="relative flex items-center justify-center overflow-hidden"
+      :class="mode === 'fit' ? 'h-full w-full flex-1 min-h-0 min-w-0 bg-black' : 'min-h-72 bg-muted/30'"
+    >
       <canvas ref="canvasRef" class="touch-none select-none" :aria-label="`${displayName} 投屏画面`" />
+
+      <!-- 未悬停时显示的极简左上角设备标签 -->
+      <div
+        class="pointer-events-none absolute left-2 top-2 z-10 flex items-center gap-1.5 rounded bg-black/60 px-2 py-0.5 text-[11px] font-mono text-neutral-300 backdrop-blur-xs select-none transition-opacity duration-200 group-hover:opacity-0"
+      >
+        <span
+          class="inline-block h-1.5 w-1.5 rounded-full"
+          :class="state === 'live' ? 'bg-emerald-500' : state === 'error' ? 'bg-destructive' : 'bg-amber-500 animate-pulse'"
+        />
+        <span class="max-w-28 truncate">{{ displayName }}</span>
+      </div>
 
       <div v-if="state !== 'live'" class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/80 p-3 text-center backdrop-blur-sm">
         <Loader2 v-if="state !== 'error'" class="h-6 w-6 animate-spin text-white" />
@@ -408,25 +435,53 @@ onUnmounted(() => {
           <RouterLink :to="{ name: 'player', query: { serial } }">在播放器中打开<ExternalLink class="h-3.5 w-3.5" /></RouterLink>
         </Button>
       </div>
-    </div>
 
-    <!-- 信息 + 工具栏 -->
-    <div class="flex items-center gap-1 px-2 py-1.5">
-      <span class="min-w-0 flex-1 truncate text-xs font-medium" :title="serial">{{ displayName }}</span>
-      <Badge v-if="state !== 'live'" variant="secondary" class="text-[10px">{{ statusText }}</Badge>
-      <Button variant="ghost" size="icon" class="h-7 w-7" title="返回主页" :aria-label="`${displayName} 返回主页`" @click="keyPress(AKEYCODE.HOME)">
-        <Home class="h-4 w-4" />
-      </Button>
-      <Button variant="ghost" size="icon" class="h-7 w-7" title="切换任务" :aria-label="`${displayName} 切换任务`" @click="keyPress(AKEYCODE.APP_SWITCH)">
-        <AppWindow class="h-4 w-4" />
-      </Button>
-      <Button variant="ghost" size="icon" class="h-7 w-7" title="点亮/熄屏" :aria-label="`${displayName} 点亮熄屏`" @click="keyPress(AKEYCODE.POWER)">
-        <Power class="h-4 w-4" />
-      </Button>
-      <Button variant="ghost" size="icon" class="h-7 w-7" :title="fullscreen ? '退出全屏' : '全屏'" :aria-label="`${displayName} 全屏`" @click="toggleFullscreen()">
-        <Minimize v-if="fullscreen" class="h-4 w-4" />
-        <Maximize v-else class="h-4 w-4" />
-      </Button>
+      <!-- 悬停时显示的纯透明纯图标工具栏（移至顶部右侧，完全透明不阻挡屏幕） -->
+      <div
+        class="absolute top-1.5 right-1.5 z-20 flex items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+      >
+        <Button
+          variant="ghost"
+          size="icon"
+          class="h-7 w-7 rounded-md bg-transparent p-0 text-white/85 shadow-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] hover:bg-white/20 hover:text-white active:bg-white/30"
+          title="返回主页"
+          :aria-label="`${displayName} 返回主页`"
+          @click.stop="keyPress(AKEYCODE.HOME)"
+        >
+          <Home class="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          class="h-7 w-7 rounded-md bg-transparent p-0 text-white/85 shadow-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] hover:bg-white/20 hover:text-white active:bg-white/30"
+          title="切换任务"
+          :aria-label="`${displayName} 切换任务`"
+          @click.stop="keyPress(AKEYCODE.APP_SWITCH)"
+        >
+          <AppWindow class="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          class="h-7 w-7 rounded-md bg-transparent p-0 text-white/85 shadow-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] hover:bg-white/20 hover:text-white active:bg-white/30"
+          title="点亮/熄屏"
+          :aria-label="`${displayName} 点亮熄屏`"
+          @click.stop="keyPress(AKEYCODE.POWER)"
+        >
+          <Power class="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          class="h-7 w-7 rounded-md bg-transparent p-0 text-white/85 shadow-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] hover:bg-white/20 hover:text-white active:bg-white/30"
+          :title="fullscreen ? '退出全屏' : '全屏'"
+          :aria-label="`${displayName} 全屏`"
+          @click.stop="toggleFullscreen()"
+        >
+          <Minimize v-if="fullscreen" class="h-4 w-4" />
+          <Maximize v-else class="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   </div>
 </template>

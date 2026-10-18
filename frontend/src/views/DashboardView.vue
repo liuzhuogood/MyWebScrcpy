@@ -1,16 +1,22 @@
 <script setup lang="ts">
-import { ArrowLeft, MonitorSmartphone, Smartphone } from 'lucide-vue-next'
+import { ArrowLeft, LayoutGrid, Maximize, Minimize, MonitorSmartphone, Smartphone } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useElementSize, useFullscreen } from '@vueuse/core'
 import DashTile from '@/components/dashboard/DashTile.vue'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fetchDevices, type Device } from '@/api/devices'
+import { computeMonitorGrid } from '@/utils/monitorGrid'
 
-type DashSize = 'small' | 'medium' | 'large'
+type DashSize = 'small' | 'medium' | 'large' | 'fit'
 const SIZE_KEY = 'dash_size'
 const POLL_MS = 5000
+
+const containerRef = ref<HTMLElement | null>(null)
+const { width: containerWidth, height: containerHeight } = useElementSize(containerRef)
+const { isFullscreen: isPageFs, toggle: togglePageFs } = useFullscreen()
 
 const devices = ref<Device[]>([])
 const loading = ref(true)
@@ -33,6 +39,24 @@ const tileWidth = computed(() => {
   if (size.value === 'medium')
     return 'w-72'
   return 'w-[26rem]'
+})
+
+const gridStyle = computed(() => {
+  if (size.value !== 'fit' || devices.value.length === 0)
+    return {}
+
+  const N = devices.value.length
+  const W = containerWidth.value || window.innerWidth
+  const H = containerHeight.value || (window.innerHeight - 56)
+  const { rows, cols } = computeMonitorGrid(N, W, H)
+
+  return {
+    display: 'grid',
+    gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+    gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
+    height: '100%',
+    width: '100%',
+  }
 })
 
 function setSize(s: DashSize) {
@@ -67,8 +91,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col">
-    <header class="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
+  <div class="flex min-h-screen flex-col bg-background" :class="{ 'h-screen overflow-hidden': size === 'fit' }">
+    <header class="sticky top-0 z-10 border-b bg-background/80 backdrop-blur shrink-0">
       <div class="flex h-14 w-full items-center gap-3 px-4">
         <Button variant="ghost" size="icon" aria-label="返回设备列表" as-child>
           <RouterLink to="/"><ArrowLeft class="h-5 w-5" /></RouterLink>
@@ -96,11 +120,27 @@ onUnmounted(() => {
           >
             <Smartphone class="h-5 w-5" />
           </Button>
+          <Button
+            variant="outline" size="icon" title="监控铺满" aria-label="监控铺满模式"
+            :class="{ 'border-primary text-primary': size === 'fit' }" @click="setSize('fit')"
+          >
+            <LayoutGrid class="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost" size="icon" :title="isPageFs ? '退出全屏' : '大屏全屏'" aria-label="大屏全屏"
+            @click="togglePageFs"
+          >
+            <Minimize v-if="isPageFs" class="h-4 w-4" />
+            <Maximize v-else class="h-4 w-4" />
+          </Button>
         </div>
       </div>
     </header>
 
-    <main class="w-full flex-1 px-4 py-6">
+    <main
+      class="w-full flex-1 min-h-0"
+      :class="size === 'fit' ? 'p-1 overflow-hidden flex flex-col h-full' : 'px-4 py-6'"
+    >
       <div v-if="loading && devices.length === 0" class="flex flex-wrap gap-4">
         <Skeleton v-for="i in 4" :key="i" class="h-72 w-44 rounded-xl" />
       </div>
@@ -122,10 +162,17 @@ onUnmounted(() => {
         </EmptyHeader>
       </Empty>
 
-      <div v-else class="flex flex-wrap items-start gap-4">
+      <div
+        v-else
+        ref="containerRef"
+        class="w-full flex-1 min-h-0"
+        :class="size === 'fit' ? 'grid gap-1' : 'flex flex-wrap items-start gap-4'"
+        :style="gridStyle"
+      >
         <DashTile
           v-for="d in devices" :key="d.serial" :device="d"
-          :class="tileWidth" class="shrink-0"
+          :mode="size === 'fit' ? 'fit' : 'card'"
+          :class="size === 'fit' ? 'w-full h-full min-h-0 min-w-0' : [tileWidth, 'shrink-0']"
         />
       </div>
     </main>
