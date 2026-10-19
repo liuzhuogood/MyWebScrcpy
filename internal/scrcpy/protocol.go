@@ -6,8 +6,12 @@ package scrcpy
 
 const ServerVersion = "4.0" // 启动 server 时第一个参数，设备端严格比对
 
-// 设备端 jar 路径
+// 设备端 jar 主路径。绝大多数设备 shell 可读写；TCL 等定制固件 SELinux
+// 禁止 shell 读该目录，app_process 加载会直接 abort，此时回退 FallbackServerPath。
 const DeviceServerPath = "/data/local/tmp/scrcpy-server.jar"
+
+// FallbackServerPath 是主路径不可读时的回退路径（/sdcard 对 shell 总是可读写）。
+const FallbackServerPath = "/sdcard/scrcpy/scrcpy-server.jar"
 
 // scrcpy 默认隧道端口
 const DefaultTunnelPort = 27183

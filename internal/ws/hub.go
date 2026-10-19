@@ -397,7 +397,12 @@ func (h *Hub) startSessionOnce(serial string, forcePush bool) (*session, *handsh
 			return nil, nil, false, fmt.Errorf("push jar: %w", err)
 		}
 	}
-	h.markJarReady(serial, sdk)
+	// 仅当 server 落在可被 probeDeviceEnv 观测的主路径时才缓存免推状态；
+	// 回退路径（如 TCL 的 /sdcard）stat 不到，若缓存会导致后续会话跳过
+	// push 而以主路径 CLASSPATH 启动失败。
+	if server.DevicePath() == scrcpy.DeviceServerPath {
+		h.markJarReady(serial, sdk)
+	}
 
 	if err := server.Forward(); err != nil {
 		return nil, nil, skippedPush, fmt.Errorf("forward: %w", err)

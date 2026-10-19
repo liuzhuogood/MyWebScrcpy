@@ -5,6 +5,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"log"
+	"strings"
+
 	"mywebscrcpy/internal/dependencies"
 )
 
@@ -43,6 +45,7 @@ type Server struct {
 	forwardSpec string // adb forward 的 remote spec
 	localPort   int    // adb forward 的本地端口
 	adbPath     string
+	devicePath  string            // 设备端 server jar 实际路径（Push 时探测决定）
 	cmd         *dependencies.Cmd // app_process 后台进程
 	exited      chan struct{}
 	exitErr     error
@@ -51,7 +54,7 @@ type Server struct {
 // NewServer 创建一个 server 实例（不启动）。
 // localPort 指定 adb forward 的本地端口，每个 session 必须用不同端口。
 func NewServer(cfg ServerConfig, adbPath string, localPort int) *Server {
-	s := &Server{cfg: cfg, adbPath: adbPath, localPort: localPort, exited: make(chan struct{})}
+	s := &Server{cfg: cfg, adbPath: adbPath, localPort: localPort, devicePath: DeviceServerPath, exited: make(chan struct{})}
 	s.generateSCID()
 	return s
 }
@@ -68,15 +71,37 @@ func (s *Server) generateSCID() {
 // SCIDHex 返回 scid 的 8 位十六进制字符串。
 func (s *Server) SCIDHex() string { return s.scidHex }
 
-// Push 将 server.jar 推送到设备。
+// Push 将 server.jar 推送到设备。优先主路径 /data/local/tmp；推送后用
+// test -r 探测 shell 是否可读 —— TCL 等定制固件 SELinux 禁止 shell 读该目录，
+// app_process 加载会直接 abort —— 不可读时自动改推 /sdcard 回退路径，
+// 后续 Start 使用 DevicePath() 返回的实际路径。
 func (s *Server) Push(jarPath string) error {
-	cmd := dependencies.Command(s.adbPath, "-s", s.cfg.Serial, "push", jarPath, DeviceServerPath)
+	if err := s.pushTo(jarPath, DeviceServerPath); err != nil {
+		return err
+	}
+	out, err := dependencies.Command(s.adbPath, "-s", s.cfg.Serial, "shell",
+		"test -r "+DeviceServerPath+" && echo __scrcpy_ok__").CombinedOutput()
+	if err == nil && strings.Contains(string(out), "__scrcpy_ok__") {
+		s.devicePath = DeviceServerPath
+		log.Printf("[scrcpy:%s] push 完成 -> %s", s.cfg.Serial, DeviceServerPath)
+		return nil
+	}
+	log.Printf("[scrcpy:%s] %s 对 shell 不可读（SELinux 限制），回退 %s",
+		s.cfg.Serial, DeviceServerPath, FallbackServerPath)
+	s.devicePath = FallbackServerPath
+	return s.pushTo(jarPath, FallbackServerPath)
+}
+
+func (s *Server) pushTo(jarPath, devicePath string) error {
+	cmd := dependencies.Command(s.adbPath, "-s", s.cfg.Serial, "push", jarPath, devicePath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("push server jar: %w: %s", err, out)
 	}
-	log.Printf("[scrcpy:%s] push 完成 -> %s", s.cfg.Serial, DeviceServerPath)
 	return nil
 }
+
+// DevicePath 返回 Push 后确定的设备端 jar 路径（Push 未调用时为主路径）。
+func (s *Server) DevicePath() string { return s.devicePath }
 
 // Forward 建立 adb forward 隧道: 本地端口 -> 设备 localabstract socket。
 func (s *Server) Forward() error {
@@ -104,7 +129,7 @@ func (s *Server) Start() error {
 
 	args := []string{
 		"-s", s.cfg.Serial, "shell",
-		"CLASSPATH=" + DeviceServerPath,
+		"CLASSPATH=" + s.devicePath,
 		"app_process", "/", "com.genymobile.scrcpy.Server", ServerVersion,
 		"scid=" + s.scidHex,
 		"log_level=warn",
