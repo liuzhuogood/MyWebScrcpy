@@ -1,6 +1,7 @@
 package apidocs
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -111,6 +112,7 @@ type Manager struct {
 
 	mu            sync.RWMutex
 	cachedModTime int64
+	cachedConfig  []byte
 	cachedSpec    []byte
 }
 
@@ -144,7 +146,7 @@ func (m *Manager) GetAutomationSpec() ([]byte, error) {
 	}
 
 	m.mu.RLock()
-	if m.cachedSpec != nil && m.cachedModTime == currentModTime {
+	if m.cachedSpec != nil && m.cachedModTime == currentModTime && bytes.Equal(m.cachedConfig, configData) {
 		spec := m.cachedSpec
 		m.mu.RUnlock()
 		return spec, nil
@@ -155,7 +157,7 @@ func (m *Manager) GetAutomationSpec() ([]byte, error) {
 	defer m.mu.Unlock()
 
 	// 二次检查
-	if m.cachedSpec != nil && m.cachedModTime == currentModTime {
+	if m.cachedSpec != nil && m.cachedModTime == currentModTime && bytes.Equal(m.cachedConfig, configData) {
 		return m.cachedSpec, nil
 	}
 
@@ -171,6 +173,7 @@ func (m *Manager) GetAutomationSpec() ([]byte, error) {
 
 	m.cachedSpec = spec
 	m.cachedModTime = currentModTime
+	m.cachedConfig = configData
 	return spec, nil
 }
 

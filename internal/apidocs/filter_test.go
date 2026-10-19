@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 const sampleSpec = `{
@@ -177,6 +178,7 @@ func TestManagerWithDiskConfig(t *testing.T) {
 	}
 
 	// 更新磁盘配置
+	time.Sleep(30 * time.Millisecond)
 	updatedCfg := `{"endpoints": ["/api/v1/actions/*"]}`
 	if err := os.WriteFile(cfgPath, []byte(updatedCfg), 0644); err != nil {
 		t.Fatal(err)
