@@ -79,6 +79,13 @@ func (s *Service) ensureAwakeAndUnlocked(ctx context.Context, serial string) {
 	if s.adbPath == "" || serial == "" {
 		return
 	}
+	// 0. 若为网络 ADB 设备 (ip:port)，确保已建立连接
+	if strings.Contains(serial, ":") {
+		connCtx, connCancel := context.WithTimeout(ctx, 2*time.Second)
+		_ = dependencies.CommandContext(connCtx, s.adbPath, "connect", serial).Run()
+		connCancel()
+	}
+
 	wakeCtx, wakeCancel := context.WithTimeout(ctx, 2*time.Second)
 	defer wakeCancel()
 

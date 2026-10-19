@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
+	"mywebscrcpy/internal/dependencies"
 	"mywebscrcpy/internal/visionframes"
 )
 
@@ -62,12 +64,35 @@ func (k *StreamKeeper) Touch(serial string, ttl time.Duration) error {
 		k.mu.Unlock()
 		return nil
 	}
+	k.mu.Unlock()
 
-	// 首次启动服务端设备流
+	// 首次启动服务端设备流：在锁外执行网络连接和 scrcpy 握手
+	if strings.Contains(serial, ":") && k.hub != nil && k.hub.adbPath != "" {
+		connCtx, connCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		_ = dependencies.CommandContext(connCtx, k.hub.adbPath, "connect", serial).Run()
+		connCancel()
+	}
+
 	ms, _, cancel, err := k.hub.acquireSession(serial)
 	if err != nil {
-		k.mu.Unlock()
 		return fmt.Errorf("启动服务端视频流失败: %w", err)
+	}
+
+	k.mu.Lock()
+	if k.closed {
+		k.mu.Unlock()
+		cancel()
+		return fmt.Errorf("StreamKeeper 已关闭")
+	}
+	if lease, exists := k.leases[serial]; exists {
+		lease.expiresAt = time.Now().Add(ttl)
+		if lease.timer != nil {
+			lease.timer.Stop()
+			lease.timer.Reset(ttl)
+		}
+		k.mu.Unlock()
+		cancel()
+		return nil
 	}
 
 	stop := make(chan struct{})
