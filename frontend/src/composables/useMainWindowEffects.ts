@@ -8,6 +8,7 @@ export interface MainWindowState {
   alwaysOnTop: boolean
   opacity: number
   clickThrough: boolean
+  borderless: boolean
 }
 
 export function useMainWindowEffects() {
@@ -16,6 +17,7 @@ export function useMainWindowEffects() {
     alwaysOnTop: false,
     opacity: 100,
     clickThrough: false,
+    borderless: false,
   })
   const shortcut = ref<string | null>(null)
   const busy = ref(false)
@@ -30,6 +32,13 @@ export function useMainWindowEffects() {
     else {
       document.documentElement.classList.remove('desktop-translucent')
       document.documentElement.style.removeProperty('--window-opacity')
+    }
+
+    if (s.borderless) {
+      document.documentElement.classList.add('desktop-borderless')
+    }
+    else {
+      document.documentElement.classList.remove('desktop-borderless')
     }
   }
 
@@ -120,12 +129,33 @@ export function useMainWindowEffects() {
     }
   }
 
+  async function setBorderless(enabled: boolean) {
+    if (!native || busy.value) return
+    busy.value = true
+    try {
+      await invoke('set_main_window_borderless', { borderless: enabled })
+      state.value.borderless = enabled
+      applyDomEffects(state.value)
+    }
+    catch (e) {
+      console.error('[Desktop] 设置主窗口无边框失败', e)
+      toast.error(String(e))
+    }
+    finally {
+      busy.value = false
+    }
+  }
+
+  async function toggleBorderless() {
+    await setBorderless(!state.value.borderless)
+  }
+
   async function restore() {
     if (!native || busy.value) return
     busy.value = true
     try {
       await invoke('restore_main_window')
-      state.value = { alwaysOnTop: false, opacity: 100, clickThrough: false }
+      state.value = { alwaysOnTop: false, opacity: 100, clickThrough: false, borderless: false }
       applyDomEffects(state.value)
     }
     catch (e) {
@@ -145,6 +175,8 @@ export function useMainWindowEffects() {
     setOpacity,
     setClickThrough,
     toggleAlwaysOnTop,
+    setBorderless,
+    toggleBorderless,
     restore,
   }
 }

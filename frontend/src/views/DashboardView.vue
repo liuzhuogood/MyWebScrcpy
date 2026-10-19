@@ -11,6 +11,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Skeleton } from '@/components/ui/skeleton'
 import { fetchDevices, type Device } from '@/api/devices'
 import { useDeviceStore } from '@/stores/devices'
+import { useMainWindowEffects } from '@/composables/useMainWindowEffects'
 import { computeMonitorGrid } from '@/utils/monitorGrid'
 
 type DashSize = 'small' | 'medium' | 'large' | 'fit'
@@ -19,6 +20,8 @@ const HIDDEN_KEY = 'dash_hidden_devices'
 const POLL_MS = 5000
 
 const deviceStore = useDeviceStore()
+const effects = useMainWindowEffects()
+const isHeaderHovered = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
 const { width: containerWidth, height: containerHeight } = useElementSize(containerRef)
 const { isFullscreen: isPageFs, toggle: togglePageFs } = useFullscreen()
@@ -89,12 +92,12 @@ const countText = computed(() => {
 })
 
 const tileWidth = computed(() => {
-  // 三档卡片宽度；高度由画面比例自适应
+  // 三档投屏屏幕宽度；高度由画面比例真实自适应撑开
   if (size.value === 'small')
-    return 'w-44'
+    return 'w-48'
   if (size.value === 'medium')
-    return 'w-72'
-  return 'w-[26rem]'
+    return 'w-80'
+  return 'w-[32rem]'
 })
 
 const gridStyle = computed(() => {
@@ -148,7 +151,23 @@ onUnmounted(() => {
 
 <template>
   <div class="flex min-h-screen flex-col bg-background" :class="{ 'h-screen overflow-hidden': size === 'fit' }">
-    <header class="sticky top-0 z-10 border-b bg-background/80 backdrop-blur shrink-0">
+    <!-- 无边框模式下的顶部感应区：鼠标悬停自动呼出导航栏 -->
+    <div
+      v-if="effects.state.value.borderless"
+      class="fixed top-0 inset-x-0 h-3 z-50 pointer-events-auto"
+      @mouseenter="isHeaderHovered = true"
+    />
+
+    <header
+      class="z-40 border-b bg-background/90 backdrop-blur shrink-0 transition-all duration-200"
+      :class="effects.state.value.borderless
+        ? [
+            'fixed top-0 inset-x-0 shadow-md',
+            isHeaderHovered ? 'translate-y-0 opacity-100 pointer-events-auto' : '-translate-y-full opacity-0 pointer-events-none',
+          ]
+        : 'sticky top-0 z-10'"
+      @mouseleave="isHeaderHovered = false"
+    >
       <div class="flex h-14 w-full items-center gap-3 px-4">
         <Button variant="ghost" size="icon" aria-label="返回设备列表" as-child>
           <RouterLink to="/"><ArrowLeft class="h-5 w-5" /></RouterLink>

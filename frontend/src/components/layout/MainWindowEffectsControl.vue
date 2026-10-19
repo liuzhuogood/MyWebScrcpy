@@ -4,6 +4,7 @@ import { Blend, MousePointer2, Pin, PinOff } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -75,6 +76,28 @@ function enableClickThrough() {
           aria-label="主窗口透明度"
           @update:model-value="updateOpacity"
         />
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <Button
+            v-for="op in [100, 10, 5, 2, 1]"
+            :key="op"
+            variant="outline"
+            size="sm"
+            class="h-6 px-1.5 text-xs font-mono"
+            :class="{ 'border-primary text-primary bg-primary/10': opacityValue[0] === op }"
+            @click="updateOpacity([op])"
+          >
+            {{ op }}%
+          </Button>
+        </div>
+        <div class="flex items-center justify-between gap-4 text-sm pt-1">
+          <span>无边框</span>
+          <Switch
+            :model-value="effects.state.value.borderless"
+            :disabled="effects.busy.value"
+            aria-label="主窗口无边框"
+            @update:model-value="effects.setBorderless(!!$event)"
+          />
+        </div>
         <p v-if="effects.shortcut.value" class="text-xs text-muted-foreground">
           按 {{ effects.shortcut.value }} 或菜单“窗口 → 恢复主窗口”可恢复
         </p>
@@ -94,7 +117,7 @@ function enableClickThrough() {
           <Button
             variant="ghost"
             size="sm"
-            :disabled="effects.busy.value || (effects.state.value.opacity === 100 && !effects.state.value.clickThrough && !effects.state.value.alwaysOnTop)"
+            :disabled="effects.busy.value || (effects.state.value.opacity === 100 && !effects.state.value.clickThrough && !effects.state.value.alwaysOnTop && !effects.state.value.borderless)"
             @click="effects.restore()"
           >
             恢复默认

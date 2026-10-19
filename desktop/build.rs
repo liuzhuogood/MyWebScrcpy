@@ -28,6 +28,7 @@ fn main() {
             "get_main_window_state",
             "set_main_window_opacity",
             "set_main_window_click_through",
+            "set_main_window_borderless",
             "set_main_window_always_on_top",
             "restore_main_window",
         ]),

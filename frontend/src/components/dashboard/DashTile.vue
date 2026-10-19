@@ -250,18 +250,31 @@ function fitCanvas() {
   if (!canvas || !wrap || !canvas.width || !canvas.height)
     return
   const availW = wrap.clientWidth
-  const availH = wrap.clientHeight
-  if (availW <= 0 || availH <= 0)
+  if (availW <= 0)
     return
   const ratio = canvas.width / canvas.height
-  let dw = availW
-  let dh = dw / ratio
-  if (dh > availH) {
-    dh = availH
-    dw = dh * ratio
+  if (!ratio)
+    return
+
+  if (props.mode === 'fit') {
+    const availH = wrap.clientHeight
+    if (availH <= 0)
+      return
+    let dw = availW
+    let dh = dw / ratio
+    if (dh > availH) {
+      dh = availH
+      dw = dh * ratio
+    }
+    canvas.style.width = `${Math.round(dw)}px`
+    canvas.style.height = `${Math.round(dh)}px`
   }
-  canvas.style.width = `${Math.round(dw)}px`
-  canvas.style.height = `${Math.round(dh)}px`
+  else {
+    const dw = availW
+    const dh = Math.round(dw / ratio)
+    canvas.style.width = `${dw}px`
+    canvas.style.height = `${dh}px`
+  }
 }
 
 // ---------- 输入事件（setup 作用域，卸载时可移除） ----------
@@ -400,19 +413,19 @@ onUnmounted(() => {
 <template>
   <div
     :ref="setPhoneRef"
-    class="dash-phone group relative flex flex-col overflow-hidden"
+    class="dash-phone group relative flex flex-col overflow-hidden bg-black"
     :class="[
       mode === 'fit'
-        ? 'h-full w-full min-h-0 min-w-0 rounded-none border border-neutral-800/80 bg-black'
-        : 'rounded-xl border bg-card',
+        ? 'h-full w-full min-h-0 min-w-0 rounded-none border border-neutral-800/80'
+        : '',
       { 'landscape': isLandscape && mode !== 'fit' },
     ]"
   >
     <!-- 画面区 -->
     <div
       ref="wrapRef"
-      class="relative flex items-center justify-center overflow-hidden"
-      :class="mode === 'fit' ? 'h-full w-full flex-1 min-h-0 min-w-0 bg-black' : 'min-h-72 bg-muted/30'"
+      class="relative flex items-center justify-center overflow-hidden bg-black"
+      :class="mode === 'fit' ? 'h-full w-full flex-1 min-h-0 min-w-0' : 'w-full'"
     >
       <canvas ref="canvasRef" class="touch-none select-none" :aria-label="`${displayName} 投屏画面`" />
 
@@ -424,7 +437,7 @@ onUnmounted(() => {
           class="inline-block h-1.5 w-1.5 rounded-full"
           :class="state === 'live' ? 'bg-emerald-500' : state === 'error' ? 'bg-destructive' : 'bg-amber-500 animate-pulse'"
         />
-        <span class="max-w-28 truncate">{{ displayName }}</span>
+        <span class="max-w-48 truncate">{{ serial }}</span>
       </div>
 
       <div v-if="state !== 'live'" class="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-background/80 p-3 text-center backdrop-blur-sm">

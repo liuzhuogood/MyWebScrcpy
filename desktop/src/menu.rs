@@ -26,11 +26,16 @@ pub fn action(app: &AppHandle, id: &str) {
             let _ = crate::main_window::restore(app);
         }
         "main-toggle-pin" => crate::main_window::toggle_always_on_top(app),
+        "main-toggle-borderless" => crate::main_window::toggle_borderless(app),
         "main-click-through" => crate::main_window::toggle_click_through(app),
         "main-opacity-100" => crate::main_window::set_opacity(app, 100),
         "main-opacity-80" => crate::main_window::set_opacity(app, 80),
         "main-opacity-60" => crate::main_window::set_opacity(app, 60),
         "main-opacity-40" => crate::main_window::set_opacity(app, 40),
+        "main-opacity-10" => crate::main_window::set_opacity(app, 10),
+        "main-opacity-5" => crate::main_window::set_opacity(app, 5),
+        "main-opacity-2" => crate::main_window::set_opacity(app, 2),
+        "main-opacity-1" => crate::main_window::set_opacity(app, 1),
         "hide" => {
             if let Some(window) = app.get_webview_window("main") {
                 if let Err(error) = window.hide() {
@@ -97,12 +102,17 @@ pub fn install(app: &mut App) -> tauri::Result<bool> {
         .build()?;
     let window_menu = SubmenuBuilder::new(app, "窗口")
         .text("main-toggle-pin", "主窗口置顶 / 取消置顶")
+        .text("main-toggle-borderless", "主窗口无边框 / 恢复边框")
         .text("main-click-through", "主窗口鼠标穿透")
         .separator()
         .text("main-opacity-100", "主窗口透明度: 100%")
         .text("main-opacity-80", "主窗口透明度: 80%")
         .text("main-opacity-60", "主窗口透明度: 60%")
         .text("main-opacity-40", "主窗口透明度: 40%")
+        .text("main-opacity-10", "主窗口透明度: 10%")
+        .text("main-opacity-5", "主窗口透明度: 5%")
+        .text("main-opacity-2", "主窗口透明度: 2%")
+        .text("main-opacity-1", "主窗口透明度: 1%")
         .separator()
         .text("restore-main", "恢复主窗口")
         .text("restore-players", "恢复所有小窗")
@@ -113,6 +123,7 @@ pub fn install(app: &mut App) -> tauri::Result<bool> {
     let tray_menu = MenuBuilder::new(app)
         .text("show", "打开主窗口")
         .text("restore-main", "恢复主窗口")
+        .text("main-toggle-borderless", "主窗口无边框开关")
         .text("restore-players", "恢复所有小窗")
         .text("home", "设备列表")
         .text("dashboard", "大屏监控")

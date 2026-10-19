@@ -9,7 +9,11 @@ import { useUpdaterStore } from '@/stores/updater'
 import UpdateNoticeDialog from '@/components/updater/UpdateNoticeDialog.vue'
 import SystemConfigDialog from '@/components/system/SystemConfigDialog.vue'
 import MainWindowEffectsControl from '@/components/layout/MainWindowEffectsControl.vue'
+import { useMainWindowEffects } from '@/composables/useMainWindowEffects'
+
 const configOpen = ref(false)
+const effects = useMainWindowEffects()
+const isHeaderHovered = ref(false)
 
 defineProps<{ deviceCountText: string }>()
 
@@ -23,7 +27,23 @@ onMounted(() => {
 </script>
 
 <template>
-  <header class="sticky top-0 z-10 border-b bg-background/80 backdrop-blur">
+  <!-- 无边框模式下的顶部感应区：鼠标悬停自动呼出导航栏 -->
+  <div
+    v-if="effects.state.value.borderless"
+    class="fixed top-0 inset-x-0 h-3 z-50 pointer-events-auto"
+    @mouseenter="isHeaderHovered = true"
+  />
+
+  <header
+    class="z-40 border-b bg-background/90 backdrop-blur transition-all duration-200"
+    :class="effects.state.value.borderless
+      ? [
+          'fixed top-0 inset-x-0 shadow-md',
+          isHeaderHovered ? 'translate-y-0 opacity-100 pointer-events-auto' : '-translate-y-full opacity-0 pointer-events-none',
+        ]
+      : 'sticky top-0 z-10'"
+    @mouseleave="isHeaderHovered = false"
+  >
     <div class="flex h-14 w-full items-center gap-2 px-4 sm:gap-3">
       <div class="flex min-w-0 items-center gap-2">
         <RouterLink to="/" class="flex min-w-0 items-center gap-2">

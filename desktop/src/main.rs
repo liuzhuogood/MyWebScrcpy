@@ -97,6 +97,7 @@ fn main() {
             main_window::get_main_window_state,
             main_window::set_main_window_opacity,
             main_window::set_main_window_click_through,
+            main_window::set_main_window_borderless,
             main_window::set_main_window_always_on_top,
             main_window::restore_main_window,
             updater::desktop_check_update,
@@ -127,6 +128,7 @@ fn main() {
                     .permission("allow-get-main-window-state")
                     .permission("allow-set-main-window-opacity")
                     .permission("allow-set-main-window-click-through")
+                    .permission("allow-set-main-window-borderless")
                     .permission("allow-set-main-window-always-on-top")
                     .permission("allow-restore-main-window")
  .permission("allow-desktop-check-update")
@@ -140,7 +142,7 @@ fn main() {
  let popup_app=app.handle().clone();
  let popup_origin=url.clone();
  WebviewWindowBuilder::new(app, "main", WebviewUrl::External(local_origin))
-                .title("MyWebScrcpy").inner_size(1280.0, 820.0).min_inner_size(800.0, 560.0)
+                .title("MyWebScrcpy").inner_size(1280.0, 820.0)
                 .transparent(true)
                 .on_new_window(move |destination,_| {
                     use tauri_plugin_opener::OpenerExt;

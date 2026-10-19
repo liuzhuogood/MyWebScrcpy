@@ -62,7 +62,6 @@ pub fn open_device_window(
     let builder = tauri::WebviewWindowBuilder::new(&app, &label, tauri::WebviewUrl::External(dest))
         .title(win_title)
         .inner_size(w, h)
-        .min_inner_size(240.0, 360.0)
         .transparent(true)
         .decorations(!borderless)
         .on_page_load(|window, payload| {
