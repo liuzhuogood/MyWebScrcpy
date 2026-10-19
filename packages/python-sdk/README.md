@@ -4,7 +4,13 @@
 
 ## 安装
 
-从仓库根目录安装基础能力或识图能力：
+从 PyPI 安装：
+
+```bash
+python -m pip install --upgrade mywebscrcpy-sdk
+```
+
+也可从仓库根目录安装本地源码：
 
 ```bash
 python -m pip install ./packages/python-sdk
@@ -17,7 +23,7 @@ python -m pip install ./packages/python-sdk
 ```bash
 python -m pip install build
 python -m build packages/python-sdk
-python -m pip install --force-reinstall 'packages/python-sdk/dist/mywebscrcpy_sdk-1.20.1-py3-none-any.whl[vision]'
+python -m pip install --force-reinstall 'packages/python-sdk/dist/mywebscrcpy_sdk-1.28.0-py3-none-any.whl[vision]'
 ```
 
 安装后脚本可以放在其他目录运行。外部脚本和全局匹配服务使用其 Python 环境中安装的 SDK。系统配置的 Python 卡片通过 pip 安装同版本 SDK 及识图依赖；服务仍需手动启动。
@@ -99,7 +105,7 @@ python -m pip install './packages/python-sdk[vision,test]'
 python -m unittest discover -s packages/python-sdk/tests -v
 ```
 
-本版在 macOS 验证了真实 H.264 受控服务、任务执行、包安装与小米手机只读取帧/匹配。真机点击等待用户指定目标；浏览器绿框和 Windows/Linux 原生链路仍待验收。macOS 的当前 PyAV/OpenCV wheel 同时加载时出现 libavdevice Objective-C 类重复警告；测试未出现故障，跨平台稳定性仍须原生验证。本次新增 Vision 能力须安装本仓库构建的 SDK；PyPI 上已发布的同版本基础包不包含这些新增能力。
+本版在 macOS 验证了真实 H.264 受控服务、任务执行、包安装与小米手机只读取帧/匹配。真机点击等待用户指定目标；浏览器绿框和 Windows/Linux 原生链路仍待验收。macOS 的当前 PyAV/OpenCV wheel 同时加载时出现 libavdevice Objective-C 类重复警告；测试未出现故障，跨平台稳定性仍须原生验证。
 
 ## 版本与发布
 
