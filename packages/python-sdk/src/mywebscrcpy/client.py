@@ -8,15 +8,20 @@ except ImportError as error:
     raise ImportError("请在当前 Python 环境安装 mywebscrcpy-sdk，或安装 httpx") from error
 
 from .errors import ConnectionError, HTTPError, ProtocolError, SDKError
+from .net import httpx_options, resolve_proxy
 
 logger = logging.getLogger(__name__)
 
 
 class Client:
-    """HTTP client. No device process, service or Vision session starts implicitly."""
+    """HTTP client. No device process, service or Vision session starts implicitly.
+
+    默认不使用代理；可用 `proxy=` 或环境变量 `MYWEBSCRCPY_PROXY` 指定代理，
+    该设置同时作用于 HTTP 请求、Vision WebSocket 与 OCR 上传。
+    """
 
     def __init__(self, base_url: str, *, headers: dict[str, str] | None = None,
-                 timeout: float = 30, verify: bool | str = True):
+                 timeout: float = 30, verify: bool | str = True, proxy: str | None = None):
         parsed = urlsplit(base_url)
         if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("base_url 必须是无凭据的 HTTP(S) 服务地址")
@@ -26,8 +31,9 @@ class Client:
             raise ValueError("timeout 必须为正数秒")
         if verify is False:
             logger.warning("TLS certificate verification explicitly disabled")
+        self._proxy = resolve_proxy(proxy)
         self._http = httpx.Client(base_url=base_url.rstrip("/"), headers=headers,
-                                  timeout=timeout, verify=verify, trust_env=False)
+                                  timeout=timeout, verify=verify, **httpx_options(self._proxy))
         self._closed = False
         self._base_url = base_url.rstrip("/")
         self._headers = dict(headers or {})

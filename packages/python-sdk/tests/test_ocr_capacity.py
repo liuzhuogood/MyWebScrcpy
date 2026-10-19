@@ -139,7 +139,7 @@ class CapacityTests(TestCase):
                 self.assertLessEqual(call.kwargs["timeout"], min(5, budget))
 
     def test_engine_deadline_returns_partial_even_if_upload_ignores_timeout(self):
-        def upload(image, url, auth="", timeout=10):
+        def upload(image, url, auth="", timeout=10, proxy=None):
             return response() if "8032" in url else self.block()
         with patch("mywebscrcpy.ocr_consensus.ENGINE_TIMEOUT_SECONDS", .04), \
                 patch("mywebscrcpy.ocr.upload_image", side_effect=upload):

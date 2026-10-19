@@ -30,7 +30,7 @@ class TestOCR(TestCase):
         }
 
         with patch("mywebscrcpy.ocr.upload_image") as mock_upload:
-            def side_effect(image, url, auth="", timeout=10.0):
+            def side_effect(image, url, auth="", timeout=10.0, proxy=None):
                 if "8032" in url:
                     raise RuntimeError("Indra 离线")
                 if "8000" in url:

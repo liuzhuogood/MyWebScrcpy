@@ -98,7 +98,7 @@ def response_boxes(result, engine, shape):
     return boxes
 
 
-def parallel_ocr(image, configurations, timeout):
+def parallel_ocr(image, configurations, timeout, proxy=None):
     """Three engine requests share six global slots and individual 5s limits."""
     from .ocr import _validate_indra, upload_image
     deadline = Deadline(timeout)
@@ -108,7 +108,7 @@ def parallel_ocr(image, configurations, timeout):
         remaining = expires - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("timeout")
-        result = upload_image(image, url, auth, timeout=remaining)
+        result = upload_image(image, url, auth, timeout=remaining, proxy=proxy)
         if engine == "indraocr":
             _validate_indra(result)
         if engine == "macocr" and result.get("success") is False:

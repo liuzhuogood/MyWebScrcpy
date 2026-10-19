@@ -12,6 +12,7 @@ import websocket
 from .contracts import Deadline, field
 from .errors import ActionError, ActionTimeout, ConnectionError, FrameTimeout, ProtocolError, SDKError
 from .models import ActionResult, Frame
+from .net import websocket_options
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class Vision:
         elif isinstance(client._verify, str):
             sslopt = {'ca_certs': client._verify}
         try:
-            self._socket = websocket.create_connection(url, timeout=deadline.remaining(), header=[f'{k}: {v}' for k, v in client._headers.items()], sslopt=sslopt, enable_multithread=True, http_no_proxy=['*'])
+            self._socket = websocket.create_connection(url, timeout=deadline.remaining(), header=[f'{k}: {v}' for k, v in client._headers.items()], sslopt=sslopt, enable_multithread=True, **websocket_options(client._proxy))
             try:
                 self._socket.settimeout(deadline.remaining(ConnectionError))
                 hello = self._socket.recv()

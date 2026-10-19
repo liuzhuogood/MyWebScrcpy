@@ -15,6 +15,7 @@ import urllib.request
 import uuid
 
 from .dependencies import vision_dependencies
+from .net import resolve_proxy, urllib_opener
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +80,8 @@ def _encode_png(image: Any) -> bytes:
     return encoded.tobytes()
 
 
-def upload_image(image: Any, url: str, auth: str = "", timeout: float = 10.0) -> dict[str, Any]:
+def upload_image(image: Any, url: str, auth: str = "", timeout: float = 10.0,
+                 proxy: str | None = None) -> dict[str, Any]:
     """通过 multipart 上传图像到支持 /upload 契约的 OCR 服务。"""
     encoded_png = _encode_png(image)
     boundary = f"----mywebscrcpy-ocr-{uuid.uuid4().hex}"
@@ -111,7 +113,7 @@ def upload_image(image: Any, url: str, auth: str = "", timeout: float = 10.0) ->
         token = base64.b64encode(url_auth.encode("utf-8")).decode("utf-8")
         req.add_header("Authorization", f"Basic {token}")
 
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    opener = urllib_opener(resolve_proxy(proxy))
     with opener.open(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
@@ -125,6 +127,7 @@ def perform_ocr(
     paddleocr_url: str | None = None,
     indraocr_url: str | None = None,
     timeout: float = 10.0,
+    proxy: str | None = None,
     _deadline: Any = None,
 ) -> tuple[dict[str, Any], str, list[str]]:
     """调用底层 OCR 引擎识别图像并返回结果、所用引擎与降级原因。"""
@@ -139,7 +142,7 @@ def perform_ocr(
     if engine == "parallel":
         from .ocr_consensus import parallel_ocr
         return parallel_ocr(image, [("indraocr", indra_url, ""), ("macocr", mac_url, mac_auth),
-                                    ("paddleocr", paddle_url, "")], timeout)
+                                    ("paddleocr", paddle_url, "")], timeout, proxy=proxy)
 
     def request_timeout():
         return _deadline.remaining() if _deadline is not None else timeout
@@ -150,7 +153,7 @@ def perform_ocr(
 
     if engine in {"auto", "indraocr"}:
         try:
-            res = upload_image(image, indra_url, "", timeout=request_timeout())
+            res = upload_image(image, indra_url, "", timeout=request_timeout(), proxy=proxy)
             _validate_indra(res)
             result, engine_used = res, "indraocr"
         except Exception as exc:
@@ -161,7 +164,7 @@ def perform_ocr(
 
     if result is None and engine in {"auto", "macocr"}:
         try:
-            res = upload_image(image, mac_url, mac_auth, timeout=request_timeout())
+            res = upload_image(image, mac_url, mac_auth, timeout=request_timeout(), proxy=proxy)
             if res.get("success") is False:
                 raise RuntimeError(str(res.get("message") or "macOCR 返回失败"))
             result = res
@@ -173,7 +176,7 @@ def perform_ocr(
 
     if result is None:
         try:
-            result = upload_image(image, paddle_url, "", timeout=request_timeout())
+            result = upload_image(image, paddle_url, "", timeout=request_timeout(), proxy=proxy)
             engine_used = "paddleocr"
         except Exception as exc:
             errors.append(f"PaddleOCR: {exc}")

@@ -91,6 +91,14 @@ Client、Device、watch 使用 `with` 或显式 `close()`，可重复关闭。�
 
 默认验证 TLS，可通过 `Client(verify='CA_PATH', headers=...)` 配置 CA 和明确请求头；不读取未知凭据。每次发布和点击都校验会话与帧来源，点击 expires_ms 在发送锁内按剩余期限计算。
 
+需要经代理访问服务时，一次性配置即可覆盖全部通道：
+
+```python
+Client('https://HOST:PORT', proxy='http://127.0.0.1:7890')
+```
+
+也可用环境变量 `MYWEBSCRCPY_PROXY` 指定（取值还支持 `env`，表示交给运行环境决定）。该设置统一作用于 HTTP 请求、Vision WebSocket 与 `device.ocr` 的图片上传；不配置时代理一律不生效，行为与旧版一致。典型场景：macOS 按代码签名授予本地网络访问权，adhoc 签名的 Python 直连内网报 `Errno 65`，把内网流量交给本机代理进程即可恢复。
+
 ## 示例与验证
 
 - [device_query.py](examples/device_query.py)：读取型号。

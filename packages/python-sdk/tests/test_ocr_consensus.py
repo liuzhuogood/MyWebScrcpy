@@ -22,7 +22,7 @@ def response(text="确定", x=10, confidence=.8):
 class ParallelTests(TestCase):
     def test_real_overlap_and_engine_votes_ignore_confidence(self):
         barrier = threading.Barrier(3)
-        def upload(image, url, auth="", timeout=10):
+        def upload(image, url, auth="", timeout=10, proxy=None):
             barrier.wait(timeout=.8)  # A serial implementation cannot pass.
             return response("错误" if "8032" in url else "确定",
                             confidence=.99 if "8032" in url else .1)
@@ -36,7 +36,7 @@ class ParallelTests(TestCase):
         self.assertEqual(result["engines_used"], ["indraocr", "macocr", "paddleocr"])
 
     def test_partial_failure_and_explicit_configuration(self):
-        def upload(image, url, auth="", timeout=10):
+        def upload(image, url, auth="", timeout=10, proxy=None):
             if url == "bad":
                 raise RuntimeError("offline")
             if url == "mac":
@@ -62,7 +62,7 @@ class ParallelTests(TestCase):
     def test_timeout_returns_completed_result_without_waiting_for_workers(self):
         release = threading.Event()
         barrier = threading.Barrier(3)
-        def upload(image, url, auth="", timeout=10):
+        def upload(image, url, auth="", timeout=10, proxy=None):
             barrier.wait(timeout=.5)
             if "8032" not in url:
                 release.wait(.8)
@@ -90,7 +90,7 @@ class ParallelTests(TestCase):
             release.set()
 
     def test_malformed_engine_is_partial_failure(self):
-        def upload(image, url, auth="", timeout=10):
+        def upload(image, url, auth="", timeout=10, proxy=None):
             return {} if "8000" in url else response()
         with patch("mywebscrcpy.ocr.upload_image", side_effect=upload):
             result, _, errors = perform_ocr(np.zeros((100, 100, 3)), engine="parallel")
@@ -99,7 +99,7 @@ class ParallelTests(TestCase):
 
     def test_auto_stays_serial_and_explicit_engines_never_fallback(self):
         active, order = 0, []
-        def upload(image, url, auth="", timeout=10):
+        def upload(image, url, auth="", timeout=10, proxy=None):
             nonlocal active
             active += 1
             self.assertEqual(active, 1)
@@ -310,7 +310,7 @@ class SamplingTests(TestCase):
         self.assertEqual(len(result.boxes), 1)
 
     def test_bbox_keywords_and_fallback_are_preserved(self):
-        def upload(image, url, auth="", timeout=10):
+        def upload(image, url, auth="", timeout=10, proxy=None):
             self.assertEqual(image.shape[:2], (50, 50))
             if "8000" in url:
                 raise RuntimeError("offline")
@@ -323,7 +323,7 @@ class SamplingTests(TestCase):
         self.assertEqual(result.engines_used, ["indraocr", "paddleocr"])
 
     def test_keywords_are_applied_after_parallel_and_temporal_fusion(self):
-        def upload(image, url, auth="", timeout=10):
+        def upload(image, url, auth="", timeout=10, proxy=None):
             return response("目标" if "8032" in url else "其他")
         with patch.object(self.device, "_session", return_value=self.session), patch("mywebscrcpy.ocr.upload_image", side_effect=upload):
             result = self.device.ocr(stabilization_ms=20, engine="parallel", keywords="目标", timeout=.5)
@@ -335,7 +335,7 @@ class SamplingTests(TestCase):
         for bbox, expected in (([.204, .306, .333, .222], [.2, .31, .34, .22]),
                                ([.994, .996, .3, .2], [.99, .99, .01, .01])):
             with self.subTest(bbox=bbox):
-                def upload(image, url, auth="", timeout=10):
+                def upload(image, url, auth="", timeout=10, proxy=None):
                     h, w = image.shape[:2]
                     return {"ocr_result": "全框", "ocr_boxes": [
                         dict(text="全框", confidence=.8, x=0, y=0, w=w, h=h)]}
@@ -348,7 +348,7 @@ class SamplingTests(TestCase):
 
     def test_auto_fallback_shares_remaining_total_budget(self):
         timeouts = []
-        def upload(image, url, auth="", timeout=10):
+        def upload(image, url, auth="", timeout=10, proxy=None):
             timeouts.append(timeout)
             if "8032" in url:
                 time.sleep(.025)
