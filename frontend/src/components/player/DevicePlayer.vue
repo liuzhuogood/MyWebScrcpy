@@ -140,8 +140,31 @@ const isVeryNarrow = computed(() => stageWidth.value < 270)
 const sidePanel = computed(() => captureOpen.value ? 'capture' : filesOpen.value || shellOpen.value || inspectorVisible.value || replayOpen.value || templateOpen.value || settingsOpen.value ? 'tools' : null)
 
 const localToolbarVisible = ref(true)
-const toolbarVisible = computed(() => nativePlayerWindow ? (windowEffects.player.value?.toolbarVisible ?? true) : localToolbarVisible.value)
+const isNativeToolbarHovered = ref(false)
+const isWindowEffectsActive = ref(false)
+const isMoreMenuOpen = ref(false)
+let nativeToolbarTimer: ReturnType<typeof setTimeout> | undefined
+
+const isNativeToolbarActive = computed(() => isNativeToolbarHovered.value || isWindowEffectsActive.value || isMoreMenuOpen.value)
+const toolbarVisible = computed(() => nativePlayerWindow ? isNativeToolbarActive.value : localToolbarVisible.value)
 const isAlwaysOnTop = ref(false)
+
+function onToolbarEnter() {
+  if (nativeToolbarTimer) {
+    clearTimeout(nativeToolbarTimer)
+    nativeToolbarTimer = undefined
+  }
+  isNativeToolbarHovered.value = true
+}
+
+function onToolbarLeave() {
+  if (nativeToolbarTimer) {
+    clearTimeout(nativeToolbarTimer)
+  }
+  nativeToolbarTimer = setTimeout(() => {
+    isNativeToolbarHovered.value = false
+  }, 400)
+}
 
 async function dragBorderlessWindow(event: MouseEvent) {
   if (!nativePlayerWindow || !windowEffects.player.value?.borderless || event.button !== 0) return
@@ -152,13 +175,6 @@ async function dragBorderlessWindow(event: MouseEvent) {
   catch (error) {
     console.warn('[Desktop] 拖动无边框小窗失败', error)
   }
-}
-
-async function setToolbarVisible(visible: boolean) {
-  if (nativePlayerWindow)
-    await windowEffects.setToolbarVisible(visible)
-  else
-    localToolbarVisible.value = visible
 }
 
 async function initAlwaysOnTop() {
@@ -186,13 +202,10 @@ async function toggleAlwaysOnTop() {
 }
 
 watch(toolbarVisible, async visible => {
-  if (!visible) {
-    const shortcut = windowEffects.shortcut.value
+  if (!visible && !nativePlayerWindow) {
     toast.info('顶栏已隐藏', {
-      description: nativePlayerWindow
-        ? `${shortcut ? `按 ${shortcut}，或` : ''}在菜单“视图 → 恢复所有小窗”中恢复；也可点击窗口顶部把手。`
-        : '点击窗口顶部把手可重新显示。',
-      duration: 8000,
+      description: '点击窗口顶部把手可重新显示。',
+      duration: 5000,
     })
   }
   await nextTick()
@@ -211,9 +224,19 @@ onMounted(() => {
   if (props.embedded && isGui.value) {
     void initAlwaysOnTop()
   }
+  if (nativePlayerWindow) {
+    isNativeToolbarHovered.value = true
+    nativeToolbarTimer = setTimeout(() => {
+      isNativeToolbarHovered.value = false
+    }, 1200)
+  }
 })
 
 onUnmounted(() => {
+  if (nativeToolbarTimer) {
+    clearTimeout(nativeToolbarTimer)
+    nativeToolbarTimer = undefined
+  }
   if (inspectorVisible.value)
     setInspector(false)
 })
@@ -365,33 +388,46 @@ defineExpose({ handleEscape })
     <!-- 工具栏隐藏时的顶部唤出把手 -->
     <div
       v-if="!toolbarVisible"
-      class="group absolute top-0 inset-x-0 z-50 flex h-6 items-start justify-center"
+      class="group absolute top-0 inset-x-0 z-50 flex h-6 items-start justify-center cursor-pointer"
+      @mouseenter="onToolbarEnter"
+      @mousedown="dragBorderlessWindow"
     >
       <button
         type="button"
-        class="flex h-4 items-center justify-center rounded-b bg-muted/80 px-4 text-muted-foreground shadow-sm backdrop-blur transition-all hover:h-5 hover:bg-muted hover:text-foreground cursor-pointer opacity-40 hover:opacity-100"
+        class="flex h-4 items-center justify-center rounded-b bg-muted/80 px-4 text-muted-foreground shadow-sm backdrop-blur transition-all hover:h-5 hover:bg-muted hover:text-foreground cursor-pointer opacity-60 hover:opacity-100"
         aria-label="展开工具条"
-        title="展开工具条"
-        @click="setToolbarVisible(true)"
+        title="鼠标悬停展开工具条"
+        @click="onToolbarEnter"
       >
         <ChevronDown class="h-3 w-3" />
       </button>
     </div>
 
     <!-- 工具栏 -->
-    <header v-if="toolbarVisible" class="flex h-14 shrink-0 items-center gap-1 border-b px-3" :class="{ 'toolbar-compact': compactToolbar, 'cursor-move select-none': embedded }" @mousedown="dragBorderlessWindow">
+    <header
+      v-if="toolbarVisible"
+      class="flex h-14 shrink-0 items-center gap-1 border-b px-3 transition-all"
+      :class="{
+        'toolbar-compact': compactToolbar,
+        'cursor-move select-none': embedded,
+        'absolute top-0 inset-x-0 z-40 bg-background/95 backdrop-blur shadow-sm': embedded,
+      }"
+      @mouseenter="onToolbarEnter"
+      @mouseleave="onToolbarLeave"
+      @mousedown="dragBorderlessWindow"
+    >
       <Button
-        v-if="embedded"
+        v-if="embedded && !nativePlayerWindow"
         variant="ghost"
         size="icon"
-        :aria-label="isGui ? '隐藏工具条' : '关闭小窗'"
-        :title="isGui ? '隐藏工具条' : '关闭小窗'"
+        aria-label="关闭小窗"
+        title="关闭小窗"
         class="cursor-pointer"
-        @click="isGui ? setToolbarVisible(false) : emit('close')"
+        @click="emit('close')"
       >
         <X class="h-4 w-4" />
       </Button>
-      <Button v-else variant="ghost" size="icon" aria-label="返回设备列表" as-child>
+      <Button v-else-if="!embedded" variant="ghost" size="icon" aria-label="返回设备列表" as-child>
         <RouterLink to="/"><ArrowLeft class="h-5 w-5" /></RouterLink>
       </Button>
       <span class="ml-1 min-w-0 max-w-44 flex-1 truncate font-mono text-sm font-medium" :class="{ 'cursor-move select-none': embedded }" :title="serial">{{ serial }}</span>
@@ -411,6 +447,7 @@ defineExpose({ handleEscape })
           @click-through="windowEffects.setClickThrough"
           @borderless="windowEffects.setBorderless"
           @restore="windowEffects.restore"
+          @active-change="isWindowEffectsActive = $event"
         />
         <Button
           v-if="isGui"
@@ -435,7 +472,7 @@ defineExpose({ handleEscape })
             <GalleryHorizontal class="h-4 w-4" />
           </Button>
         </template>
-        <DropdownMenu :modal="false">
+        <DropdownMenu :modal="false" v-model:open="isMoreMenuOpen">
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon" title="更多" aria-label="更多">
               <Ellipsis class="h-4 w-4" />

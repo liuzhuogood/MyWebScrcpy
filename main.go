@@ -248,6 +248,7 @@ func main() {
 		aiClient,
 		auxiliary.visionFrames,
 	)
+	deviceStateService.SetStreamKeeper(hub.StreamKeeper())
 	deviceStateHandler := devicestate.NewHandler(deviceStateService, aiClient)
 	deviceStateHandler.RegisterRoutes(mux)
 

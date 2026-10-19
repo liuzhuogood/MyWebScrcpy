@@ -30,8 +30,9 @@
 |---|---|---|
 | 设备卡片 | 卡片 | `frontend/src/components/device/DeviceCard.vue` |
 | 顶栏 | header、顶部导航 | `frontend/src/components/layout/AppHeader.vue` |
-| 小窗顶栏 | 小窗工具条、投屏工具栏 | `frontend/src/components/player/DevicePlayer.vue` 内的工具栏;隐藏后可用顶部把手、恢复小窗快捷键或菜单“视图 → 恢复所有小窗”恢复 |
+| 小窗顶栏 | 小窗工具条、投屏工具栏 | `frontend/src/components/player/DevicePlayer.vue` 内的工具栏;自动隐藏至小横条，鼠标悬停小横条自动滑出显示，亦可用恢复小窗快捷键或菜单“视图 → 恢复所有小窗”恢复 |
 | 小窗窗口设置 | 透明度菜单、鼠标穿透菜单 | `frontend/src/components/player/WindowEffectsControl.vue`;原生小窗的透明度、鼠标穿透与无边框开关 |
+| 主窗口窗口设置 | 主窗口透明度菜单、主窗口效果 | `frontend/src/components/layout/MainWindowEffectsControl.vue` 与原生菜单栏“窗口”菜单;主窗口置顶、透明度调节、鼠标穿透与恢复默认 |
 | 无边框 | 隐藏系统标题栏 | 原生投屏小窗的系统窗口装饰开关,独立于小窗顶栏;系统设置的“投屏设置”保存新小窗默认值,小窗窗口设置与投屏设置侧栏控制当前窗口 |
 | 投屏设置 | 播放器设置 | 系统设置页签 `frontend/src/components/system/PlayerSettingsContent.vue` 保存默认配置;投屏详情页侧栏 `frontend/src/components/player/PlayerSettingsPanel.vue` 调整当前投屏 |
 | 右侧抽屉 | 抽屉、侧栏、侧边栏 | 投屏详情页右侧自适应面板,收纳检查器、文件管理、模板管理、ADB 终端(`frontend/src/components/player/DevicePlayer.vue`) |
@@ -53,7 +54,7 @@
 | OCR | 识文字、文字识别 | 接口 `POST /api/vision/ocr`；支持文件上传与设备截图，`auto` 按 Indra OCR → macOCR → PaddleOCR 串行降级，`parallel` 为独立的三引擎并发融合模式；见 `docs/system-config.md` |
 | OCR 连续采样 | OCR 防抖、稳定识别 | `internal/ocr/detect.go`；设备请求的 `stabilization_ms=1..5000` 启用服务端连续截图，轮次启动间隔至少 50 ms、最多 101 轮；省略或 0 保持单次，上传文件不启用 |
 | OCR 文本画 | 文字图片、text-art | 接口 `POST /api/vision/ocr-text-art`；按 OCR 文字框位置渲染纯文本布局，共用 OCR 引擎与采样规则，支持 JSON、multipart 和 query；JSON 返回 `samples`、`engines_used` 等识别信息，`Accept: text/plain` 返回文本画 |
-| 设备总状态 | 总状态、设备状态 | 单轮设备状态、页面信息、投屏帧截图、OCR、模板匹配；截图取自投屏视频流最新帧(无投屏时该源失败)；接口 `GET /api/device-state/{serial}` |
+| 设备总状态 | 总状态、设备状态 | 单轮设备状态、页面信息、最终帧图画面（投屏帧截图）、OCR、模板匹配；调用前尝试 ADB 唤醒解锁；截图取自投屏视频流最新帧(无投屏时该源失败)；接口 `GET /api/device-state/{serial}` |
 | 投屏帧缓存 | 画面帧、visionframes | 浏览器解码后的投屏画面帧,前端经 `POST /api/vision/frame` 低频上传,后端按 serial 缓存最新一帧;后端 `internal/visionframes` |
 | 总状态及决策 | AI 决策、状态决策 | 共用单轮采集并在服务端调用视觉 AI 模型进行决策建议；接口 `POST /api/device-state/{serial}/decision` |
 | 通用操作技能 | 通用技能、my-scrcpy-common | `skills/my-scrcpy-common`；共享规则、Wiki 与通用操作脚本（观察、刷视频、返回、启动/重启应用、解锁屏幕） |

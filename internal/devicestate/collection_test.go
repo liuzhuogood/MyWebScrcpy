@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"mywebscrcpy/internal/ocr"
 	"mywebscrcpy/internal/uipage"
@@ -28,6 +29,8 @@ func TestCollectStateWithoutUIDump(t *testing.T) {
 	adb := filepath.Join(dir, "adb")
 	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> " + quote(logPath) + "\n" +
 		"case \"$*\" in\n" +
+		"  '-s phone shell input keyevent 224') exit 0;;\n" +
+		"  '-s phone shell wm dismiss-keyguard') exit 0;;\n" +
 		"  '-s phone get-state') printf 'device\\n';;\n" +
 		"  *) exit 1;;\nesac\n"
 	if err := os.WriteFile(adb, []byte(script), 0700); err != nil {
@@ -84,8 +87,72 @@ func TestCollectStateWithoutUIDump(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "-s phone get-state\n"
+	want := "-s phone shell input keyevent 224\n-s phone shell wm dismiss-keyguard\n-s phone get-state\n"
 	if string(commands) != want {
-		t.Fatalf("unexpected ADB workflow (screencap should be gone): %s", commands)
+		t.Fatalf("unexpected ADB workflow: %s", commands)
+	}
+}
+
+type mockStreamKeeper struct {
+	frame   visionframes.Frame
+	err     error
+	touched bool
+}
+
+func (m *mockStreamKeeper) EnsureFrame(ctx context.Context, serial string, maxWait time.Duration) (visionframes.Frame, error) {
+	m.touched = true
+	return m.frame, m.err
+}
+
+func (m *mockStreamKeeper) Touch(serial string, ttl time.Duration) error {
+	m.touched = true
+	return nil
+}
+
+func (m *mockStreamKeeper) IsActive(serial string) bool {
+	return true
+}
+
+func TestCollectStateWithStreamKeeper(t *testing.T) {
+	dir := t.TempDir()
+	adb := filepath.Join(dir, "adb")
+	script := "#!/bin/sh\n" +
+		"case \"$*\" in\n" +
+		"  '-s phone shell input keyevent 224') exit 0;;\n" +
+		"  '-s phone shell wm dismiss-keyguard') exit 0;;\n" +
+		"  '-s phone get-state') printf 'device\\n';;\n" +
+		"  *) exit 1;;\nesac\n"
+	if err := os.WriteFile(adb, []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	page := uipage.NewWithRunner(func(ctx context.Context, args ...string) ([]byte, error) {
+		return []byte("mCurrentFocus=Window{123 u0 com.example/.MainActivity}"), nil
+	})
+	emptyFrames := visionframes.NewStore()
+	svc := NewService(adb, page, nil, nil, nil, emptyFrames)
+
+	testJPEG := createTestJPEG(8, 12, color.White)
+	mockKeeper := &mockStreamKeeper{
+		frame: visionframes.Frame{
+			JPEG:   testJPEG,
+			Width:  8,
+			Height: 12,
+		},
+	}
+	svc.SetStreamKeeper(mockKeeper)
+
+	state, err := svc.CollectState(t.Context(), "phone", nil)
+	if err != nil {
+		t.Fatalf("CollectState with StreamKeeper failed: %v", err)
+	}
+	if state.Screenshot.Width != 8 || state.Screenshot.Height != 12 {
+		t.Fatalf("unexpected screenshot dimensions from StreamKeeper: %+v", state.Screenshot)
+	}
+	if state.Sources["screenshot"].Status != "success" {
+		t.Fatalf("expected screenshot source success, got: %+v", state.Sources["screenshot"])
+	}
+	if !mockKeeper.touched {
+		t.Fatalf("expected StreamKeeper to be touched")
 	}
 }

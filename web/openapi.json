@@ -4801,7 +4801,8 @@
         "tags": [
           "Device State"
         ],
-        "summary": "获取设备总状态（支持 JSON 或 HTML）",
+        "summary": "获取设备总状态与最终帧图画面（支持 JSON 或 HTML）",
+        "description": "采集并返回指定设备的单轮总状态，包括页面信息（Activity/包名/旋转/分辨率）、投屏视频流最新帧截图（最终帧图画面，Base64 Data URL）、OCR 识别结果、模板匹配结果及采集源状态契约。接口调用时会自动尝试 ADB 唤醒与解锁屏幕。支持通过 Accept 请求头返回 JSON 数据或可视化 HTML 页面。注意：截图画面取自投屏视频流最新帧，需保持设备处于投屏播放状态。",
         "responses": {
           "200": {
             "description": "成功",

@@ -138,3 +138,13 @@ html.desktop-player body {
 html.desktop-player #app {
   opacity: var(--player-opacity, 1);
 }
+
+html.desktop-translucent,
+html.desktop-translucent body {
+  background: transparent !important;
+}
+
+html.desktop-translucent #app {
+  opacity: var(--window-opacity, 1);
+}
+

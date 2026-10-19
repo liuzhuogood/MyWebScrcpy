@@ -31,7 +31,8 @@ func (h *Hub) acquireMatchingSession(serial string) (*managedSession, *handshake
 		return nil, nil, nil, fmt.Errorf("投屏会话已关闭")
 	}
 	ms.mu.Lock()
-	if ms.replay || ms.sess == nil || ms.refs <= ms.matchingRefs {
+	keeperActive := h.streamKeeper != nil && h.streamKeeper.IsActive(serial)
+	if ms.replay || ms.sess == nil || (!keeperActive && ms.refs <= ms.matchingRefs) {
 		ms.mu.Unlock()
 		h.sessionMu.Unlock()
 		return nil, nil, nil, fmt.Errorf("没有实时投屏会话")

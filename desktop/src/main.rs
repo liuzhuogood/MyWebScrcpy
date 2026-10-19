@@ -4,6 +4,7 @@ mod backend;
 #[cfg(any(test, all(windows, not(debug_assertions))))]
 mod embedded_service;
 mod links;
+mod main_window;
 mod menu;
 mod player_windows;
 mod update_backup;
@@ -73,6 +74,7 @@ fn main() {
     };
     let builder = tauri::Builder::default()
         .manage(player_windows::PlayerWindows::default())
+        .manage(main_window::MainWindowManager::default())
         .plugin(tauri_plugin_single_instance::init(|app, args, _| {
             menu::show(app);
             if let Some(index) = args.iter().position(|value| value == "--launcher-ready") {
@@ -92,6 +94,11 @@ fn main() {
             player_windows::set_player_borderless,
             player_windows::set_player_toolbar_visible,
             player_windows::restore_player_window,
+            main_window::get_main_window_state,
+            main_window::set_main_window_opacity,
+            main_window::set_main_window_click_through,
+            main_window::set_main_window_always_on_top,
+            main_window::restore_main_window,
             updater::desktop_check_update,
             updater::desktop_upgrade
         ])
@@ -117,6 +124,11 @@ fn main() {
                     .permission("allow-set-player-toolbar-visible")
                     .permission("core:window:allow-start-dragging")
                     .permission("allow-restore-player-window")
+                    .permission("allow-get-main-window-state")
+                    .permission("allow-set-main-window-opacity")
+                    .permission("allow-set-main-window-click-through")
+                    .permission("allow-set-main-window-always-on-top")
+                    .permission("allow-restore-main-window")
  .permission("allow-desktop-check-update")
  .permission("allow-desktop-upgrade"),
             )?;
@@ -129,6 +141,7 @@ fn main() {
  let popup_origin=url.clone();
  WebviewWindowBuilder::new(app, "main", WebviewUrl::External(local_origin))
                 .title("MyWebScrcpy").inner_size(1280.0, 820.0).min_inner_size(800.0, 560.0)
+                .transparent(true)
                 .on_new_window(move |destination,_| {
                     use tauri_plugin_opener::OpenerExt;
                     if destination.as_str().starts_with(&(popup_origin.clone()+"/")) || destination.scheme()=="https" {

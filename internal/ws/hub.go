@@ -24,6 +24,7 @@ import (
 	"mywebscrcpy/internal/inputconfig"
 	"mywebscrcpy/internal/scrcpy"
 	"mywebscrcpy/internal/vision"
+	"mywebscrcpy/internal/visionframes"
 
 	"github.com/gorilla/websocket"
 )
@@ -74,6 +75,24 @@ type Hub struct {
 	deviceConfigsMu sync.Mutex
 	deviceConfigs   map[string]deviceStreamConfig
 	inputConfig     *inputconfig.Store
+	streamKeeper    *StreamKeeper
+}
+
+// InitStreamKeeper 初始化或关联全局 StreamKeeper 视频流保活管理器。
+func (h *Hub) InitStreamKeeper(frames *visionframes.Store) *StreamKeeper {
+	h.sessionMu.Lock()
+	defer h.sessionMu.Unlock()
+	if h.streamKeeper == nil {
+		h.streamKeeper = NewStreamKeeper(h, frames)
+	}
+	return h.streamKeeper
+}
+
+// StreamKeeper 返回当前 Hub 的视频流保活管理器。
+func (h *Hub) StreamKeeper() *StreamKeeper {
+	h.sessionMu.Lock()
+	defer h.sessionMu.Unlock()
+	return h.streamKeeper
 }
 
 // SetInputConfig 挂载系统设置的默认注入模式存储（main 启动时注入）。

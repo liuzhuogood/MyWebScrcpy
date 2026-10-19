@@ -22,6 +22,15 @@ pub fn action(app: &AppHandle, id: &str) {
     match id {
         "show" => show(app),
         "restore-players" => crate::player_windows::restore_all(app),
+        "restore-main" => {
+            let _ = crate::main_window::restore(app);
+        }
+        "main-toggle-pin" => crate::main_window::toggle_always_on_top(app),
+        "main-click-through" => crate::main_window::toggle_click_through(app),
+        "main-opacity-100" => crate::main_window::set_opacity(app, 100),
+        "main-opacity-80" => crate::main_window::set_opacity(app, 80),
+        "main-opacity-60" => crate::main_window::set_opacity(app, 60),
+        "main-opacity-40" => crate::main_window::set_opacity(app, 40),
         "hide" => {
             if let Some(window) = app.get_webview_window("main") {
                 if let Err(error) = window.hide() {
@@ -86,11 +95,24 @@ pub fn install(app: &mut App) -> tauri::Result<bool> {
         .text("show", "打开主窗口")
         .text("restore-players", "恢复所有小窗")
         .build()?;
-    let menu = Menu::with_items(app, &[&application, &edit, &view])?;
+    let window_menu = SubmenuBuilder::new(app, "窗口")
+        .text("main-toggle-pin", "主窗口置顶 / 取消置顶")
+        .text("main-click-through", "主窗口鼠标穿透")
+        .separator()
+        .text("main-opacity-100", "主窗口透明度: 100%")
+        .text("main-opacity-80", "主窗口透明度: 80%")
+        .text("main-opacity-60", "主窗口透明度: 60%")
+        .text("main-opacity-40", "主窗口透明度: 40%")
+        .separator()
+        .text("restore-main", "恢复主窗口")
+        .text("restore-players", "恢复所有小窗")
+        .build()?;
+    let menu = Menu::with_items(app, &[&application, &edit, &view, &window_menu])?;
     app.set_menu(menu)?;
     app.on_menu_event(|app, event| action(app, event.id.as_ref()));
     let tray_menu = MenuBuilder::new(app)
         .text("show", "打开主窗口")
+        .text("restore-main", "恢复主窗口")
         .text("restore-players", "恢复所有小窗")
         .text("home", "设备列表")
         .text("dashboard", "大屏监控")

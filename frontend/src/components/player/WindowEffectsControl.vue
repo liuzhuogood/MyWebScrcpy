@@ -22,10 +22,14 @@ const emit = defineEmits<{
   clickThrough: [enabled: boolean]
   borderless: [enabled: boolean]
   restore: []
+  activeChange: [active: boolean]
 }>()
 const confirmOpen = ref(false)
 const popoverOpen = ref(false)
 const value = ref([props.opacity])
+watch([popoverOpen, confirmOpen], ([p, c]) => {
+  emit('activeChange', p || c)
+})
 watch(() => props.opacity, next => { value.value = [next] })
 watch(() => props.busy, busy => { if (!busy) value.value = [props.opacity] })
 

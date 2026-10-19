@@ -83,8 +83,9 @@ pub fn install(app: &AppHandle) {
                 app.state::<PlayerWindows>()
                     .recovery_generation
                     .fetch_add(1, Ordering::Relaxed);
-                eprintln!("[Desktop] 全局快捷键恢复小窗");
+                eprintln!("[Desktop] 全局快捷键恢复小窗与主窗口");
                 restore_all(app);
+                let _ = crate::main_window::restore(app);
             }
         }) {
             Ok(()) => {

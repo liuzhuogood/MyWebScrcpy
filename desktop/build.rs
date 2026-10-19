@@ -25,6 +25,11 @@ fn main() {
             "set_player_borderless",
             "set_player_toolbar_visible",
             "restore_player_window",
+            "get_main_window_state",
+            "set_main_window_opacity",
+            "set_main_window_click_through",
+            "set_main_window_always_on_top",
+            "restore_main_window",
         ]),
     ))
     .expect("desktop build configuration failed")

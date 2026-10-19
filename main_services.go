@@ -60,9 +60,10 @@ func configureAuxiliaryServices(dataDir string, database *db.DB, hub *ws.Hub, mu
 		return serviceSettings.Control(servicepython.IndraOCR, enabled, action)
 	})
 	ocrService.RegisterRoutes(mux)
-	// 投屏帧缓存：浏览器/匹配服务 worker 解码后的最新画面帧，供设备总状态消费
+	// 投屏帧缓存：浏览器/匹配服务 worker/StreamKeeper 解码后的最新画面帧，供设备总状态消费
 	visionFrames := visionframes.NewStore()
 	visionFrames.RegisterRoutes(mux)
+	hub.InitStreamKeeper(visionFrames)
 
 	matchingManager := matchingservice.New(matchingservice.Options{
 		Python: func() (string, func(), error) { return pythonServices.Acquire(servicepython.Matching) },
@@ -74,12 +75,17 @@ func configureAuxiliaryServices(dataDir string, database *db.DB, hub *ws.Hub, mu
 		},
 		Devices: func() []string {
 			devices := []string{}
+			keeper := hub.StreamKeeper()
 			for _, serial := range hub.MatchingDevices() {
+				hasTemplate := false
 				for _, asset := range templateStorage.ListTemplates(serial) {
 					if asset.Enabled {
-						devices = append(devices, serial)
+						hasTemplate = true
 						break
 					}
+				}
+				if hasTemplate || (keeper != nil && keeper.IsActive(serial)) {
+					devices = append(devices, serial)
 				}
 			}
 			return devices

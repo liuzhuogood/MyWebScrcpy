@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { useUpdaterStore } from '@/stores/updater'
 import UpdateNoticeDialog from '@/components/updater/UpdateNoticeDialog.vue'
 import SystemConfigDialog from '@/components/system/SystemConfigDialog.vue'
+import MainWindowEffectsControl from '@/components/layout/MainWindowEffectsControl.vue'
 const configOpen = ref(false)
 
 defineProps<{ deviceCountText: string }>()
@@ -103,7 +104,10 @@ onMounted(() => {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <Button variant="ghost" size="sm" class="ml-auto shrink-0 xl:ml-0" aria-label="系统设置" @click="configOpen = true"><Settings class="size-4" /><span class="hidden sm:inline">系统设置</span></Button>
+      <div class="ml-auto flex items-center gap-1.5 shrink-0 xl:ml-0">
+        <MainWindowEffectsControl />
+        <Button variant="ghost" size="sm" aria-label="系统设置" @click="configOpen = true"><Settings class="size-4" /><span class="hidden sm:inline">系统设置</span></Button>
+      </div>
       <DropdownMenu>
         <DropdownMenuTrigger as-child>
           <Button class="xl:hidden" variant="ghost" size="icon" title="更多" aria-label="更多">

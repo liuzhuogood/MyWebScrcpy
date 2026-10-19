@@ -65,6 +65,12 @@ func (h *Hub) Close() {
 	for _, serial := range serials {
 		h.closeLiveSession(serial)
 	}
+	h.sessionMu.Lock()
+	sk := h.streamKeeper
+	h.sessionMu.Unlock()
+	if sk != nil {
+		sk.Close()
+	}
 	for _, call := range calls {
 		select {
 		case <-call.done:

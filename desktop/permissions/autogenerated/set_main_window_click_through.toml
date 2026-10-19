@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-main-window-click-through"
+description = "Enables the set_main_window_click_through command without any pre-configured scope."
+commands.allow = ["set_main_window_click_through"]
+
+[[permission]]
+identifier = "deny-set-main-window-click-through"
+description = "Denies the set_main_window_click_through command without any pre-configured scope."
+commands.deny = ["set_main_window_click_through"]

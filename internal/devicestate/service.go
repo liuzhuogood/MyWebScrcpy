@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -22,9 +23,16 @@ import (
 
 const (
 	CollectionBudget = 20 * time.Second
-	// frameMaxAge 投屏帧的有效期；前端按 1fps 上传，超期视为投屏已停止。
+	// frameMaxAge 投屏帧的有效期；超期视为投屏已停止或画面不可用。
 	frameMaxAge = 5 * time.Second
 )
+
+// StreamKeeper 提供设备视频流自主保活与最新帧获取接口
+type StreamKeeper interface {
+	EnsureFrame(ctx context.Context, serial string, maxWait time.Duration) (visionframes.Frame, error)
+	Touch(serial string, ttl time.Duration) error
+	IsActive(serial string) bool
+}
 
 // Service 提供统一设备总状态采集服务
 type Service struct {
@@ -34,6 +42,7 @@ type Service struct {
 	templateStorage *template.Storage
 	aiClient        *AIClient
 	frames          *visionframes.Store
+	streamKeeper    StreamKeeper
 
 	deviceLocks sync.Map // map[string]*sync.Mutex，同设备串行采集
 }
@@ -56,9 +65,36 @@ func NewService(
 	}
 }
 
+// SetStreamKeeper 挂载服务端视频流保活管理器。
+func (s *Service) SetStreamKeeper(k StreamKeeper) {
+	s.streamKeeper = k
+}
+
 func (s *Service) lockChanForDevice(serial string) chan struct{} {
 	v, _ := s.deviceLocks.LoadOrStore(serial, make(chan struct{}, 1))
 	return v.(chan struct{})
+}
+
+func (s *Service) ensureAwakeAndUnlocked(ctx context.Context, serial string) {
+	if s.adbPath == "" || serial == "" {
+		return
+	}
+	wakeCtx, wakeCancel := context.WithTimeout(ctx, 2*time.Second)
+	defer wakeCancel()
+
+	// 1. 唤醒屏幕 (224 = KEYCODE_WAKEUP)
+	wakeCmd := dependencies.CommandContext(wakeCtx, s.adbPath, "-s", serial, "shell", "input", "keyevent", "224")
+	if err := wakeCmd.Run(); err != nil && wakeCtx.Err() == nil {
+		log.Printf("[DeviceState] ADB 唤醒屏幕重试/忽略 serial=%s: %v", serial, err)
+	}
+
+	// 2. 解除锁屏
+	dismissCmd := dependencies.CommandContext(wakeCtx, s.adbPath, "-s", serial, "shell", "wm", "dismiss-keyguard")
+	if err := dismissCmd.Run(); err != nil && wakeCtx.Err() == nil {
+		// 备用解锁 (82 = KEYCODE_MENU)
+		menuCmd := dependencies.CommandContext(wakeCtx, s.adbPath, "-s", serial, "shell", "input", "keyevent", "82")
+		_ = menuCmd.Run()
+	}
 }
 
 // CollectState 执行单轮设备状态采集，预算 20 秒，同设备串行
@@ -77,6 +113,9 @@ func (s *Service) CollectState(ctx context.Context, serial string, templateIDs [
 	case <-collectCtx.Done():
 		return nil, fmt.Errorf("设备采集等待锁超时或被取消: %w", collectCtx.Err())
 	}
+
+	// 0. 采集前主动唤醒并解锁屏幕
+	s.ensureAwakeAndUnlocked(collectCtx, serial)
 
 	now := time.Now().UnixMilli()
 	obsID := fmt.Sprintf("obs-%d-%s", now, randomHex(4))
@@ -102,37 +141,54 @@ func (s *Service) CollectState(ctx context.Context, serial string, templateIDs [
 		}
 	}
 
-	// 2. 屏幕画面采集：取投屏视频流最新帧（浏览器解码，分辨率与投屏一致）
+	// 2. 屏幕画面采集：由服务端 StreamKeeper 自动维护视频流（15分钟保活与延时刷新），获取最新解码画面帧
 	var sceneImg image.Image
 	var frameBytes []byte
-	frame, hasFrame := s.frames.Latest(serial, frameMaxAge)
-	if !hasFrame {
+
+	if s.streamKeeper != nil {
+		frame, err := s.streamKeeper.EnsureFrame(collectCtx, serial, 3*time.Second)
+		if err == nil && len(frame.JPEG) > 0 {
+			if decoded, dErr := jpeg.Decode(bytes.NewReader(frame.JPEG)); dErr == nil {
+				sceneImg = decoded
+				frameBytes = frame.JPEG
+				state.Screenshot = ScreenshotInfo{
+					DataBase64: fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(frame.JPEG)),
+					Width:      frame.Width,
+					Height:     frame.Height,
+					SizeBytes:  len(frame.JPEG),
+				}
+				sources["screenshot"] = SourceStatus{
+					Status:    "success",
+					Timestamp: time.Now().UnixMilli(),
+				}
+			}
+		}
+	} else if s.frames != nil {
+		if frame, hasFrame := s.frames.Latest(serial, frameMaxAge); hasFrame {
+			if decoded, dErr := jpeg.Decode(bytes.NewReader(frame.JPEG)); dErr == nil {
+				sceneImg = decoded
+				frameBytes = frame.JPEG
+				state.Screenshot = ScreenshotInfo{
+					DataBase64: fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(frame.JPEG)),
+					Width:      frame.Width,
+					Height:     frame.Height,
+					SizeBytes:  len(frame.JPEG),
+				}
+				sources["screenshot"] = SourceStatus{
+					Status:    "success",
+					Timestamp: time.Now().UnixMilli(),
+				}
+			}
+		}
+	}
+
+	if sceneImg == nil {
 		sources["screenshot"] = SourceStatus{
 			Status:    "failed",
 			Timestamp: time.Now().UnixMilli(),
-			Error:     fmt.Sprintf("投屏视频流无最新帧（%v 内未上传），请保持该设备投屏播放", frameMaxAge),
+			Error:     "服务端视频流未生成画面帧",
 		}
-		partialFailures = append(partialFailures, "投屏视频流无最新帧，跳过截图/OCR/模板匹配")
-	} else if decoded, dErr := jpeg.Decode(bytes.NewReader(frame.JPEG)); dErr != nil {
-		sources["screenshot"] = SourceStatus{
-			Status:    "failed",
-			Timestamp: time.Now().UnixMilli(),
-			Error:     dErr.Error(),
-		}
-		partialFailures = append(partialFailures, fmt.Sprintf("投屏帧解码失败: %v", dErr))
-	} else {
-		sceneImg = decoded
-		frameBytes = frame.JPEG
-		state.Screenshot = ScreenshotInfo{
-			DataBase64: fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(frame.JPEG)),
-			Width:      frame.Width,
-			Height:     frame.Height,
-			SizeBytes:  len(frame.JPEG),
-		}
-		sources["screenshot"] = SourceStatus{
-			Status:    "success",
-			Timestamp: time.Now().UnixMilli(),
-		}
+		partialFailures = append(partialFailures, "获取屏幕画面失败（服务端视频流无可用帧）")
 	}
 
 	// 3. OCR 识别
