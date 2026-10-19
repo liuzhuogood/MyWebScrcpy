@@ -3,6 +3,7 @@ package automation
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -20,6 +21,10 @@ func (s *Service) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/vision/wait", s.handleWait)
 	mux.HandleFunc("POST /api/v1/vision/actions/tap-when", s.handleTapWhen)
 	mux.HandleFunc("POST /api/v1/vision/region-screenshot", s.handleRegionScreenshot)
+	mux.HandleFunc("GET /api/v1/vision/pixel", s.handlePixel)
+	mux.HandleFunc("POST /api/v1/vision/pixel", s.handlePixel)
+	mux.HandleFunc("GET /api/v1/pixel", s.handlePixel)
+	mux.HandleFunc("POST /api/v1/pixel", s.handlePixel)
 
 	// 兼容 yolo_wepork / opencv_match 历史前缀的别名
 	mux.HandleFunc("POST /api/v1/vision/actions/tap", s.handleTap)
@@ -220,4 +225,47 @@ func (s *Service) handleRegionScreenshot(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "image/png")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(pngBytes)
+}
+
+func (s *Service) handlePixel(w http.ResponseWriter, r *http.Request) {
+	var req PixelRequest
+	if r.Method == http.MethodPost && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_json", "请求体 JSON 格式错误: "+err.Error())
+			return
+		}
+	}
+
+	if req.Serial == "" {
+		req.Serial = r.URL.Query().Get("serial")
+	}
+	if req.Serial == "" {
+		writeError(w, http.StatusBadRequest, "missing_serial", "缺少 serial 参数")
+		return
+	}
+
+	// 若未传 x, y，从 Query 参数读取
+	if req.X == nil && r.URL.Query().Has("x") {
+		if val, err := strconv.ParseFloat(r.URL.Query().Get("x"), 64); err == nil {
+			req.X = &val
+		}
+	}
+	if req.Y == nil && r.URL.Query().Has("y") {
+		if val, err := strconv.ParseFloat(r.URL.Query().Get("y"), 64); err == nil {
+			req.Y = &val
+		}
+	}
+	if req.Normalized == nil && r.URL.Query().Has("normalized") {
+		normVal := r.URL.Query().Get("normalized")
+		b := normVal == "true" || normVal == "1"
+		req.Normalized = &b
+	}
+
+	res, err := s.GetPixel(r.Context(), req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "pixel_failed", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, res)
 }

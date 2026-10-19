@@ -224,6 +224,14 @@ func (h *Hub) PublishVisionResult(serial string, msg vision.Message) {
 	h.publishResult(serial, msg)
 }
 
+// LatestVisionResult 返回指定设备在视频流中最新的视觉匹配结果
+func (h *Hub) LatestVisionResult(serial string) (vision.Message, bool) {
+	h.resultMu.Lock()
+	defer h.resultMu.Unlock()
+	msg, ok := h.lastResult[serial]
+	return msg, ok
+}
+
 func (h *Hub) publishResult(serial string, msg vision.Message) {
 	// Detection producers that omit objects mean "no target". Normalize that
 	// legacy form so downstream clients always receive an explicit empty list

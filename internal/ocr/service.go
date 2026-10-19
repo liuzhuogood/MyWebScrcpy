@@ -164,6 +164,13 @@ func (s *Service) SetPaddlePort(port int) {
 	s.paddlePort = port
 }
 
+// SetScreenCapture 设置设备屏幕截屏函数（例如使用服务端最新视频帧）
+func (s *Service) SetScreenCapture(fn func(context.Context, string) ([]byte, error)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.captureScreen = fn
+}
+
 func (s *Service) getConfig(key, fallback string) string {
 	if s.db != nil {
 		val, err := s.db.GetConfig(key)

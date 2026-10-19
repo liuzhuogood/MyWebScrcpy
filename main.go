@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
 	"fmt"
+	"image"
 	"io/fs"
 	"log"
 	"net/http"
@@ -249,8 +251,19 @@ func main() {
 		auxiliary.visionFrames,
 	)
 	deviceStateService.SetStreamKeeper(hub.StreamKeeper())
+	deviceStateService.SetVisionHub(hub)
 	deviceStateHandler := devicestate.NewHandler(deviceStateService, aiClient)
 	deviceStateHandler.RegisterRoutes(mux)
+
+	// 统一所有视觉相关接口的帧来源：优先消费视频流最新帧图片
+	auxiliary.ocr.SetScreenCapture(func(ctx context.Context, serial string) ([]byte, error) {
+		_, raw, _, err := deviceStateService.GetLatestFrame(ctx, serial)
+		return raw, err
+	})
+	auxiliary.automation.SetFrameFetcher(func(ctx context.Context, serial string) (image.Image, []byte, error) {
+		img, raw, _, err := deviceStateService.GetLatestFrame(ctx, serial)
+		return img, raw, err
+	})
 
 	// API: 设备管理
 	mux.HandleFunc("/api/devices", func(w http.ResponseWriter, r *http.Request) {

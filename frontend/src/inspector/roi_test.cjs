@@ -267,7 +267,7 @@ function load(file) {
   await tick();
   assert.equal(elementLoop.ocr.running.value, false);
 
-  // A slow result from an advanced video frame cannot restore stale boxes.
+  // Single-shot OCR results remain valid even if the video stream advances during recognition.
   let frameVersion = 0;
   const fresh = inspectorModule.provideInspector('fresh-device', () => canvas, () => frameVersion);
   const now = Date.now;
@@ -280,8 +280,8 @@ function load(file) {
   finish(response);
   await stale;
   Date.now = now;
-  assert.equal(fresh.ocrResult.value, null);
-  assert.match(fresh.ocrError.value, /画面已变化/);
+  assert.equal(fresh.ocrResult.value?.text, 'late result');
+  assert.equal(fresh.ocrError.value, '');
   uploadOverride = async () => { throw new Error('connection refused at internal endpoint'); };
   await fresh.runOcr();
   assert.match(fresh.ocrError.value, /请检查 OCR 服务/);

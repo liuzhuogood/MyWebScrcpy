@@ -3843,6 +3843,166 @@
         }
       }
     },
+    "/api/v1/vision/pixel": {
+      "get": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "获取指定坐标像素点",
+        "description": "获取指定坐标的像素点颜色信息，支持归一化坐标(0~1)与绝对像素坐标，基于最新画面帧快速取色并返回详细颜色(RGB/RGBA/HEX)。",
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "query",
+            "required": true,
+            "description": "设备序列号",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x",
+            "in": "query",
+            "required": true,
+            "description": "X 坐标（支持 0~1 归一化坐标或绝对像素值）",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "y",
+            "in": "query",
+            "required": true,
+            "description": "Y 坐标（支持 0~1 归一化坐标或绝对像素值）",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "normalized",
+            "in": "query",
+            "required": false,
+            "description": "是否显式指定为归一化坐标（缺省时自动识别：x,y<=1 视为归一化）",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "像素取色成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "serial": { "type": "string" },
+                    "width": { "type": "integer" },
+                    "height": { "type": "integer" },
+                    "x": { "type": "integer" },
+                    "y": { "type": "integer" },
+                    "norm_x": { "type": "number" },
+                    "norm_y": { "type": "number" },
+                    "rgb": { "type": "array", "items": { "type": "integer" } },
+                    "rgba": { "type": "array", "items": { "type": "integer" } },
+                    "hex": { "type": "string" },
+                    "color": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "获取指定坐标像素点 (POST)",
+        "description": "通过 POST 请求获取指定坐标或批量检测点的像素颜色信息，支持归一化坐标与绝对像素坐标。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["serial"],
+                "properties": {
+                  "serial": { "type": "string", "description": "设备序列号" },
+                  "x": { "type": "number", "description": "单点 X 坐标" },
+                  "y": { "type": "number", "description": "单点 Y 坐标" },
+                  "normalized": { "type": "boolean", "description": "是否为归一化坐标" },
+                  "points": {
+                    "type": "array",
+                    "description": "批量检测点列表",
+                    "items": {
+                      "type": "object",
+                      "required": ["x", "y"],
+                      "properties": {
+                        "x": { "type": "number" },
+                        "y": { "type": "number" },
+                        "normalized": { "type": "boolean" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "像素取色成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{serial}/latest-frame": {
+      "get": {
+        "tags": [
+          "自动化与视觉 (Automation & Vision)"
+        ],
+        "summary": "获取设备最新帧图片流",
+        "description": "优先从服务端自主保活视频流提取最新解码帧，若流未就绪则通过 ADB screencap 保底截取，直接返回 JPEG/PNG 图片二进制流。",
+        "parameters": [
+          {
+            "name": "serial",
+            "in": "path",
+            "required": true,
+            "description": "目标设备序列号",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "图片流响应",
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/devices/{serial}": {
       "parameters": [
         {

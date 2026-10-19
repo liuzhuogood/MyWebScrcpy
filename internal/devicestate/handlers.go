@@ -23,6 +23,9 @@ func NewHandler(service *Service, aiClient *AIClient) *Handler {
 
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/device-state/{serial}", h.handleGetTotalState)
+	mux.HandleFunc("GET /api/device-state/{serial}/screenshot", h.handleGetLatestFrame)
+	mux.HandleFunc("GET /api/devices/{serial}/latest-frame", h.handleGetLatestFrame)
+	mux.HandleFunc("GET /api/v1/vision/latest-frame", h.handleGetLatestFrame)
 	mux.HandleFunc("POST /api/device-state/{serial}/decision", h.handleGetStateAndDecision)
 	mux.HandleFunc("GET /api/system/service-config", h.handleGetServiceConfig)
 	mux.HandleFunc("PUT /api/system/service-config", h.handleSaveServiceConfig)
@@ -43,6 +46,31 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
+func (h *Handler) handleGetLatestFrame(w http.ResponseWriter, r *http.Request) {
+	serial := r.PathValue("serial")
+	if serial == "" {
+		serial = r.URL.Query().Get("serial")
+	}
+	if serial == "" {
+		http.Error(w, "missing serial", http.StatusBadRequest)
+		return
+	}
+
+	_, raw, mimeType, err := h.service.GetLatestFrame(r.Context(), serial)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	if mimeType == "" {
+		mimeType = "image/jpeg"
+	}
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(raw)
+}
+
 func (h *Handler) handleGetTotalState(w http.ResponseWriter, r *http.Request) {
 	serial := r.PathValue("serial")
 	if serial == "" {
@@ -59,7 +87,24 @@ func (h *Handler) handleGetTotalState(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	state, err := h.service.CollectState(r.Context(), serial, templateIDs)
+	includeOCR := true
+	if q := r.URL.Query().Get("include_ocr"); q == "false" || q == "0" {
+		includeOCR = false
+	} else if q := r.URL.Query().Get("ocr"); q == "false" || q == "0" {
+		includeOCR = false
+	}
+	engine := r.URL.Query().Get("ocr_engine")
+	if engine == "" {
+		engine = r.URL.Query().Get("engine")
+	}
+
+	opts := CollectOptions{
+		TemplateIDs: templateIDs,
+		IncludeOCR:  includeOCR,
+		OCREngine:   engine,
+	}
+
+	state, err := h.service.CollectStateWithOptions(r.Context(), serial, opts)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("采集设备总状态失败: %v", err), http.StatusInternalServerError)
 		return

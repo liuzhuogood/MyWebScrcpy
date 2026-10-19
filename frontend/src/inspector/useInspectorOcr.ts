@@ -24,7 +24,7 @@ export function useInspectorOcr(
   selectedNode: Ref<Element | null>,
   elementBox: () => Box | null,
   redraw: () => void,
-  frameVersion: () => number = () => 0,
+  _frameVersion: () => number = () => 0,
   isSourceReady: () => boolean = () => true,
 ) {
   const loading = ref(false)
@@ -45,8 +45,6 @@ export function useInspectorOcr(
   let timer: ReturnType<typeof setTimeout> | undefined
   let controller: AbortController | null = null
   let anchor: { x: number, y: number } | null = null
-  let capturedAt = 0
-  let capturedFrame = 0
   let overlayValid = false
   let selectionSize: { width: number, height: number } | null = null
   let continuousTarget: { width: number, height: number, pixels: Region } | null = null
@@ -189,7 +187,7 @@ export function useInspectorOcr(
     loading.value = true
     running.value = continuous.value
     if (running.value) continuousTarget = { width, height, pixels: { x: left, y: top, w: right - left, h: bottom - top } }
-    const started = Date.now(), frame = frameVersion()
+    const started = Date.now()
     const requestEngine = engine.value
     let stage: 'capture' | 'recognition' = 'capture'
     const timeout = setTimeout(() => abort.abort(new Error('OCR 识别超时')), 30000)
@@ -216,17 +214,9 @@ export function useInspectorOcr(
       stage = 'recognition'
       const response = await detectOCR(form, abort.signal)
       if (token !== revision || !isSourceReady() || getCanvas() !== canvas || canvas.width !== width || canvas.height !== height) return
-      if (frameVersion() !== frame && Date.now() - started > 600) {
-        overlayValid = false
-        redraw()
-        if (!running.value) error.value = '画面已变化，请重新识别'
-        return
-      }
       result.value = response
       sourceSize.value = { width, height }
       selected.value = null
-      capturedAt = started
-      capturedFrame = frame
       overlayValid = true
       redraw()
     }
@@ -254,7 +244,6 @@ export function useInspectorOcr(
     if (continuousTarget && canvas && (continuousTarget.width !== canvas.width || continuousTarget.height !== canvas.height)) { invalidate(); return }
     if (selectionSize && canvas && (selectionSize.width !== canvas.width || selectionSize.height !== canvas.height)) { invalidate(); return }
     if (result.value && canvas && (sourceSize.value.width !== canvas.width || sourceSize.value.height !== canvas.height)) { invalidate(); return }
-    if (overlayValid && frameVersion() !== capturedFrame && Date.now() - capturedAt >= 600) { overlayValid = false; redraw() }
   }
 
   function draw(ctx: CanvasRenderingContext2D, width: number, height: number) {

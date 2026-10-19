@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/draw"
 	"image/png"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,6 +37,9 @@ type HubSessionProvider interface {
 	GetDeviceResolution(serial string) (int, int, bool)
 }
 
+// FrameFetcher 定义获取最新设备截面的函数签名
+type FrameFetcher func(ctx context.Context, serial string) (image.Image, []byte, error)
+
 // Service 自动化与视觉服务实现
 type Service struct {
 	hub             *ws.Hub
@@ -43,6 +47,7 @@ type Service struct {
 	ocrService      *ocr.Service
 	inputConfig     *inputconfig.Store
 	adbPath         string
+	frameFetcher    FrameFetcher
 }
 
 // NewService 创建自动化服务实例
@@ -60,6 +65,11 @@ func NewService(
 		inputConfig:     inputConfig,
 		adbPath:         adbPath,
 	}
+}
+
+// SetFrameFetcher 设置自定义最新帧获取函数（如使用服务端视频流最新帧）
+func (s *Service) SetFrameFetcher(fn FrameFetcher) {
+	s.frameFetcher = fn
 }
 
 // resolveMode 获取动作最终生效的注入模式
@@ -121,6 +131,13 @@ func (s *Service) GetDeviceStatus(serial string) (DeviceStatusResponse, error) {
 func (s *Service) CaptureFrame(ctx context.Context, serial string) (image.Image, []byte, error) {
 	if serial == "" {
 		return nil, nil, fmt.Errorf("missing serial")
+	}
+
+	if s.frameFetcher != nil {
+		img, raw, err := s.frameFetcher(ctx, serial)
+		if err == nil && img != nil && len(raw) > 0 {
+			return img, raw, nil
+		}
 	}
 
 	cmd := dependencies.Command(s.adbPath, "-s", serial, "exec-out", "screencap", "-p")
@@ -678,3 +695,136 @@ func (s *Service) RegionScreenshot(ctx context.Context, req RegionScreenshotRequ
 
 	return buf.Bytes(), nil
 }
+
+// GetPixel 获取指定坐标的像素点信息，支持归一化坐标与绝对像素坐标
+func (s *Service) GetPixel(ctx context.Context, req PixelRequest) (*PixelResponse, error) {
+	if req.Serial == "" {
+		return nil, fmt.Errorf("missing serial")
+	}
+
+	img, _, err := s.CaptureFrame(ctx, req.Serial)
+	if err != nil {
+		return nil, err
+	}
+
+	bounds := img.Bounds()
+	imgW := bounds.Dx()
+	imgH := bounds.Dy()
+	if imgW <= 0 || imgH <= 0 {
+		return nil, fmt.Errorf("无效的图像尺寸")
+	}
+
+	calcPixel := func(x, y float64, normFlag *bool) (PixelInfo, error) {
+		isNorm := false
+		if normFlag != nil {
+			isNorm = *normFlag
+		} else if x >= 0 && x <= 1 && y >= 0 && y <= 1 {
+			isNorm = true
+		}
+
+		var px, py int
+		var normX, normY float64
+
+		if isNorm {
+			if x < 0 || x > 1 || y < 0 || y > 1 {
+				return PixelInfo{}, fmt.Errorf("归一化坐标超出 0~1 范围: (%.4f, %.4f)", x, y)
+			}
+			normX = x
+			normY = y
+			px = int(x * float64(imgW))
+			py = int(y * float64(imgH))
+			if px >= imgW {
+				px = imgW - 1
+			}
+			if py >= imgH {
+				py = imgH - 1
+			}
+		} else {
+			px = int(math.Round(x))
+			py = int(math.Round(y))
+			if px < 0 || px >= imgW || py < 0 || py >= imgH {
+				return PixelInfo{}, fmt.Errorf("像素坐标超出范围 (%d, %d)，图像尺寸为 (%dx%d)", px, py, imgW, imgH)
+			}
+			normX = float64(px) / float64(imgW)
+			normY = float64(py) / float64(imgH)
+		}
+
+		c := img.At(bounds.Min.X+px, bounds.Min.Y+py)
+		r, g, b, a := c.RGBA()
+		r8 := int(r >> 8)
+		g8 := int(g >> 8)
+		b8 := int(b >> 8)
+		a8 := int(a >> 8)
+
+		hexColor := fmt.Sprintf("#%02X%02X%02X", r8, g8, b8)
+		colorStr := fmt.Sprintf("rgb(%d, %d, %d)", r8, g8, b8)
+		if a8 < 255 {
+			colorStr = fmt.Sprintf("rgba(%d, %d, %d, %.2f)", r8, g8, b8, float64(a8)/255.0)
+		}
+
+		return PixelInfo{
+			X:     px,
+			Y:     py,
+			NormX: normX,
+			NormY: normY,
+			R:     r8,
+			G:     g8,
+			B:     b8,
+			A:     a8,
+			RGB:   [3]int{r8, g8, b8},
+			RGBA:  [4]int{r8, g8, b8, a8},
+			Hex:   hexColor,
+			Color: colorStr,
+		}, nil
+	}
+
+	resp := &PixelResponse{
+		Serial: req.Serial,
+		Width:  imgW,
+		Height: imgH,
+	}
+
+	if len(req.Points) > 0 {
+		resp.Points = make([]PixelInfo, len(req.Points))
+		for i, pt := range req.Points {
+			norm := pt.Normalized
+			if norm == nil {
+				norm = req.Normalized
+			}
+			info, err := calcPixel(pt.X, pt.Y, norm)
+			if err != nil {
+				return nil, err
+			}
+			resp.Points[i] = info
+		}
+		if len(resp.Points) > 0 {
+			first := resp.Points[0]
+			resp.X = first.X
+			resp.Y = first.Y
+			resp.NormX = first.NormX
+			resp.NormY = first.NormY
+			resp.RGB = first.RGB
+			resp.RGBA = first.RGBA
+			resp.Hex = first.Hex
+			resp.Color = first.Color
+		}
+	} else if req.X != nil && req.Y != nil {
+		info, err := calcPixel(*req.X, *req.Y, req.Normalized)
+		if err != nil {
+			return nil, err
+		}
+		resp.X = info.X
+		resp.Y = info.Y
+		resp.NormX = info.NormX
+		resp.NormY = info.NormY
+		resp.RGB = info.RGB
+		resp.RGBA = info.RGBA
+		resp.Hex = info.Hex
+		resp.Color = info.Color
+	} else {
+		return nil, fmt.Errorf("必须指定坐标 (x, y) 或 points 列表")
+	}
+
+	return resp, nil
+}
+

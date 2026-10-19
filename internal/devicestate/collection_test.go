@@ -16,6 +16,7 @@ import (
 
 	"mywebscrcpy/internal/ocr"
 	"mywebscrcpy/internal/uipage"
+	"mywebscrcpy/internal/vision"
 	"mywebscrcpy/internal/visionframes"
 )
 
@@ -156,3 +157,84 @@ func TestCollectStateWithStreamKeeper(t *testing.T) {
 		t.Fatalf("expected StreamKeeper to be touched")
 	}
 }
+
+type mockVisionHub struct {
+	msg vision.Message
+	ok  bool
+}
+
+func (m *mockVisionHub) LatestVisionResult(serial string) (vision.Message, bool) {
+	return m.msg, m.ok
+}
+
+func TestCollectStateWithStreamTemplateMatching(t *testing.T) {
+	frames := visionframes.NewStore()
+	testJPEG := createTestJPEG(100, 200, color.White)
+	_, _ = frames.Put("phone", testJPEG)
+
+	svc := NewService("", nil, nil, nil, nil, frames)
+	hub := &mockVisionHub{
+		msg: vision.Message{
+			Objects: []vision.Object{
+				{
+					Label:      "login_btn",
+					Confidence: 0.96,
+					X:          0.1,
+					Y:          0.2,
+					W:          0.4,
+					H:          0.3,
+				},
+			},
+		},
+		ok: true,
+	}
+	svc.SetVisionHub(hub)
+
+	state, err := svc.CollectState(t.Context(), "phone", nil)
+	if err != nil {
+		t.Fatalf("CollectState failed: %v", err)
+	}
+	if len(state.TemplateMatches) != 1 {
+		t.Fatalf("expected 1 template match from stream, got: %d", len(state.TemplateMatches))
+	}
+	m := state.TemplateMatches[0]
+	if m.TemplateID != "login_btn" || m.Confidence != 0.96 {
+		t.Fatalf("unexpected match item: %+v", m)
+	}
+	if m.PixelX != 10 || m.PixelY != 40 || m.PixelW != 40 || m.PixelH != 60 {
+		t.Fatalf("unexpected pixel coordinates: %+v", m)
+	}
+	if state.Sources["templates"].Status != "success" {
+		t.Fatalf("expected templates status success, got: %+v", state.Sources["templates"])
+	}
+}
+
+func TestCollectStateSkipOCR(t *testing.T) {
+	frames := visionframes.NewStore()
+	testJPEG := createTestJPEG(10, 10, color.White)
+	_, _ = frames.Put("phone", testJPEG)
+
+	ocrCalled := false
+	ocrServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ocrCalled = true
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ocr_result":"text","ocr_boxes":[]}`))
+	}))
+	defer ocrServer.Close()
+	t.Setenv("INDRAOCR_URL", ocrServer.URL)
+
+	svc := NewService("", nil, ocr.NewService(nil, nil), nil, nil, frames)
+	state, err := svc.CollectStateWithOptions(t.Context(), "phone", CollectOptions{
+		IncludeOCR: false,
+	})
+	if err != nil {
+		t.Fatalf("CollectStateWithOptions failed: %v", err)
+	}
+	if ocrCalled {
+		t.Fatalf("expected OCR to NOT be called when IncludeOCR is false")
+	}
+	if state.Sources["ocr"].Status != "skipped" {
+		t.Fatalf("expected ocr source status to be skipped, got: %+v", state.Sources["ocr"])
+	}
+}
+

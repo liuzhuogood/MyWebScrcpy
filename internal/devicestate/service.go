@@ -9,7 +9,9 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"image/png"
 	"log"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +20,7 @@ import (
 	"mywebscrcpy/internal/ocr"
 	"mywebscrcpy/internal/template"
 	"mywebscrcpy/internal/uipage"
+	"mywebscrcpy/internal/vision"
 	"mywebscrcpy/internal/visionframes"
 )
 
@@ -34,6 +37,18 @@ type StreamKeeper interface {
 	IsActive(serial string) bool
 }
 
+// VisionResultProvider 提供设备视频流最新视觉检测结果的查询接口
+type VisionResultProvider interface {
+	LatestVisionResult(serial string) (vision.Message, bool)
+}
+
+// CollectOptions 控制状态采集的可选参数
+type CollectOptions struct {
+	TemplateIDs []string
+	IncludeOCR  bool   // 默认 true，若为 false 则跳过 OCR 识别
+	OCREngine   string // 可选指定引擎，传空则由 OCR 服务自动读取系统配置 (如 macocr)
+}
+
 // Service 提供统一设备总状态采集服务
 type Service struct {
 	adbPath         string
@@ -43,6 +58,7 @@ type Service struct {
 	aiClient        *AIClient
 	frames          *visionframes.Store
 	streamKeeper    StreamKeeper
+	visionHub       VisionResultProvider
 
 	deviceLocks sync.Map // map[string]*sync.Mutex，同设备串行采集
 }
@@ -68,6 +84,11 @@ func NewService(
 // SetStreamKeeper 挂载服务端视频流保活管理器。
 func (s *Service) SetStreamKeeper(k StreamKeeper) {
 	s.streamKeeper = k
+}
+
+// SetVisionHub 挂载视频流视觉结果提供者（用于读取视频流伴随的模板匹配结果）。
+func (s *Service) SetVisionHub(v VisionResultProvider) {
+	s.visionHub = v
 }
 
 func (s *Service) lockChanForDevice(serial string) chan struct{} {
@@ -104,8 +125,16 @@ func (s *Service) ensureAwakeAndUnlocked(ctx context.Context, serial string) {
 	}
 }
 
-// CollectState 执行单轮设备状态采集，预算 20 秒，同设备串行
+// CollectState 执行单轮设备状态采集，默认启用 OCR，预算 20 秒，同设备串行
 func (s *Service) CollectState(ctx context.Context, serial string, templateIDs []string) (*DeviceState, error) {
+	return s.CollectStateWithOptions(ctx, serial, CollectOptions{
+		TemplateIDs: templateIDs,
+		IncludeOCR:  true,
+	})
+}
+
+// CollectStateWithOptions 执行单轮设备状态采集，支持按需控制 OCR 及指定引擎
+func (s *Service) CollectStateWithOptions(ctx context.Context, serial string, opts CollectOptions) (*DeviceState, error) {
 	if serial == "" {
 		return nil, fmt.Errorf("missing device serial")
 	}
@@ -134,217 +163,301 @@ func (s *Service) CollectState(ctx context.Context, serial string, templateIDs [
 		DeviceInfo:    make(map[string]any),
 	}
 
+	var mu sync.Mutex
 	sources := make(map[string]SourceStatus)
 	var partialFailures []string
 
-	// 1. 采集前页面上下文
-	var prePage *uipage.PageInfo
-	if s.uiPage != nil {
-		p, err := s.uiPage.FetchPageInfo(collectCtx, serial)
-		if err != nil {
-			partialFailures = append(partialFailures, fmt.Sprintf("获取初始页面信息失败: %v", err))
-		} else {
-			prePage = p
-		}
+	addSource := func(name string, st SourceStatus) {
+		mu.Lock()
+		defer mu.Unlock()
+		sources[name] = st
+	}
+	addFailure := func(msg string) {
+		mu.Lock()
+		defer mu.Unlock()
+		partialFailures = append(partialFailures, msg)
 	}
 
-	// 2. 屏幕画面采集：由服务端 StreamKeeper 自动维护视频流（15分钟保活与延时刷新），获取最新解码画面帧
+	// 阶段 1：并发获取初始页面上下文 (prePage) 与屏幕最新画面帧 (sceneImg, frameBytes)
+	var prePage *uipage.PageInfo
+	var frameErr error
 	var sceneImg image.Image
 	var frameBytes []byte
+	var mimeType string
 
-	if s.streamKeeper != nil {
-		frame, err := s.streamKeeper.EnsureFrame(collectCtx, serial, 3*time.Second)
-		if err == nil && len(frame.JPEG) > 0 {
-			if decoded, dErr := jpeg.Decode(bytes.NewReader(frame.JPEG)); dErr == nil {
-				sceneImg = decoded
-				frameBytes = frame.JPEG
-				state.Screenshot = ScreenshotInfo{
-					DataBase64: fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(frame.JPEG)),
-					Width:      frame.Width,
-					Height:     frame.Height,
-					SizeBytes:  len(frame.JPEG),
-				}
-				sources["screenshot"] = SourceStatus{
-					Status:    "success",
-					Timestamp: time.Now().UnixMilli(),
-				}
+	var stage1Wg sync.WaitGroup
+	stage1Wg.Add(2)
+
+	go func() {
+		defer stage1Wg.Done()
+		if s.uiPage != nil {
+			p, err := s.uiPage.FetchPageInfo(collectCtx, serial)
+			if err != nil {
+				addFailure(fmt.Sprintf("获取初始页面信息失败: %v", err))
+			} else {
+				prePage = p
 			}
 		}
-	} else if s.frames != nil {
-		if frame, hasFrame := s.frames.Latest(serial, frameMaxAge); hasFrame {
-			if decoded, dErr := jpeg.Decode(bytes.NewReader(frame.JPEG)); dErr == nil {
-				sceneImg = decoded
-				frameBytes = frame.JPEG
-				state.Screenshot = ScreenshotInfo{
-					DataBase64: fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(frame.JPEG)),
-					Width:      frame.Width,
-					Height:     frame.Height,
-					SizeBytes:  len(frame.JPEG),
-				}
-				sources["screenshot"] = SourceStatus{
-					Status:    "success",
-					Timestamp: time.Now().UnixMilli(),
-				}
-			}
-		}
-	}
+	}()
 
-	if sceneImg == nil {
-		sources["screenshot"] = SourceStatus{
+	go func() {
+		defer stage1Wg.Done()
+		sceneImg, frameBytes, mimeType, frameErr = s.GetLatestFrame(collectCtx, serial)
+	}()
+
+	stage1Wg.Wait()
+
+	// 处理截屏画面
+	if frameErr == nil && len(frameBytes) > 0 && sceneImg != nil {
+		bounds := sceneImg.Bounds()
+		imgW := bounds.Dx()
+		imgH := bounds.Dy()
+		if mimeType == "" {
+			mimeType = "image/jpeg"
+		}
+		state.Screenshot = ScreenshotInfo{
+			DataBase64: fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(frameBytes)),
+			Width:      imgW,
+			Height:     imgH,
+			SizeBytes:  len(frameBytes),
+		}
+		addSource("screenshot", SourceStatus{
+			Status:    "success",
+			Timestamp: time.Now().UnixMilli(),
+		})
+	} else {
+		errText := "服务端视频流未生成画面帧"
+		if frameErr != nil {
+			errText = frameErr.Error()
+		}
+		addSource("screenshot", SourceStatus{
 			Status:    "failed",
 			Timestamp: time.Now().UnixMilli(),
-			Error:     "服务端视频流未生成画面帧",
-		}
-		partialFailures = append(partialFailures, "获取屏幕画面失败（服务端视频流无可用帧）")
+			Error:     errText,
+		})
+		addFailure("获取屏幕画面失败（服务端视频流无可用帧）")
 	}
 
-	// 3. OCR 识别
-	if s.ocrService != nil && len(frameBytes) > 0 {
-		ocrResp, oErr := s.ocrService.Detect(collectCtx, frameBytes, ocr.DetectRequest{Serial: serial, Engine: "auto"})
-		if oErr != nil {
-			state.OCR.Error = oErr.Error()
-			sources["ocr"] = SourceStatus{
+	// 阶段 2 并发执行：OCR 识别（若启用）、页面结束上下文核对 (postPage)、ADB 设备在线状态探测
+	var stage2Wg sync.WaitGroup
+
+	// 2.1 OCR 识别
+	if opts.IncludeOCR {
+		if s.ocrService != nil && len(frameBytes) > 0 {
+			stage2Wg.Add(1)
+			go func() {
+				defer stage2Wg.Done()
+				// Engine 传 opts.OCREngine（传空则由 ocrService.effectiveEngine 自动读取系统配置，如 macocr）
+				ocrResp, oErr := s.ocrService.Detect(collectCtx, frameBytes, ocr.DetectRequest{
+					Serial: serial,
+					Engine: opts.OCREngine,
+				})
+				if oErr != nil {
+					mu.Lock()
+					state.OCR.Error = oErr.Error()
+					mu.Unlock()
+					addSource("ocr", SourceStatus{
+						Status:    "failed",
+						Timestamp: time.Now().UnixMilli(),
+						Error:     oErr.Error(),
+					})
+					addFailure(fmt.Sprintf("OCR 识别请求失败: %v", oErr))
+				} else if ocrResp != nil {
+					mu.Lock()
+					state.OCR.Engine = ocrResp.Engine
+					state.OCR.Text = ocrResp.Text
+					for _, b := range ocrResp.Boxes {
+						state.OCR.Boxes = append(state.OCR.Boxes, OCRBox{
+							Text:       b.Text,
+							Confidence: b.Confidence,
+							X:          b.X,
+							Y:          b.Y,
+							W:          b.W,
+							H:          b.H,
+							PixelX:     b.PixelX,
+							PixelY:     b.PixelY,
+							PixelW:     b.PixelW,
+							PixelH:     b.PixelH,
+						})
+					}
+					isEmpty := len(state.OCR.Boxes) == 0 && strings.TrimSpace(state.OCR.Text) == ""
+					mu.Unlock()
+
+					if isEmpty {
+						addSource("ocr", SourceStatus{
+							Status:    "empty",
+							Timestamp: time.Now().UnixMilli(),
+						})
+					} else {
+						addSource("ocr", SourceStatus{
+							Status:    "success",
+							Timestamp: time.Now().UnixMilli(),
+						})
+					}
+				}
+			}()
+		} else {
+			addSource("ocr", SourceStatus{
+				Status:    "unavailable",
+				Timestamp: time.Now().UnixMilli(),
+			})
+		}
+	} else {
+		// 调用方主动跳过 OCR
+		addSource("ocr", SourceStatus{
+			Status:    "skipped",
+			Timestamp: time.Now().UnixMilli(),
+		})
+	}
+
+	// 2.2 结束页面上下文核对，验证观测稳定性
+	stage2Wg.Add(1)
+	go func() {
+		defer stage2Wg.Done()
+		if sceneImg == nil {
+			mu.Lock()
+			state.ContextStable = false
+			mu.Unlock()
+			addSource("page_info", SourceStatus{
 				Status:    "failed",
 				Timestamp: time.Now().UnixMilli(),
-				Error:     oErr.Error(),
-			}
-			partialFailures = append(partialFailures, fmt.Sprintf("OCR 识别请求失败: %v", oErr))
-		} else if ocrResp != nil {
-			state.OCR.Engine = ocrResp.Engine
-			state.OCR.Text = ocrResp.Text
-			for _, b := range ocrResp.Boxes {
-				state.OCR.Boxes = append(state.OCR.Boxes, OCRBox{
-					Text:       b.Text,
-					Confidence: b.Confidence,
-					X:          b.X,
-					Y:          b.Y,
-					W:          b.W,
-					H:          b.H,
-					PixelX:     b.PixelX,
-					PixelY:     b.PixelY,
-					PixelW:     b.PixelW,
-					PixelH:     b.PixelH,
+				Error:     "截屏缺失导致上下文无法验证",
+			})
+			return
+		}
+
+		if s.uiPage != nil {
+			postPage, pErr := s.uiPage.FetchPageInfo(collectCtx, serial)
+			if pErr != nil {
+				addFailure(fmt.Sprintf("核对结束页面信息失败: %v", pErr))
+				mu.Lock()
+				state.PageInfo = prePage
+				state.ContextStable = false
+				mu.Unlock()
+				addSource("page_info", SourceStatus{
+					Status:    "failed",
+					Timestamp: time.Now().UnixMilli(),
+					Error:     pErr.Error(),
+				})
+			} else {
+				mu.Lock()
+				state.PageInfo = postPage
+				if prePage == nil {
+					state.ContextStable = false
+				} else if prePage.PackageName != postPage.PackageName || prePage.Activity != postPage.Activity {
+					state.ContextStable = false
+					partialFailures = append(partialFailures, fmt.Sprintf("观测期间页面上下文发生变化: 从 %s/%s 切换至 %s/%s", prePage.PackageName, prePage.Activity, postPage.PackageName, postPage.Activity))
+				} else {
+					state.ContextStable = true
+				}
+				mu.Unlock()
+				addSource("page_info", SourceStatus{
+					Status:    "success",
+					Timestamp: time.Now().UnixMilli(),
 				})
 			}
-			if len(state.OCR.Boxes) == 0 && strings.TrimSpace(state.OCR.Text) == "" {
-				sources["ocr"] = SourceStatus{
-					Status:    "empty",
-					Timestamp: time.Now().UnixMilli(),
-				}
-			} else {
-				sources["ocr"] = SourceStatus{
-					Status:    "success",
-					Timestamp: time.Now().UnixMilli(),
-				}
-			}
-		}
-	} else {
-		sources["ocr"] = SourceStatus{
-			Status:    "unavailable",
-			Timestamp: time.Now().UnixMilli(),
-		}
-	}
-
-	// 4. 模板加载与匹配
-	if sceneImg != nil {
-		allTemplates, tmplErrs := s.collectAllTemplates(serial)
-		if len(tmplErrs) > 0 {
-			partialFailures = append(partialFailures, tmplErrs...)
-		}
-		matches, matchErrs := MatchAllTemplates(sceneImg, allTemplates, templateIDs)
-		if len(matchErrs) > 0 {
-			partialFailures = append(partialFailures, matchErrs...)
-		}
-		state.TemplateMatches = matches
-
-		if len(allTemplates) == 0 {
-			sources["templates"] = SourceStatus{
-				Status:    "empty",
-				Timestamp: time.Now().UnixMilli(),
-			}
-		} else if len(matches) == 0 && len(matchErrs) > 0 {
-			sources["templates"] = SourceStatus{
-				Status:    "failed",
-				Timestamp: time.Now().UnixMilli(),
-				Error:     strings.Join(matchErrs, "; "),
-			}
-		} else if len(matches) == 0 {
-			sources["templates"] = SourceStatus{
-				Status:    "empty",
-				Timestamp: time.Now().UnixMilli(),
-			}
 		} else {
-			sources["templates"] = SourceStatus{
-				Status:    "success",
+			mu.Lock()
+			state.ContextStable = true
+			mu.Unlock()
+			addSource("page_info", SourceStatus{
+				Status:    "unavailable",
 				Timestamp: time.Now().UnixMilli(),
-			}
+			})
 		}
-	} else {
-		sources["templates"] = SourceStatus{
-			Status:    "unavailable",
-			Timestamp: time.Now().UnixMilli(),
-		}
-	}
+	}()
 
-	// 6. 采集后页面上下文核对，验证观测稳定性
-	if sceneImg == nil {
-		// 截屏失败，判定为不稳定
-		state.ContextStable = false
-		sources["page_info"] = SourceStatus{
-			Status:    "failed",
-			Timestamp: time.Now().UnixMilli(),
-			Error:     "截屏缺失导致上下文无法验证",
-		}
-	} else if s.uiPage != nil {
-		postPage, pErr := s.uiPage.FetchPageInfo(collectCtx, serial)
-		if pErr != nil {
-			partialFailures = append(partialFailures, fmt.Sprintf("核对结束页面信息失败: %v", pErr))
-			state.PageInfo = prePage
-			state.ContextStable = false
-			sources["page_info"] = SourceStatus{
-				Status:    "failed",
-				Timestamp: time.Now().UnixMilli(),
-				Error:     pErr.Error(),
+	// 2.3 ADB 设备在线状态探测
+	stage2Wg.Add(1)
+	go func() {
+		defer stage2Wg.Done()
+		devStatus := "offline"
+		if s.adbPath != "" {
+			stateCmd := dependencies.CommandContext(collectCtx, s.adbPath, "-s", serial, "get-state")
+			if stateOut, stateErr := stateCmd.Output(); stateErr == nil {
+				devStatus = strings.TrimSpace(string(stateOut))
+			} else if sceneImg != nil {
+				devStatus = "device"
 			}
-		} else {
-			state.PageInfo = postPage
-			sources["page_info"] = SourceStatus{
-				Status:    "success",
-				Timestamp: time.Now().UnixMilli(),
-			}
-			if prePage == nil {
-				state.ContextStable = false
-			} else if prePage.PackageName != postPage.PackageName || prePage.Activity != postPage.Activity {
-				state.ContextStable = false
-				partialFailures = append(partialFailures, fmt.Sprintf("观测期间页面上下文发生变化: 从 %s/%s 切换至 %s/%s", prePage.PackageName, prePage.Activity, postPage.PackageName, postPage.Activity))
-			} else {
-				state.ContextStable = true
-			}
-		}
-	} else {
-		state.ContextStable = true
-		sources["page_info"] = SourceStatus{
-			Status:    "unavailable",
-			Timestamp: time.Now().UnixMilli(),
-		}
-	}
-
-	// 7. 填充设备指标信息
-	deviceInfo := map[string]any{
-		"serial": serial,
-		"status": "offline",
-	}
-	if s.adbPath != "" {
-		stateCmd := dependencies.CommandContext(collectCtx, s.adbPath, "-s", serial, "get-state")
-		if stateOut, stateErr := stateCmd.Output(); stateErr == nil {
-			deviceInfo["status"] = strings.TrimSpace(string(stateOut))
 		} else if sceneImg != nil {
-			deviceInfo["status"] = "device"
+			devStatus = "device"
 		}
-	} else if sceneImg != nil {
-		deviceInfo["status"] = "device"
+		mu.Lock()
+		state.DeviceInfo["serial"] = serial
+		state.DeviceInfo["status"] = devStatus
+		mu.Unlock()
+	}()
+
+	stage2Wg.Wait()
+
+	// 3. 模板匹配：直接读取视频流最新推理结果缓存（0ms），不再进行耗时数秒的纯 Go 多尺度扫描
+	state.TemplateMatches = []TemplateMatchItem{}
+	if sceneImg != nil {
+		if s.visionHub != nil {
+			if msg, ok := s.visionHub.LatestVisionResult(serial); ok && len(msg.Objects) > 0 {
+				imgW := state.Screenshot.Width
+				imgH := state.Screenshot.Height
+				for _, obj := range msg.Objects {
+					if len(opts.TemplateIDs) > 0 {
+						matched := false
+						for _, targetID := range opts.TemplateIDs {
+							if targetID == obj.Label {
+								matched = true
+								break
+							}
+						}
+						if !matched {
+							continue
+						}
+					}
+					item := TemplateMatchItem{
+						Source:       "stream",
+						TemplateID:   obj.Label,
+						TemplateName: obj.Label,
+						Confidence:   obj.Confidence,
+						X:            obj.X,
+						Y:            obj.Y,
+						W:            obj.W,
+						H:            obj.H,
+					}
+					if imgW > 0 && imgH > 0 {
+						item.PixelX = int(math.Round(obj.X * float64(imgW)))
+						item.PixelY = int(math.Round(obj.Y * float64(imgH)))
+						item.PixelW = int(math.Round(obj.W * float64(imgW)))
+						item.PixelH = int(math.Round(obj.H * float64(imgH)))
+					}
+					if s.templateStorage != nil {
+						if tmpl, err := s.templateStorage.GetTemplate(obj.Label); err == nil && tmpl != nil {
+							item.TemplateName = tmpl.Name
+							if tmpl.Serial == "" || tmpl.Serial == template.GlobalSerial {
+								item.Source = "global"
+							} else {
+								item.Source = "device"
+							}
+						}
+					}
+					state.TemplateMatches = append(state.TemplateMatches, item)
+				}
+			}
+		}
+
+		if len(state.TemplateMatches) > 0 {
+			addSource("templates", SourceStatus{
+				Status:    "success",
+				Timestamp: time.Now().UnixMilli(),
+			})
+		} else {
+			addSource("templates", SourceStatus{
+				Status:    "empty",
+				Timestamp: time.Now().UnixMilli(),
+			})
+		}
+	} else {
+		addSource("templates", SourceStatus{
+			Status:    "unavailable",
+			Timestamp: time.Now().UnixMilli(),
+		})
 	}
-	state.DeviceInfo = deviceInfo
 
 	state.Sources = sources
 	state.PartialFailures = partialFailures
@@ -421,4 +534,50 @@ func randomHex(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// GetLatestFrame 获取指定设备的最新屏幕画面帧。
+// 优先从视频流（StreamKeeper 或 visionframes.Store）获取最新帧；若无视频流或超时则通过 adb screencap 保底。
+// 返回: 解码图像, 原始字节流, Content-Type ("image/jpeg" 或 "image/png"), 错误
+func (s *Service) GetLatestFrame(ctx context.Context, serial string) (image.Image, []byte, string, error) {
+	if serial == "" {
+		return nil, nil, "", fmt.Errorf("missing device serial")
+	}
+
+	var frame visionframes.Frame
+	var frameErr error
+
+	if s.streamKeeper != nil {
+		frame, frameErr = s.streamKeeper.EnsureFrame(ctx, serial, 3*time.Second)
+	} else if s.frames != nil {
+		if f, hasFrame := s.frames.Latest(serial, frameMaxAge); hasFrame {
+			frame = f
+		} else {
+			frameErr = fmt.Errorf("没有最近可用的投屏帧")
+		}
+	} else {
+		frameErr = fmt.Errorf("服务端无可用帧源")
+	}
+
+	if frameErr == nil && len(frame.JPEG) > 0 {
+		if decoded, dErr := jpeg.Decode(bytes.NewReader(frame.JPEG)); dErr == nil {
+			return decoded, frame.JPEG, "image/jpeg", nil
+		}
+	}
+
+	// 视频流未就绪或解析失败时，通过 ADB screencap 保底
+	if s.adbPath != "" {
+		cmd := dependencies.CommandContext(ctx, s.adbPath, "-s", serial, "exec-out", "screencap", "-p")
+		out, err := cmd.Output()
+		if err == nil && len(out) > 0 {
+			if decoded, pErr := png.Decode(bytes.NewReader(out)); pErr == nil {
+				return decoded, out, "image/png", nil
+			}
+		}
+	}
+
+	if frameErr != nil {
+		return nil, nil, "", fmt.Errorf("获取最新画面帧失败: %w", frameErr)
+	}
+	return nil, nil, "", fmt.Errorf("获取最新画面帧失败: 无可用图像数据")
 }

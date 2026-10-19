@@ -56,13 +56,22 @@ func (k *StreamKeeper) Touch(serial string, ttl time.Duration) error {
 		return fmt.Errorf("StreamKeeper 已关闭")
 	}
 	if lease, exists := k.leases[serial]; exists {
-		lease.expiresAt = time.Now().Add(ttl)
-		if lease.timer != nil {
-			lease.timer.Stop()
-			lease.timer.Reset(ttl)
+		select {
+		case <-lease.stopped:
+			// 旧租约底层流已结束，清理后重新启动
+			if lease.timer != nil {
+				lease.timer.Stop()
+			}
+			delete(k.leases, serial)
+		default:
+			lease.expiresAt = time.Now().Add(ttl)
+			if lease.timer != nil {
+				lease.timer.Stop()
+				lease.timer.Reset(ttl)
+			}
+			k.mu.Unlock()
+			return nil
 		}
-		k.mu.Unlock()
-		return nil
 	}
 	k.mu.Unlock()
 
@@ -85,14 +94,19 @@ func (k *StreamKeeper) Touch(serial string, ttl time.Duration) error {
 		return fmt.Errorf("StreamKeeper 已关闭")
 	}
 	if lease, exists := k.leases[serial]; exists {
-		lease.expiresAt = time.Now().Add(ttl)
-		if lease.timer != nil {
-			lease.timer.Stop()
-			lease.timer.Reset(ttl)
+		select {
+		case <-lease.stopped:
+			delete(k.leases, serial)
+		default:
+			lease.expiresAt = time.Now().Add(ttl)
+			if lease.timer != nil {
+				lease.timer.Stop()
+				lease.timer.Reset(ttl)
+			}
+			k.mu.Unlock()
+			cancel()
+			return nil
 		}
-		k.mu.Unlock()
-		cancel()
-		return nil
 	}
 
 	stop := make(chan struct{})
@@ -138,15 +152,23 @@ func (k *StreamKeeper) expire(serial string) {
 	l.cancel()
 }
 
-// IsActive 查询设备是否处于保活租约中。
+// IsActive 查询设备是否处于保活租约中且底层流未退出。
 func (k *StreamKeeper) IsActive(serial string) bool {
 	if k == nil {
 		return false
 	}
 	k.mu.Lock()
 	defer k.mu.Unlock()
-	_, exists := k.leases[serial]
-	return exists
+	l, exists := k.leases[serial]
+	if !exists {
+		return false
+	}
+	select {
+	case <-l.stopped:
+		return false
+	default:
+		return true
+	}
 }
 
 // ActiveSerials 返回当前所有处于保活期内的设备序列号列表。
@@ -191,10 +213,6 @@ func (k *StreamKeeper) EnsureFrame(ctx context.Context, serial string, maxWait t
 				return f, nil
 			}
 			if time.Now().After(deadline) {
-				// 宽限：处于活跃保活状态且画面静止时，历史帧亦有效
-				if f, ok := k.frames.Latest(serial, 15*time.Minute); ok {
-					return f, nil
-				}
 				return visionframes.Frame{}, fmt.Errorf("等待视频流画面帧超时")
 			}
 		}
@@ -202,7 +220,18 @@ func (k *StreamKeeper) EnsureFrame(ctx context.Context, serial string, maxWait t
 }
 
 func (k *StreamKeeper) runStream(serial string, ms *managedSession, l *streamLease) {
-	defer close(l.stopped)
+	defer func() {
+		close(l.stopped)
+		k.mu.Lock()
+		if cur, exists := k.leases[serial]; exists && cur == l {
+			if l.timer != nil {
+				l.timer.Stop()
+			}
+			delete(k.leases, serial)
+			log.Printf("[StreamKeeper] 视频流底层连接结束，已清理保活租约 serial=%s", serial)
+		}
+		k.mu.Unlock()
+	}()
 	ffmpegPath, err := exec.LookPath("ffmpeg")
 	if err != nil {
 		log.Printf("[StreamKeeper] 未找到系统 ffmpeg，将由匹配服务 worker 或客户端补充推帧 serial=%s", serial)

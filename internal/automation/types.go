@@ -315,3 +315,51 @@ var NamedEvents = map[string]uint32{
 	"enter":       66,
 	"delete":      67,
 }
+
+// PixelPointQuery 像素检测单点查询
+type PixelPointQuery struct {
+	X          float64 `json:"x"`
+	Y          float64 `json:"y"`
+	Normalized *bool   `json:"normalized,omitempty"`
+}
+
+// PixelRequest 获取像素点请求
+type PixelRequest struct {
+	Serial     string            `json:"serial"`
+	X          *float64          `json:"x,omitempty"`
+	Y          *float64          `json:"y,omitempty"`
+	Normalized *bool             `json:"normalized,omitempty"`
+	Points     []PixelPointQuery `json:"points,omitempty"`
+}
+
+// PixelInfo 单个像素点信息
+type PixelInfo struct {
+	X     int     `json:"x"`
+	Y     int     `json:"y"`
+	NormX float64 `json:"norm_x"`
+	NormY float64 `json:"norm_y"`
+	R     int     `json:"r"`
+	G     int     `json:"g"`
+	B     int     `json:"b"`
+	A     int     `json:"a"`
+	RGB   [3]int  `json:"rgb"`
+	RGBA  [4]int  `json:"rgba"`
+	Hex   string  `json:"hex"`
+	Color string  `json:"color"`
+}
+
+// PixelResponse 获取像素点响应
+type PixelResponse struct {
+	Serial string      `json:"serial"`
+	Width  int         `json:"width"`
+	Height int         `json:"height"`
+	X      int         `json:"x"`
+	Y      int         `json:"y"`
+	NormX  float64     `json:"norm_x"`
+	NormY  float64     `json:"norm_y"`
+	RGB    [3]int      `json:"rgb"`
+	RGBA   [4]int      `json:"rgba"`
+	Hex    string      `json:"hex"`
+	Color  string      `json:"color"`
+	Points []PixelInfo `json:"points,omitempty"`
+}
