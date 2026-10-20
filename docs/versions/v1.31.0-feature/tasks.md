@@ -12,3 +12,24 @@
   - 遥测参数横条替换为“前台应用”微缩感知卡片（支持运行中/待命状态）；
   - 满屏全宽自适应展开，移除视窗居中约束；
   - 顶栏高反差微晶体胶囊按键适配。
+- [x] 8. macOS GUI 窗口与原生红绿灯沉浸适配：
+  - 桌面端配置 Tauri 原生 `TitleBarStyle::Overlay` 与 `hidden_title(true)` 移除原生灰色边框；
+  - 前端增加 `is-macos` 宿主检测；
+  - 顶栏收缩至 macOS 标准紧凑高度（`h-11` 44px），标题及图标右移（`pl-[82px]`）避让红绿灯，支持 `data-tauri-drag-region` 拖拽窗口。
+- [x] 9. 术语与入口规范同步：首页及顶栏将“大屏模式”统一更新为“大屏监控”（对齐 `docs/glossary.md`）。
+- [x] 10. 投屏画中画（小窗）交互与卡片按钮简化：
+  - 小窗口工具栏最左侧新增 `<X>` 关闭按钮，直接关闭桌面原生小窗或 Web 浮窗；
+  - 设备卡片移除独立的“恢复”按钮，由“画中画”按钮统一承载打开与恢复小窗功能。
+- [x] 11. 投屏详情页面（DevicePlayer）Holo Spatial Deck 风格重构：
+  - 引入极光光斑渐变与星芒网格背景；
+  - 投屏主画面采用大圆角悬浮巨幕质感（`rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.35)]`）；
+  - 顶栏状态指示、FPS 与操作按钮升级为微晶体玻璃胶囊风格，在 macOS 桌面端自动适配紧凑高度与红绿灯避让。
+- [x] 12. 顶栏架构公共组件化与全页面复用（AppHeader）：
+  - 封装 `AppHeader.vue` 为通用顶栏组件，支持 slots（`#left`, `#center`, `#actions`, `#more`）与属性配置；
+  - 大屏监控（`DashboardView.vue`）和投屏详情页（`DevicePlayer.vue`）全面接入 `AppHeader`，统一为首页全息微晶磨砂玻璃视觉风格；
+  - 桌面端主窗口配置 macOS 原生红绿灯上下居中定位（精确为 `traffic_light_position(18.0, 24.0)`，在 44px 紧凑顶栏内上下各 15px 严格对称居中）；
+  - 顶栏拖拽区域增加桌面端原生窗口双击切换最大化（`toggleMaximize` 与 `core:window:allow-internal-toggle-maximize`）响应，智能过滤交互控件并防重复抖动；
+  - 移除首页顶栏红绿灯旁的“1台设备在线”冗余统计徽标，确保顶栏左侧仅保留红绿灯与品牌 Logo，信息更纯粹。
+- [x] 13. AI 集成页面全息视觉升级与公共顶栏对齐：
+  - AI 集成主页（`AiIntegrationView.vue`）与技能详情页（`SkillDetailView.vue`）全面接入统一的 `AppHeader` 顶栏，配置返回路径、页面标题及机器人专属图标；
+  - 引入 `HomeAuroraBackground` 极光光斑渐变（三组呼吸光斑）与星芒网格背景（`radial-gradient` 微点矩阵），完美自适应暗色与亮色双主题，全系统视觉高度一致。

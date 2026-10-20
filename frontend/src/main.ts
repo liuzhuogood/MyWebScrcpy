@@ -15,6 +15,10 @@ if (typeof window !== 'undefined') {
   )
   if (isDesktop) {
     document.documentElement.classList.add('is-desktop')
+    const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPod|iPad/i.test(navigator.userAgent || navigator.platform)
+    if (isMac) {
+      document.documentElement.classList.add('is-macos')
+    }
   }
 }
 

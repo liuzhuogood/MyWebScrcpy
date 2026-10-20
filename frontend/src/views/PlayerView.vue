@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { isTauri } from '@tauri-apps/api/core'
+import { invoke, isTauri } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import DevicePlayer from '@/components/player/DevicePlayer.vue'
 
@@ -17,10 +17,17 @@ onUnmounted(() => document.documentElement.classList.remove('desktop-player'))
 async function handleClose() {
   if (isTauri()) {
     try {
+      await invoke('close_window')
+      return
+    }
+    catch (e) {
+      console.warn('[Desktop] invoke close_window 失败，尝试 window.close()', e)
+    }
+    try {
       await getCurrentWindow().close()
     }
     catch (e) {
-      console.warn('关闭窗口失败', e)
+      console.warn('[Desktop] 关闭窗口失败', e)
     }
   }
 }

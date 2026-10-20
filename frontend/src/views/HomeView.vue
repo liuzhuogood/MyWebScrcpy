@@ -62,16 +62,6 @@ const onlineCount = computed(() => {
   return store.devices.filter(d => d.state === 'device').length
 })
 
-const countText = computed(() => {
-  if (store.mockEnabled)
-    return `${store.devices.length} 台设备（Mock）`
-  if (store.loading && store.devices.length === 0)
-    return '加载中...'
-  if (store.error)
-    return '加载失败'
-  return `${onlineCount.value} 台设备在线`
-})
-
 // 添加设备对话框状态
 const isAddDialogOpen = ref(false)
 const addHost = ref('')
@@ -127,7 +117,7 @@ onUnmounted(() => store.stopPolling())
     <HomeAuroraBackground />
 
     <!-- 顶部应用导航栏（高对比晶体按键） -->
-    <AppHeader :device-count-text="countText" />
+    <AppHeader />
 
     <!-- 满屏宽度布局，完全填满窗口宽度，无居中留白约束 -->
     <main class="relative z-10 w-full px-4 sm:px-6 py-5 space-y-5">
@@ -151,7 +141,7 @@ onUnmounted(() => store.stopPolling())
       <!-- 初次加载骨架屏 -->
       <div
         v-if="store.loading && store.devices.length === 0"
-        class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+        class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
       >
         <div
           v-for="i in 8"
@@ -223,7 +213,7 @@ onUnmounted(() => store.stopPolling())
       <!-- 视图模式一：3D 全息设备甲板视图 (Deck View) 铺满全屏 -->
       <div
         v-else-if="viewMode === 'deck'"
-        class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+        class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
       >
         <DeviceCard
           v-for="d in store.filtered"
@@ -237,7 +227,7 @@ onUnmounted(() => store.stopPolling())
       <!-- 视图模式二：紧凑型设备阵列视图 (Compact View) 铺满全屏 -->
       <div
         v-else
-        class="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+        class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
       >
         <DeviceCard
           v-for="d in store.filtered"

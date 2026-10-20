@@ -31,6 +31,8 @@ fn main() {
             "set_main_window_borderless",
             "set_main_window_always_on_top",
             "restore_main_window",
+            "toggle_window_maximize",
+            "close_window",
         ]),
     ))
     .expect("desktop build configuration failed")
