@@ -140,8 +140,8 @@ fn main() {
             let local_origin = url.parse().map_err(std::io::Error::other)?;
             let navigation_app=app.handle().clone();
  let popup_app=app.handle().clone();
- let popup_origin=url.clone();
- WebviewWindowBuilder::new(app, "main", WebviewUrl::External(local_origin))
+            let popup_origin = url.clone();
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(local_origin))
                 .title("MyWebScrcpy").inner_size(1280.0, 820.0)
                 .transparent(true)
                 .on_new_window(move |destination,_| {
