@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Generic HTTP transport for the project API skill (Python 3.10+)."""
+from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass

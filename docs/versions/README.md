@@ -66,6 +66,7 @@
 | [v1.28.0-feature](v1.28.0-feature/version.md) | 已合本地 main；待真机验收 | OCR 接口新增 stabilization_ms（0～5000ms），在指定窗口内多次识别并综合；保留 auto 串行逻辑，新增独立 parallel 模式，API、SDK 与引擎选择入口同步。 |
 | [v1.30.0-feature](v1.30.0-feature/version.md) | 待实施；原型已验证 | 投屏拖拽安装 APK；原型与公网预览已验证，已调整计划并更新四件套文档。 |
 | [v1.31.0-feature](v1.31.0-feature/version.md) | 已实现并通过验证 | 首页全新全息空间甲板（Holo Spatial Deck）设计重构，全宽展开，隐藏帧率，设备列表与纯蓝 #406BDB 投屏键，前台应用卡片；支持 0%~100% 主窗口无级全透明穿透，修复 macOS 浅色系统下黑暗模式泛白问题。 |
+| [v2026.10.21-feature](v2026.10.21-feature/version.md) | 正式发布版本 | 全息空间甲板视觉、AppHeader 顶栏化与投屏拖拽安装 APK/文件能力；同步 Python 3.9 兼容性修复并按北京时间 tag 发布。 |
 
 ## Vue 前端迁移版本
 
