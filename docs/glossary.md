@@ -15,6 +15,7 @@
 |---|---|---|
 | 设备列表页 | 首页、主页、设备页 | 路由 `/` · `frontend/src/views/HomeView.vue` |
 | 投屏详情页 | 投屏页、投屏操控页、播放器页、控制页 | 路由 `/player?serial=<序列号>` · `frontend/src/views/PlayerView.vue` |
+| 投屏小窗 | 小窗、画中画小窗、画中画、画中画微窗 | 从设备列表页（首页）设备卡片“画中画”打开的独立投屏窗口。桌面端为系统级独立原生小窗（路由 `/player?serial=<序列号>&embedded=1`，由 `desktop/src/links.rs` 的 `open_device_window` 创建）；Web 端为内嵌可拖拽画中画浮动窗口（`frontend/src/components/player/FloatingPlayer.vue`） |
 | 大屏监控页 | 大屏、监控墙、dashboard | 路由 `/dashboard` · `frontend/src/views/DashboardView.vue` |
 | 文件管理页 | 文件页、文件管理器 | 路由 `/files?serial=<序列号>` · `frontend/src/views/FilesView.vue`;亦内嵌于投屏详情页抽屉(`DevicePlayer.vue`,embedded) |
 | 依赖管理页 | 依赖页 | 路由 `/dependencies` · `frontend/src/views/DependenciesView.vue` |
@@ -61,6 +62,7 @@
 | 动作执行 | 拟人化注入、input 执行 | 两种模式:SDK 拟人化注入(贝塞尔曲线/落点微抖动)与 ADB Shell input 系统级穿透 |
 | 最新帧图片流接口 | 最新帧、最新截图、投屏截图流 | 接口 `GET /api/devices/{serial}/latest-frame` 与 `GET /api/device-state/{serial}/screenshot`；优先从服务端视频流提取最新解码帧并返回图片流，供所有视觉相关接口统一消费 |
 | 像素点取色接口 | 获取像素点、像素颜色接口、坐标取色 | 接口 `GET/POST /api/v1/vision/pixel`；支持归一化坐标(0~1)与绝对像素坐标，基于最新帧画面快速提取像素并返回详细颜色信息(RGB/RGBA/HEX) |
+| 投屏拖拽安装 | 拖拽安装、APK 拖拽安装、投屏文件投放 | 投屏详情页与小窗投屏画面支持直接拖入文件；APK 文件弹出安装确认弹窗（支持保留数据覆盖、自动授权、允许降级），其他文件弹出保存到设备 Downloads 目录（`/storage/emulated/0/Download/`）确认弹窗 |
 | 快手短视频技能 | 快手技能、快手极速版任务、观看视频模式 | `skills/kuaishou-short-video/SKILL.md`；红包守护、连续打卡白拿手机、连续签到的视频观看流程 |
 
 ## 后端模块速查(`internal/`)
@@ -74,6 +76,7 @@
 | `uipage` / `uixml` | 页面信息、UI XML 快照 |
 | `vision` / `ocr` / `template` / `matchingservice` / `automation` | 视觉接口、OCR 引擎调度、模板管理、模板匹配服务进程、Go 原生自动化与视觉条件判断 |
 | `files` | 文件管理后端 |
+| `apps` | 应用安装后端，支持投屏 APK 拖拽安装与常见安装错误码精准映射 |
 | `operationlog` | 操作日志 |
 | `dependencies` / `servicepython` / `serviceprefs` | ADB/Python 依赖管理、Python 服务进程管理、服务开关偏好持久化 |
 | `updater` / `desktop` / `db` / `debug` | 应用更新、桌面模式、数据库访问、调试 |
