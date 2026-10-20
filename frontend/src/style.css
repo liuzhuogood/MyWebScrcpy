@@ -140,11 +140,24 @@ html.desktop-player #app {
 }
 
 html.desktop-translucent,
-html.desktop-translucent body {
+html.desktop-translucent body,
+html.desktop-translucent #app {
   background: transparent !important;
 }
 
 html.desktop-translucent #app {
   opacity: var(--window-opacity, 1);
 }
+
+html.desktop-translucent .aurora-desktop-transparent {
+  display: none !important;
+}
+
+html.desktop-translucent header {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+
+
 

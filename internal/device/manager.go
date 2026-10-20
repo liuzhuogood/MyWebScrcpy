@@ -14,38 +14,58 @@ import (
 
 // Device 表示一台设备，融合了 adb 动态状态与持久化配置。
 type Device struct {
-	Serial        string `json:"serial"`
-	State         string `json:"state"`  // "device", "offline", "connecting", "unauthorized" 等
-	Source        string `json:"source"` // "auto" (自动发现) 或 "manual" (手动添加)
-	Alias         string `json:"alias,omitempty"`
-	Product       string `json:"product,omitempty"`
-	Model         string `json:"model,omitempty"`
-	DeviceName    string `json:"device,omitempty"`
-	TransportID   string `json:"transport_id,omitempty"`
-	AutoReconnect bool   `json:"auto_reconnect"`
+	Serial             string   `json:"serial"`
+	State              string   `json:"state"`  // "device", "offline", "connecting", "unauthorized" 等
+	Source             string   `json:"source"` // "auto" (自动发现) 或 "manual" (手动添加)
+	Alias              string   `json:"alias,omitempty"`
+	Product            string   `json:"product,omitempty"`
+	Model              string   `json:"model,omitempty"`
+	DeviceName         string   `json:"device,omitempty"`
+	TransportID        string   `json:"transport_id,omitempty"`
+	AutoReconnect      bool     `json:"auto_reconnect"`
+	Brand              string   `json:"brand,omitempty"`
+	Manufacturer       string   `json:"manufacturer,omitempty"`
+	AndroidRelease     string   `json:"android_release,omitempty"`
+	SDKVersion         int      `json:"sdk_version,omitempty"`
+	CPUABI             string   `json:"cpu_abi,omitempty"`
+	BuildDisplayID     string   `json:"build_display_id,omitempty"`
+	BatteryLevel       *int     `json:"battery_level,omitempty"`
+	BatteryTemp        *float64 `json:"battery_temp,omitempty"`
+	BatteryCharging    *bool    `json:"battery_charging,omitempty"`
+	CPUTemp            *float64 `json:"cpu_temp,omitempty"`
+	CPUTempSupported   bool     `json:"cpu_temp_supported"`
+	TelemetryUpdatedAt int64    `json:"telemetry_updated_at,omitempty"`
 }
 
 // Manager 负责跟踪 adb 设备列表并守护手动添加设备的连接与持久化。
 type Manager struct {
-	adbPath string
-	db      *db.DB
-	mu      sync.RWMutex
-	devices []Device
-	stop    chan struct{}
+	adbPath        string
+	db             *db.DB
+	mu             sync.RWMutex
+	devices        []Device
+	stop           chan struct{}
+	telemetryMu    sync.RWMutex
+	hardwareCache  map[string]HardwareInfo
+	telemetryCache map[string]TelemetryInfo
+	fetchingHW     map[string]bool
 }
 
 // NewManager 创建设备管理器。
 func NewManager(adbPath string, database *db.DB) *Manager {
 	return &Manager{
-		adbPath: adbPath,
-		db:      database,
-		stop:    make(chan struct{}),
+		adbPath:        adbPath,
+		db:             database,
+		stop:           make(chan struct{}),
+		hardwareCache:  make(map[string]HardwareInfo),
+		telemetryCache: make(map[string]TelemetryInfo),
+		fetchingHW:     make(map[string]bool),
 	}
 }
 
 // Start 启动后台轮询，定期刷新设备列表和自动重连守护。
 func (m *Manager) Start() {
 	go m.loop()
+	go m.telemetryLoop()
 }
 
 // Stop 停止轮询。
@@ -140,6 +160,7 @@ func (m *Manager) refresh() {
 				go m.db.UpdateDeviceStatus(d.Serial, "offline", "", "", "", "", false)
 			}
 		}
+		m.attachTelemetry(&d)
 		combined = append(combined, d)
 	}
 
@@ -147,6 +168,7 @@ func (m *Manager) refresh() {
 	for _, adbDev := range adbDevs {
 		if !seen[adbDev.Serial] {
 			adbDev.Source = "auto"
+			m.attachTelemetry(&adbDev)
 			combined = append(combined, adbDev)
 		}
 	}
@@ -154,6 +176,45 @@ func (m *Manager) refresh() {
 	m.mu.Lock()
 	m.devices = combined
 	m.mu.Unlock()
+}
+
+// attachTelemetry 将缓存的静态硬件信息与最新遥测指标附加至 Device 实例
+func (m *Manager) attachTelemetry(d *Device) {
+	m.telemetryMu.RLock()
+	hw, hasHW := m.hardwareCache[d.Serial]
+	tel, hasTel := m.telemetryCache[d.Serial]
+	isFetching := m.fetchingHW[d.Serial]
+	m.telemetryMu.RUnlock()
+
+	if hasHW {
+		if hw.Brand != "" {
+			d.Brand = hw.Brand
+		}
+		if hw.Manufacturer != "" {
+			d.Manufacturer = hw.Manufacturer
+		}
+		if hw.Model != "" && d.Model == "" {
+			d.Model = hw.Model
+		}
+		d.AndroidRelease = hw.AndroidRelease
+		d.SDKVersion = hw.SDKVersion
+		d.CPUABI = hw.CPUABI
+		d.BuildDisplayID = hw.BuildDisplayID
+	} else if d.State == "device" && !isFetching {
+		m.telemetryMu.Lock()
+		m.fetchingHW[d.Serial] = true
+		m.telemetryMu.Unlock()
+		go m.runHardwareFetch(d.Serial)
+	}
+
+	if hasTel {
+		d.BatteryLevel = tel.BatteryLevel
+		d.BatteryTemp = tel.BatteryTemp
+		d.BatteryCharging = tel.BatteryCharging
+		d.CPUTemp = tel.CPUTemp
+		d.CPUTempSupported = tel.CPUTempSupported
+		d.TelemetryUpdatedAt = tel.UpdatedAt
+	}
 }
 
 // reconnectOfflineManualDevices 扫描开启了 auto_reconnect 且离线的手动设备，执行 adb connect

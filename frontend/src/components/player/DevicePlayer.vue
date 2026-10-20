@@ -76,6 +76,7 @@ import { usePlayer } from '@/scrcpy/usePlayer'
 import TouchVisualizer from '@/scrcpy/TouchVisualizer.vue'
 import AdbShellPanel from '@/scrcpy/AdbShellPanel.vue'
 import SplitLayout from '@/components/layout/SplitLayout.vue'
+import AppHeader from '@/components/layout/AppHeader.vue'
 import FilesView from '@/views/FilesView.vue'
 import PlayerSettingsPanel from '@/components/player/PlayerSettingsPanel.vue'
 import WindowEffectsControl from '@/components/player/WindowEffectsControl.vue'
@@ -83,6 +84,10 @@ import { usePlayerWindows } from '@/composables/usePlayerWindows'
 import TemplatePanel from '@/template/TemplatePanel.vue'
 import { useTemplateMatches } from '@/template/useTemplateMatches'
 import { useDesktopConfig } from '@/composables/useDesktopConfig'
+import DeviceFileDropOverlay from '@/components/player/DeviceFileDropOverlay.vue'
+import AppInstallDialog from '@/components/player/AppInstallDialog.vue'
+import SaveToDownloadsDialog from '@/components/player/SaveToDownloadsDialog.vue'
+import { useDeviceFileDrop } from '@/composables/useDeviceFileDrop'
 import type { RecordingEntry } from '@/api/recordings'
 
 const props = withDefaults(defineProps<{ serial: string, embedded?: boolean }>(), { embedded: false })
@@ -91,8 +96,29 @@ const emit = defineEmits<{
   layout: [layout: { width: number, height: number, side: 'capture' | 'tools' | null }]
 }>()
 const serial = computed(() => props.serial)
+const drop = useDeviceFileDrop()
 const windowEffects = usePlayerWindows(serial)
 const nativePlayerWindow = isTauri() && getCurrentWindow().label.startsWith('player-')
+
+async function handleCloseSmallWindow() {
+  if (isTauri()) {
+    try {
+      await invoke('close_window')
+      return
+    }
+    catch (e) {
+      console.warn('[Desktop] invoke close_window 失败，尝试 window.close()', e)
+    }
+    try {
+      await getCurrentWindow().close()
+      return
+    }
+    catch (e) {
+      console.warn('[Desktop] 关闭桌面小窗失败', e)
+    }
+  }
+  emit('close')
+}
 const desktopConfig = useDesktopConfig()
 const isGui = computed(() => {
   return desktopConfig.isDesktop.value || Boolean(
@@ -384,7 +410,7 @@ defineExpose({ handleEscape })
     </Empty>
   </div>
 
-  <div v-else :ref="p.stageRef" class="relative flex min-h-0 min-w-0 flex-col bg-background" :class="embedded ? 'h-full overflow-hidden' : 'h-dvh'">
+  <div v-else :ref="p.stageRef" class="relative flex min-h-0 min-w-0 flex-col" :class="embedded ? 'h-full overflow-hidden bg-black' : 'h-dvh bg-slate-100/90 text-slate-900 dark:bg-[#060810] dark:text-white transition-colors duration-200'">
     <!-- 工具栏隐藏时的顶部唤出把手 -->
     <div
       v-if="!toolbarVisible"
@@ -403,39 +429,72 @@ defineExpose({ handleEscape })
       </button>
     </div>
 
-    <!-- 工具栏 -->
-    <header
+    <!-- 工具栏复用 AppHeader 公共组件 -->
+    <AppHeader
       v-if="toolbarVisible"
-      class="flex h-14 shrink-0 items-center gap-1 border-b px-3 transition-all"
-      :class="{
-        'toolbar-compact': compactToolbar,
-        'cursor-move select-none': embedded,
-        'absolute top-0 inset-x-0 z-40 bg-background/95 backdrop-blur shadow-sm': embedded,
-      }"
+      :embedded="embedded"
+      :compact-toolbar="compactToolbar"
+      :show-nav="false"
+      :show-effects="false"
+      :show-config="false"
+      :class="[
+        embedded ? 'absolute top-0 inset-x-0 z-40' : '',
+      ]"
       @mouseenter="onToolbarEnter"
       @mouseleave="onToolbarLeave"
       @mousedown="dragBorderlessWindow"
     >
-      <Button
-        v-if="embedded && !nativePlayerWindow"
-        variant="ghost"
-        size="icon"
-        aria-label="关闭小窗"
-        title="关闭小窗"
-        class="cursor-pointer"
-        @click="emit('close')"
-      >
-        <X class="h-4 w-4" />
-      </Button>
-      <Button v-else-if="!embedded" variant="ghost" size="icon" aria-label="返回设备列表" as-child>
-        <RouterLink to="/"><ArrowLeft class="h-5 w-5" /></RouterLink>
-      </Button>
-      <span class="ml-1 min-w-0 max-w-44 flex-1 truncate font-mono text-sm font-medium" :class="{ 'cursor-move select-none': embedded }" :title="serial">{{ serial }}</span>
-      <Badge v-if="!embedded" :variant="p.live.value ? 'default' : 'secondary'">{{ p.statusText.value }}</Badge>
-      <Badge v-if="!embedded && p.showFps.value" class="toolbar-secondary" variant="outline">{{ p.fps.value }} fps</Badge>
+      <template #left>
+        <div class="flex min-w-0 items-center gap-1.5 sm:gap-2">
+          <Button
+            v-if="embedded"
+            variant="ghost"
+            size="icon"
+            aria-label="关闭小窗"
+            title="关闭小窗"
+            class="h-8 w-8 rounded-xl text-slate-600 hover:text-red-600 hover:bg-red-500/10 dark:text-slate-300 dark:hover:text-red-400 dark:hover:bg-red-500/15 cursor-pointer transition-colors"
+            @click.stop="handleCloseSmallWindow"
+          >
+            <X class="h-4 w-4" />
+          </Button>
+          <Button
+            v-else
+            variant="ghost"
+            size="icon"
+            aria-label="返回设备列表"
+            as-child
+            class="h-8 w-8 rounded-xl border border-slate-200/70 bg-white/70 text-slate-700 hover:bg-slate-200/80 hover:text-slate-950 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/15 dark:hover:text-white cursor-pointer transition-colors"
+          >
+            <RouterLink to="/"><ArrowLeft class="h-4 w-4" /></RouterLink>
+          </Button>
+          <span
+            class="ml-1 min-w-0 max-w-44 flex-1 truncate font-mono text-xs font-bold tracking-tight text-slate-900 dark:text-white"
+            :class="{ 'cursor-move select-none': embedded }"
+            :title="serial"
+          >
+            {{ serial }}
+          </span>
+          <span
+            v-if="!embedded"
+            class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold backdrop-blur-md"
+            :class="p.live.value ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30' : 'bg-slate-200/70 text-slate-600 border border-slate-300/60 dark:bg-white/5 dark:text-slate-400 dark:border-white/10'"
+          >
+            <span class="h-1.5 w-1.5 rounded-full" :class="p.live.value ? 'bg-emerald-500 dark:bg-emerald-400 animate-pulse' : 'bg-slate-400'" />
+            {{ p.statusText.value }}
+          </span>
+          <Badge
+            v-if="!embedded && p.showFps.value"
+            class="toolbar-secondary rounded-lg font-mono text-[10px] border border-slate-200/80 bg-white/60 dark:border-white/10 dark:bg-white/5 text-slate-600 dark:text-slate-300"
+            variant="outline"
+          >
+            {{ p.fps.value }} fps
+          </Badge>
+        </div>
+      </template>
 
-      <!-- 小窗模式专属精简工具栏：默认只显示 置顶(GUI)、返回、主页、切换 + 更多；过窄时全部收入更多 -->
-      <div v-if="embedded" class="ml-auto flex shrink-0 items-center gap-0.5">
+      <template #actions>
+        <!-- 小窗模式专属精简工具栏：默认只显示 置顶(GUI)、返回、主页、切换 + 更多；过窄时全部收入更多 -->
+        <div v-if="embedded" class="flex shrink-0 items-center gap-0.5">
         <WindowEffectsControl
           v-if="nativePlayerWindow"
           :opacity="windowEffects.player.value?.opacity ?? 100"
@@ -509,7 +568,7 @@ defineExpose({ handleEscape })
       </div>
 
       <!-- 完整页面模式工具栏 -->
-      <div v-else class="ml-auto flex shrink-0 items-center gap-1">
+      <div v-else class="flex shrink-0 items-center gap-1">
         <Button class="toolbar-secondary" variant="ghost" size="icon" title="返回" aria-label="返回" @click="p.pressBack()">
           <Undo2 class="h-5 w-5" />
         </Button>
@@ -685,7 +744,8 @@ defineExpose({ handleEscape })
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-    </header>
+    </template>
+  </AppHeader>
     <Dialog :open="mobileTool !== null" @update:open="(open) => { if (!open) mobileTool = null }">
       <DialogContent class="max-h-[calc(100dvh-2rem)] grid-cols-1 overflow-y-auto" :aria-describedby="undefined">
         <DialogHeader><DialogTitle>{{ mobileTool === 'recording' ? '录制' : '截图' }}</DialogTitle></DialogHeader>
@@ -716,10 +776,49 @@ defineExpose({ handleEscape })
     </Dialog>
     <!-- 舞台 + 侧栏 -->
     <SplitLayout :class="{ 'capture-layout': captureOpen }" :open="sidePanel !== null">
-      <template #main><div class="flex h-full min-h-0 flex-col overflow-hidden p-0" :class="embedded ? 'bg-black' : 'bg-muted/40 gap-3 overflow-auto'">
-      <main class="relative flex min-w-0 flex-1 items-center justify-center" :class="embedded ? 'min-h-0 bg-black' : 'min-h-80'">
-        <div class="relative">
-          <canvas :ref="p.canvasRef" tabindex="0" class="block touch-none bg-black select-none" :class="{ 'rounded-sm': !embedded, 'cursor-crosshair': inspectorVisible && inspectionMode }" aria-label="设备投屏画面" @pointerdown="p.canvasRef.value?.focus({ preventScroll: true })" />
+      <template #main><div class="flex h-full min-h-0 flex-col overflow-hidden p-0" :class="embedded ? 'bg-black' : 'bg-transparent gap-3 overflow-auto'">
+      <main
+        class="relative flex min-w-0 flex-1 items-center justify-center p-3 sm:p-5"
+        :class="embedded ? 'min-h-0 bg-black !p-0' : 'min-h-80'"
+        @dragenter="drop.onDragEnter"
+        @dragover="drop.onDragOver"
+        @dragleave="drop.onDragLeave"
+        @drop="drop.onDrop"
+      >
+        <!-- 全息星芒网格背景（仅在非小窗详情模式下展现） -->
+        <div
+          v-if="!embedded"
+          class="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+        >
+          <!-- 极光光斑 1 -->
+          <div
+            class="absolute -top-32 -left-32 h-[450px] w-[450px] rounded-full blur-[140px] bg-gradient-to-tr from-indigo-500/15 via-purple-500/10 to-transparent dark:from-indigo-600/25 dark:via-purple-600/20"
+          />
+          <!-- 极光光斑 2 -->
+          <div
+            class="absolute -bottom-32 -right-32 h-[500px] w-[500px] rounded-full blur-[150px] bg-gradient-to-bl from-cyan-400/15 via-blue-500/10 to-transparent dark:from-cyan-500/25 dark:via-blue-600/20"
+          />
+          <!-- 网格星点 -->
+          <div
+            class="absolute inset-0 text-slate-900/10 dark:text-white/15 opacity-70"
+            style="background-image: radial-gradient(currentColor 1px, transparent 1px); background-size: 32px 32px;"
+          />
+        </div>
+
+        <div class="relative z-10 transition-transform">
+          <canvas
+            :ref="p.canvasRef"
+            tabindex="0"
+            class="block touch-none bg-black select-none transition-shadow"
+            :class="[
+              embedded
+                ? ''
+                : 'rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.35)] ring-1 ring-slate-300/60 dark:ring-white/10 overflow-hidden',
+              inspectorVisible && inspectionMode ? 'cursor-crosshair' : '',
+            ]"
+            aria-label="设备投屏画面"
+            @pointerdown="p.canvasRef.value?.focus({ preventScroll: true })"
+          />
           <canvas
             :ref="ins.overlayRef"
             class="pointer-events-none absolute inset-0 h-full w-full"
@@ -736,6 +835,9 @@ defineExpose({ handleEscape })
             :actions-target="`#${captureHostId}`"
             @close="captureOpen = false"
           />
+
+          <!-- 投屏拖拽文件高亮浮层 -->
+          <DeviceFileDropOverlay :visible="drop.isDragging.value" :drag-kind="drop.dragKind.value" />
 
           <!-- 加载中 -->
           <div v-if="p.loading.value" class="absolute inset-0 flex flex-col items-center justify-center gap-3 rounded-sm bg-black/60">
@@ -825,6 +927,19 @@ defineExpose({ handleEscape })
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+    <!-- 拖拽 APK 安装确认弹窗 -->
+    <AppInstallDialog
+      v-model:open="drop.installDialogOpen.value"
+      :file="drop.candidateFile.value"
+      :serial="serial"
+    />
+
+    <!-- 拖拽非 APK 保存到 Downloads 弹窗 -->
+    <SaveToDownloadsDialog
+      v-model:open="drop.saveDialogOpen.value"
+      :file="drop.candidateFile.value"
+      :serial="serial"
+    />
   </div>
 </template>
 

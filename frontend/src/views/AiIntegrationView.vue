@@ -2,7 +2,7 @@
 import type { AiTool, AiToolId, SkillCategory, SkillInstallTargetResult, SkillItem } from '@/api/aiIntegrations'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { AlertCircle, Loader2, RotateCcw } from 'lucide-vue-next'
+import { AlertCircle, Bot, Loader2, RotateCcw } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import {
   Empty,
@@ -13,6 +13,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import AppHeader from '@/components/layout/AppHeader.vue'
+import HomeAuroraBackground from '@/components/home/HomeAuroraBackground.vue'
 import AiGuidePanel from '@/components/ai-integration/AiGuidePanel.vue'
 import AiToolSelector from '@/components/ai-integration/AiToolSelector.vue'
 import InstallDialog from '@/components/ai-integration/InstallDialog.vue'
@@ -261,10 +262,19 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-background text-foreground">
-    <AppHeader device-count-text="" />
+  <div class="relative min-h-screen text-slate-900 dark:text-slate-100 select-none pb-20 overflow-x-hidden">
+    <!-- 极光光斑渐变与星芒网格背景 -->
+    <HomeAuroraBackground />
 
-    <main class="flex-1 pb-16 pt-4">
+    <!-- 顶部应用导航栏 -->
+    <AppHeader
+      back
+      back-to="/"
+      title="AI 集成"
+      :icon="Bot"
+    />
+
+    <main class="relative z-10 flex-1 pb-16 pt-5">
       <div class="mx-auto max-w-6xl space-y-8 px-4 sm:px-6">
         <!-- 加载中状态 -->
         <div v-if="isLoading" class="flex flex-col items-center justify-center py-24 text-muted-foreground">

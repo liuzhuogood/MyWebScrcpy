@@ -29,6 +29,22 @@ pub struct State {
     tray_available: AtomicBool,
 }
 
+#[tauri::command]
+async fn toggle_window_maximize(window: tauri::Window) -> Result<(), String> {
+    let is_max = window.is_maximized().map_err(|e| e.to_string())?;
+    if is_max {
+        window.unmaximize().map_err(|e| e.to_string())?;
+    } else {
+        window.maximize().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn close_window(window: tauri::Window) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
 fn main() {
     #[cfg(target_os = "macos")]
     backend::fix_macos_env();
@@ -100,6 +116,8 @@ fn main() {
             main_window::set_main_window_borderless,
             main_window::set_main_window_always_on_top,
             main_window::restore_main_window,
+            toggle_window_maximize,
+            close_window,
             updater::desktop_check_update,
             updater::desktop_upgrade
         ])
@@ -131,6 +149,15 @@ fn main() {
                     .permission("allow-set-main-window-borderless")
                     .permission("allow-set-main-window-always-on-top")
                     .permission("allow-restore-main-window")
+                    .permission("allow-toggle-window-maximize")
+                    .permission("allow-close-window")
+                    .permission("core:window:allow-close")
+                    .permission("core:window:allow-destroy")
+                    .permission("core:window:allow-internal-toggle-maximize")
+                    .permission("core:window:allow-toggle-maximize")
+                    .permission("core:window:allow-maximize")
+                    .permission("core:window:allow-unmaximize")
+                    .permission("core:window:allow-is-maximized")
  .permission("allow-desktop-check-update")
  .permission("allow-desktop-upgrade"),
             )?;
@@ -140,10 +167,21 @@ fn main() {
             let local_origin = url.parse().map_err(std::io::Error::other)?;
             let navigation_app=app.handle().clone();
  let popup_app=app.handle().clone();
- let popup_origin=url.clone();
- WebviewWindowBuilder::new(app, "main", WebviewUrl::External(local_origin))
+            let popup_origin = url.clone();
+            let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(local_origin))
                 .title("MyWebScrcpy").inner_size(1280.0, 820.0)
-                .transparent(true)
+                .transparent(true);
+
+            #[cfg(target_os = "macos")]
+            {
+                builder = builder
+                    .decorations(true)
+                    .title_bar_style(tauri::TitleBarStyle::Overlay)
+                    .hidden_title(true)
+                    .traffic_light_position(tauri::LogicalPosition::new(18.0, 24.0));
+            }
+
+            builder
                 .on_new_window(move |destination,_| {
                     use tauri_plugin_opener::OpenerExt;
                     if destination.as_str().starts_with(&(popup_origin.clone()+"/")) || destination.scheme()=="https" {

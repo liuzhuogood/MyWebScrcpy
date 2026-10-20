@@ -34,7 +34,9 @@ export const useDeviceStore = defineStore('devices', () => {
   const mockEnabled = ref(import.meta.env.DEV && localStorage.getItem(MOCK_KEY) === '1')
   let timer: number | undefined
 
-  const displayName = (d: Device) => d.alias?.trim() || aliases.value[d.serial]?.trim() || d.model || '未知设备'
+  // 设备显示名称逻辑：用户别名 > 品牌名 (ro.product.brand) > 型号 > 默认设备
+  const displayName = (d: Device) =>
+    d.alias?.trim() || aliases.value[d.serial]?.trim() || d.brand?.trim() || d.model || 'Android'
 
   const filtered = computed(() => {
     let list = devices.value
@@ -46,7 +48,7 @@ export const useDeviceStore = defineStore('devices', () => {
     if (!k)
       return list
     return list.filter(d =>
-      [displayName(d), d.serial, d.model, d.product].filter(Boolean)
+      [displayName(d), d.serial, d.brand, d.model, d.product].filter(Boolean)
         .join(' ').toLowerCase().includes(k),
     )
   })

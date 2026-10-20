@@ -8,6 +8,18 @@ export interface Device {
   device?: string
   transport_id?: string
   auto_reconnect?: boolean
+  brand?: string
+  manufacturer?: string
+  android_release?: string
+  sdk_version?: number
+  cpu_abi?: string
+  build_display_id?: string
+  battery_level?: number
+  battery_temp?: number
+  battery_charging?: boolean
+  cpu_temp?: number
+  cpu_temp_supported?: boolean
+  telemetry_updated_at?: number
 }
 
 export async function fetchDevices(): Promise<Device[]> {

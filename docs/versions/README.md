@@ -64,6 +64,8 @@
 | [v1.27.1-feature](v1.27.1-feature/version.md) | 界面验收通过；三项功能缺口待修复 | 任务目录手动扫描、总状态及决策、通用技能和应用规则精简；左右分栏、图片网格与页内原图预览已验证。按用户授权本地合入 main，沿用当前 1.27.2 版本；超时、ESC 动态 XML、AI 配置保存仍待修复，见验收记录。 |
 | [v1.27.2-fix](v1.27.2-fix/version.md) | 已发布 v1.27.2 | 修复 `DirWatcher.Close` 在 Windows 上先关 fsnotify、后等事件循环造成的互锁（关闭时目录事件在途会永久阻塞），并让 `removeWatch` 只处理登记过的目录；新增关闭场景回归测试。其余内容与 v1.27.0 相同。2026-10-17 [GitHub Actions](https://github.com/liuzhuogood/MyWebScrcpy/actions/runs/39018862813) 全部成功；[Release](https://github.com/liuzhuogood/MyWebScrcpy/releases/tag/v1.27.2) 已发布 10 个资产。 |
 | [v1.28.0-feature](v1.28.0-feature/version.md) | 已合本地 main；待真机验收 | OCR 接口新增 stabilization_ms（0～5000ms），在指定窗口内多次识别并综合；保留 auto 串行逻辑，新增独立 parallel 模式，API、SDK 与引擎选择入口同步。 |
+| [v1.30.0-feature](v1.30.0-feature/version.md) | 待实施；原型已验证 | 投屏拖拽安装 APK；原型与公网预览已验证，已调整计划并更新四件套文档。 |
+| [v1.31.0-feature](v1.31.0-feature/version.md) | 已实现并通过验证 | 首页全新全息空间甲板（Holo Spatial Deck）设计重构，全宽展开，隐藏帧率，设备列表与纯蓝 #406BDB 投屏键，前台应用卡片；支持 0%~100% 主窗口无级全透明穿透，修复 macOS 浅色系统下黑暗模式泛白问题。 |
 
 ## Vue 前端迁移版本
 

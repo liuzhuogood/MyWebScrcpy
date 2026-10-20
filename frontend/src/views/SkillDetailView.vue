@@ -21,6 +21,7 @@ import {
   Smartphone,
   Sparkles,
   Zap,
+  Bot,
 } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -34,6 +35,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty'
 import AppHeader from '@/components/layout/AppHeader.vue'
+import HomeAuroraBackground from '@/components/home/HomeAuroraBackground.vue'
 import TargetToolSelector from '@/components/ai-integration/TargetToolSelector.vue'
 import { ApiError, downloadSkillZip, fetchAiIntegrations, fetchSkillDetail, installSkill } from '@/api/aiIntegrations'
 
@@ -295,10 +297,19 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex min-h-screen flex-col bg-background text-foreground">
-    <AppHeader device-count-text="" />
+  <div class="relative min-h-screen text-slate-900 dark:text-slate-100 select-none pb-20 overflow-x-hidden">
+    <!-- 极光光斑渐变与星芒网格背景 -->
+    <HomeAuroraBackground />
 
-    <main class="flex-1 pb-16 pt-4">
+    <AppHeader
+      back
+      title="技能详情"
+      :subtitle="skill?.name"
+      :icon="Bot"
+      @back="handleBackToMarket"
+    />
+
+    <main class="relative z-10 flex-1 pb-16 pt-5">
       <div class="mx-auto max-w-6xl px-4 sm:px-6">
         <!-- 加载中 -->
         <div v-if="isLoading" class="flex flex-col items-center justify-center py-24 text-muted-foreground">

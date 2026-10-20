@@ -16,6 +16,7 @@ import (
 
 	"mywebscrcpy/internal/adbshell"
 	"mywebscrcpy/internal/apidocs"
+	"mywebscrcpy/internal/apps"
 	"mywebscrcpy/internal/db"
 	"mywebscrcpy/internal/dependencies"
 	"mywebscrcpy/internal/desktop"
@@ -141,6 +142,10 @@ func main() {
 
 	// 文件管理 API：每个请求都携带当前投屏页面选定的设备 serial，操作手机共享存储。
 	files.RegisterRoutes(mux, fileManager)
+
+	// 应用安装 API：处理投屏拖拽 APK 安装请求
+	appManager := apps.NewManager(adbPath)
+	apps.RegisterRoutes(mux, appManager)
 
 	// AI 集成与技能市场 API
 	userHome, homeErr := os.UserHomeDir()
