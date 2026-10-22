@@ -50,10 +50,9 @@ pub fn action(app: &AppHandle, id: &str) {
                 eprintln!("[Desktop] 打开浏览器失败: {error}");
             }
         }
-        "home" | "dashboard" | "dependencies" => {
+        "home" | "dependencies" => {
             let path = match id {
                 "home" => "/",
-                "dashboard" => "/dashboard",
                 _ => "/dependencies",
             };
             let state = app.state::<State>();
@@ -95,7 +94,6 @@ pub fn install(app: &mut App) -> tauri::Result<bool> {
         .build()?;
     let view = SubmenuBuilder::new(app, "视图")
         .text("home", "设备列表")
-        .text("dashboard", "大屏监控")
         .separator()
         .text("show", "打开主窗口")
         .text("restore-players", "恢复所有小窗")
@@ -126,7 +124,6 @@ pub fn install(app: &mut App) -> tauri::Result<bool> {
         .text("main-toggle-borderless", "主窗口无边框开关")
         .text("restore-players", "恢复所有小窗")
         .text("home", "设备列表")
-        .text("dashboard", "大屏监控")
         .text("dependencies", "依赖管理")
         .separator()
         .text("browser", "在浏览器中打开")

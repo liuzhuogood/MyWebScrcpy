@@ -5,9 +5,12 @@ import {
   Plus,
   RefreshCw,
   Search,
+  SlidersHorizontal,
+  Smartphone,
   Usb,
   Wifi,
 } from 'lucide-vue-next'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
@@ -15,17 +18,22 @@ import { Switch } from '@/components/ui/switch'
 defineProps<{
   keyword: string
   sourceFilter: 'all' | 'auto' | 'manual'
-  viewMode: 'deck' | 'compact'
+  viewMode: 'deck' | 'compact' | 'phone'
   totalCount: number
   onlineCount: number
   isDevelopment?: boolean
   mockEnabled?: boolean
+  isPanelOpen?: boolean
+  selectedCount?: number
+  showOffline?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:keyword', val: string): void
   (e: 'update:sourceFilter', val: 'all' | 'auto' | 'manual'): void
-  (e: 'update:viewMode', val: 'deck' | 'compact'): void
+  (e: 'update:showOffline', val: boolean): void
+  (e: 'update:viewMode', val: 'deck' | 'compact' | 'phone'): void
+  (e: 'togglePanel'): void
   (e: 'refresh'): void
   (e: 'openAdd'): void
   (e: 'toggleMock', val: boolean): void
@@ -33,20 +41,20 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="relative z-20 flex flex-col items-center justify-between gap-4 rounded-3xl border border-slate-200/80 bg-white/75 p-3.5 shadow-lg backdrop-blur-2xl text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-2xl dark:text-white md:flex-row md:px-5 transition-colors">
-    <!-- 左侧设备状态标签（已去除动态图标，并命名为设备列表） -->
-    <div class="flex items-center gap-3">
+  <div class="relative z-20 flex flex-col items-center justify-between gap-4 rounded-3xl border border-slate-200/80 bg-white/75 p-3.5 shadow-lg backdrop-blur-2xl text-slate-900 dark:border-white/10 dark:bg-white/[0.04] dark:shadow-2xl dark:text-white lg:flex-row lg:px-5 transition-colors">
+    <!-- 左侧设备状态标签（防挤压设置 shrink-0 与 min-w-max） -->
+    <div class="flex items-center gap-3 shrink-0 min-w-max">
       <div>
         <div class="flex items-center gap-2.5">
-          <span class="text-base font-bold tracking-tight text-slate-900 dark:text-white">设备列表</span>
-          <span class="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/30">
+          <span class="text-base font-bold tracking-tight text-slate-900 dark:text-white whitespace-nowrap">设备列表</span>
+          <span class="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/30 whitespace-nowrap">
             {{ onlineCount }} 在线
           </span>
-          <span v-if="mockEnabled" class="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-500/30">
+          <span v-if="mockEnabled" class="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-500/20 dark:text-amber-300 border border-amber-500/30 whitespace-nowrap">
             Mock
           </span>
         </div>
-        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">毫秒级超低时延投屏 · 多端无感互联</p>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 whitespace-nowrap">毫秒级超低时延投屏 · 多端无感互联</p>
       </div>
     </div>
 
@@ -98,6 +106,16 @@ const emit = defineEmits<{
           无线
         </button>
       </div>
+
+      <!-- 离散开关：显示离线设备 -->
+      <label class="flex items-center gap-1.5 px-2 py-1 text-xs text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+        <Switch
+          :model-value="showOffline"
+          aria-label="显示离线设备"
+          @update:model-value="(v) => emit('update:showOffline', !!v)"
+        />
+        <span>显示离线</span>
+      </label>
     </div>
 
     <!-- 右侧：布局切换与操作按钮 -->
@@ -128,7 +146,40 @@ const emit = defineEmits<{
         >
           <Grid3X3 class="h-4 w-4" />
         </button>
+        <button
+          type="button"
+          class="rounded-xl p-1.5 transition-colors cursor-pointer"
+          :class="viewMode === 'phone'
+            ? 'bg-white text-slate-950 shadow-xs dark:bg-white/15 dark:text-white'
+            : 'text-slate-600 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white'"
+          title="手机视图"
+          aria-label="手机视图"
+          @click="emit('update:viewMode', 'phone')"
+        >
+          <Smartphone class="h-4 w-4" />
+        </button>
       </div>
+
+      <!-- 批量操作面板触发按钮（带已选徽章） -->
+      <Button
+        variant="ghost"
+        size="sm"
+        class="h-9 rounded-2xl border border-slate-200/80 bg-white/70 text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white px-2.5 text-xs font-medium gap-1.5 shadow-2xs cursor-pointer transition-all"
+        :class="{ '!border-violet-500 !text-violet-600 dark:!text-violet-400': isPanelOpen }"
+        title="批量操作面板"
+        aria-label="批量操作面板"
+        @click="emit('togglePanel')"
+      >
+        <SlidersHorizontal class="h-3.5 w-3.5" />
+        <span>批量操作</span>
+        <Badge
+          v-if="selectedCount && selectedCount > 0"
+          variant="secondary"
+          class="h-4 px-1 text-[10px] bg-violet-600 text-white dark:bg-violet-500 leading-none"
+        >
+          {{ selectedCount }}
+        </Badge>
+      </Button>
 
       <Button
         variant="ghost"

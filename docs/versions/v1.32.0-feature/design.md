@@ -1,6 +1,6 @@
-# v1.32.0-feature · 首页手机视图与批量操作规划
+# v1.32.0-feature · 首页手机视图与批量操作设计与实施
 
-状态：规划已记录，业务尚未实施。日期：2026-10-20。
+状态：本版功能已完成代码实现与单元自测，独立原型已获真实浏览器验证；真实双机交互验收由主管实测推进中（部分验证）。日期：2026-10-21。正式版本维持 `v1.29.0`。
 
 ## 背景与证据边界
 
@@ -69,20 +69,20 @@ v1.35 不包含恢复旧任务中心、内嵌 Pi、任意 JS/BAT 执行或完整
 
 ### 布局与职责
 
-- 顶部保留现有搜索、来源筛选和三种视图切换，名称沿用“设备列表”。
+- 顶部保留现有搜索、来源筛选和三种视图切换，名称沿用“设备列表”。顶部搜索/筛选控制中枢占满整行，不因右侧批量面板被挤压变形。
 - 来源筛选仍按已确认的 `source=auto/manual` 工作，不能仅凭自动发现或手动添加就推断 USB/Wi-Fi 物理连接类型。
-- 主区域展示当前视图；手机视图使用轻量手机外框、实际画面比例、唯一设备标识，避免大量装饰占用画面。
-- 右侧面板可收起；窄屏使用抽屉，收起后有明确恢复入口。三种视图共享选择语义，手机专属显示控件仅在手机视图出现。
-- 面板分为目标设备、批量操作、显示设置、当前执行结果。只显示必要的目标数与结果，不重复堆叠设备统计。
+- 主区域展示当前视图；手机视图使用轻量手机外框、实际画面比例、唯一设备标识与编号徽章（01..N），避免大量装饰占用画面。
+- 批量操作面板位于设备卡片主展示区右侧（预留专属宽度，桌面端并排不遮挡设备卡片；窄屏自然上下流式堆叠，无幽灵 modal 遮罩，关闭后入口可恢复）。
+- 面板全面组件化拆分：面板壳（`BatchPanelShell`）、编号设备显隐选择区（`BatchDeviceGrid`）、批量勾选范围（`BatchTargetScope`）、离散按键动作（`BatchActionButtons`）、显示设置（`BatchDisplaySettings`）、逐台结果（`BatchResultList`）。
 - 选择复选框与触控画面分离；点击画面仍是单机操控，不能因多选而广播触摸。
 
-### 显示数量
+### 显示数量与编号方块选择器
 
-- “每页台数”指本页最多展示的手机数量，不是连接总数、选中数或每行列数。
-- 建议默认 9 台，预设 4/9/16/25/36，并允许输入 1～64；这是初始产品上限，必须经原型与性能验证后定稿。
-- 筛选或显隐后不足 N 台，按实际数量展示；不填充假设备、不主动连接不存在的 serial。
-- 保留小/中/大与铺满布局；每页台数限制挂载范围，尺寸与铺满只决定这些设备如何排列。
-- 当前页在线设备才挂载投屏；离线/未授权设备显示可识别状态，不循环启动失败会话。开发 Mock 只用于布局，不向 `/ws` 发起假设备请求。
+- 原手机视图每页台数/分页/显隐 popover 整条已被面板内所有真实设备的编号小方块选择器替代。
+- 编号与 serial 保持稳定映射（按 serial 字典序稳定排序），不按动态数组索引执行控制，真实设备有多少台就展示多少编号，不伪造 60 台空块。
+- 点编号切换对应设备显隐，提供“全显”（恢复全部设备显示）与“只显已选”（仅显示当前批量勾选的设备快照）。
+- 编号设备池不因隐藏卡片而丢失按钮，确保隐藏后始终有恢复入口；“只显已选”与选择清理具有快照保护，不产生递归互相清空。
+- 保留小/中/大与铺满布局；当前可见且在线的真实设备才挂载投屏；离线/未授权设备显示可识别状态，不循环启动失败会话。开发 Mock 只用于布局，不向 `/ws` 发起假设备请求。
 
 ### 选择与执行范围
 
@@ -128,7 +128,7 @@ flowchart TD
 | 范围 | 已有文件/拟新增职责 | 边界 |
 | --- | --- | --- |
 | 首页宿主 | `frontend/src/views/HomeView.vue`、`frontend/src/components/home/HomeControlCapsule.vue` | 扩展视图类型，组合视图和面板；不把视频连接及批调度塞进页面 |
-| 手机视图 | `frontend/src/components/dashboard/DashTile.vue`、`frontend/src/utils/monitorGrid.ts`；拟新增 `frontend/src/components/home/HomePhoneView.vue` | 复用既有磁贴能力，按当前页挂载；交互迁移前建立清单 |
+| 手机视图 | `frontend/src/components/dashboard/DashTile.vue`、`frontend/src/utils/monitorGrid.ts`、`frontend/src/utils/phoneGrid.ts`；`frontend/src/components/home/HomePhoneView.vue` | 紧密设备墙规格（小/中/大/铺满同档位同宽同高，相邻横纵间距锁定 2px，画面黑底 contain 等比居中填充黑边、不拉伸不裁图，黑边不发触控） |
 | 显示/选择状态 | `frontend/src/stores/devices.ts`；拟新增 `frontend/src/composables/useHomePhoneView.ts`、`useDeviceSelection.ts` | 首页设备列表单一事实来源；偏好持久化不持久化危险的批量选中状态 |
 | 面板/调度 | 拟新增 `frontend/src/components/home/BatchOperationPanel.vue`、`frontend/src/composables/useDeviceBatch.ts`、`frontend/src/api/deviceActions.ts` | API 封装按当前契约读取；不假设存在批量后端接口 |
 | 原导航入口 | `frontend/src/components/layout/AppHeader.vue`、`desktop/src/menu.rs` | 移除桌面、移动与两处原生菜单入口；路由处置待明确 |

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ArrowLeft, Bot, ChevronDown, Ellipsis, Github, LayoutGrid, Settings, Sparkles, X } from 'lucide-vue-next'
+import { ArrowLeft, Bot, ChevronDown, Ellipsis, Github, Settings, Sparkles, X } from 'lucide-vue-next'
 import { RouterLink } from 'vue-router'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -301,18 +301,6 @@ onMounted(() => {
           <Button
             variant="ghost"
             size="sm"
-            class="h-8 rounded-xl border border-slate-200/80 bg-slate-100/70 text-slate-800 hover:bg-slate-200/80 hover:text-slate-950 dark:border-white/15 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/20 dark:hover:text-white text-xs font-medium px-3 gap-1.5 shadow-2xs backdrop-blur-md transition-all cursor-pointer"
-            as-child
-          >
-            <RouterLink to="/dashboard">
-              <LayoutGrid class="h-4 w-4" />
-              大屏监控
-            </RouterLink>
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
             class="h-8 rounded-xl text-slate-700 hover:text-slate-950 hover:bg-slate-100 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10 text-xs font-medium px-2.5 gap-1.5 transition-colors cursor-pointer"
             as-child
           >
@@ -379,9 +367,6 @@ onMounted(() => {
             <DropdownMenuSeparator v-if="updater.checkResult?.has_update" />
             <DropdownMenuItem as-child>
               <RouterLink to="/ai-integration"><Bot class="h-4 w-4" />AI 集成</RouterLink>
-            </DropdownMenuItem>
-            <DropdownMenuItem as-child>
-              <RouterLink to="/dashboard"><LayoutGrid class="h-4 w-4" />大屏监控</RouterLink>
             </DropdownMenuItem>
             <DropdownMenuItem as-child>
               <a href="https://github.com/liuzhuogood/MyWebScrcpy" target="_blank" rel="noopener noreferrer"><Github class="h-4 w-4" />GitHub</a>
