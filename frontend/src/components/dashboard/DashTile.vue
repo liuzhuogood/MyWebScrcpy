@@ -17,11 +17,12 @@ import {
   POINTER_MOUSE,
 } from '@/scrcpy/protocol'
 import { useDeviceStore } from '@/stores/devices'
+import { computeContainDimensions, mapViewportToDeviceCoords } from '@/utils/phoneGrid'
 
 const props = withDefaults(
   defineProps<{
     device: Device
-    mode?: 'card' | 'fit'
+    mode?: 'card' | 'fit' | 'contain'
   }>(),
   {
     mode: 'card',
@@ -187,14 +188,16 @@ function send(bytes: Uint8Array) {
 }
 
 function toDevice(clientX: number, clientY: number) {
-  const rect = canvasRef.value?.getBoundingClientRect()
-  const dw = packer.deviceWidth
-  const dh = packer.deviceHeight
-  if (!rect || !dw || !dh || rect.width === 0 || rect.height === 0)
-    return { x: 0, y: 0 }
-  const x = Math.round(((clientX - rect.left) * dw) / rect.width)
-  const y = Math.round(((clientY - rect.top) * dh) / rect.height)
-  return { x: Math.max(0, Math.min(dw - 1, x)), y: Math.max(0, Math.min(dh - 1, y)) }
+  return (
+    mapViewportToDeviceCoords(
+      clientX,
+      clientY,
+      canvasRef.value?.getBoundingClientRect(),
+      packer.deviceWidth,
+      packer.deviceHeight,
+      false,
+    ) || { x: 0, y: 0 }
+  )
 }
 
 function keyPress(keycode: number) {
@@ -256,18 +259,18 @@ function fitCanvas() {
   if (!ratio)
     return
 
-  if (props.mode === 'fit') {
+  if (props.mode === 'fit' || props.mode === 'contain') {
     const availH = wrap.clientHeight
     if (availH <= 0)
       return
-    let dw = availW
-    let dh = dw / ratio
-    if (dh > availH) {
-      dh = availH
-      dw = dh * ratio
-    }
-    canvas.style.width = `${Math.round(dw)}px`
-    canvas.style.height = `${Math.round(dh)}px`
+    const { width: dw, height: dh } = computeContainDimensions(
+      canvas.width,
+      canvas.height,
+      availW,
+      availH,
+    )
+    canvas.style.width = `${dw}px`
+    canvas.style.height = `${dh}px`
   }
   else {
     const dw = availW
@@ -284,10 +287,19 @@ function onMouseDown(e: MouseEvent) {
     send(packer.back(KEY_UP))
     return
   }
+  const pt = mapViewportToDeviceCoords(
+    e.clientX,
+    e.clientY,
+    canvasRef.value?.getBoundingClientRect(),
+    packer.deviceWidth,
+    packer.deviceHeight,
+    true,
+  )
+  if (!pt)
+    return
   mouseDown = true
-  const { x, y } = toDevice(e.clientX, e.clientY)
-  lastMousePoint = { x, y }
-  send(packer.touch(ACTION_DOWN, POINTER_MOUSE, x, y, 1.0, 0x1, 0x1))
+  lastMousePoint = pt
+  send(packer.touch(ACTION_DOWN, POINTER_MOUSE, pt.x, pt.y, 1.0, 0x1, 0x1))
 }
 
 function onMouseMove(e: MouseEvent) {
@@ -317,8 +329,17 @@ function onMouseUp(e: MouseEvent) {
 
 function onWheel(e: WheelEvent) {
   e.preventDefault()
-  const { x, y } = toDevice(e.clientX, e.clientY)
-  send(packer.scroll(x, y, e.deltaX, e.deltaY))
+  const pt = mapViewportToDeviceCoords(
+    e.clientX,
+    e.clientY,
+    canvasRef.value?.getBoundingClientRect(),
+    packer.deviceWidth,
+    packer.deviceHeight,
+    true,
+  )
+  if (!pt)
+    return
+  send(packer.scroll(pt.x, pt.y, e.deltaX, e.deltaY))
 }
 
 function onContextMenu(e: Event) {
@@ -328,10 +349,19 @@ function onContextMenu(e: Event) {
 function onTouchStart(e: TouchEvent) {
   e.preventDefault()
   const t = e.touches[0]
+  const pt = mapViewportToDeviceCoords(
+    t.clientX,
+    t.clientY,
+    canvasRef.value?.getBoundingClientRect(),
+    packer.deviceWidth,
+    packer.deviceHeight,
+    true,
+  )
+  if (!pt)
+    return
   touchActive = true
-  const { x, y } = toDevice(t.clientX, t.clientY)
-  lastTouchPoint = { x, y }
-  send(packer.touch(ACTION_DOWN, POINTER_FINGER_BASE, x, y, t.force || 1.0))
+  lastTouchPoint = pt
+  send(packer.touch(ACTION_DOWN, POINTER_FINGER_BASE, pt.x, pt.y, t.force || 1.0))
 }
 
 function onTouchMove(e: TouchEvent) {
@@ -417,15 +447,17 @@ onUnmounted(() => {
     :class="[
       mode === 'fit'
         ? 'h-full w-full min-h-0 min-w-0 rounded-none border border-neutral-800/80'
-        : '',
-      { 'landscape': isLandscape && mode !== 'fit' },
+        : mode === 'contain'
+          ? 'h-full w-full min-h-0 min-w-0'
+          : '',
+      { 'landscape': isLandscape && mode !== 'fit' && mode !== 'contain' },
     ]"
   >
     <!-- 画面区 -->
     <div
       ref="wrapRef"
       class="relative flex items-center justify-center overflow-hidden bg-black"
-      :class="mode === 'fit' ? 'h-full w-full flex-1 min-h-0 min-w-0' : 'w-full'"
+      :class="mode === 'fit' || mode === 'contain' ? 'h-full w-full flex-1 min-h-0 min-w-0' : 'w-full'"
     >
       <canvas ref="canvasRef" class="touch-none select-none" :aria-label="`${displayName} 投屏画面`" />
 

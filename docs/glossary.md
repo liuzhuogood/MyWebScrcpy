@@ -42,6 +42,11 @@
 | ADB 终端 | Web Shell、交互式终端 | 右侧抽屉内 xterm.js 终端,真实 PTY 分配 |
 | 系统配置 | 设置、系统设置、系统配置弹窗 | 首页入口弹窗 `frontend/src/components/system/SystemConfigDialog.vue`,页签:主题 / ADB / Python / 模板匹配 / OCR 服务 |
 | 大屏磁贴 | 磁贴、tile | `frontend/src/components/dashboard/DashTile.vue` |
+| 首页手机视图 | 手机视图、第三视图、手机样式视图、手机墙、首页多设备投屏、紧密设备墙 | `frontend/src/components/home/HomePhoneView.vue`；首页三种视图之一，以紧密设备墙规格挂载实时画面（小/中/大/铺满同档位同宽同高，相邻横纵间距统一 2px，画面黑底 contain 等比居中黑边填充、不拉伸不裁图，黑边不发触控），由右侧批量操作面板内真实设备编号小方块选择器统一控制显隐，支持页面全屏，与 `deck`、`compact` 并列 |
+| 手机视图统一格 | 统一格、同宽同高手机格子、紧密设备格 | `frontend/src/utils/phoneGrid.ts` 与 `frontend/src/components/home/HomePhoneView.vue`；首页手机视图在小/中/大/铺满各档位所使用的等宽等高规格与 2px 间隙体系，横屏、长屏与旋转均保持卡片尺寸恒定，视口内黑底等比 contain 居中显示 |
+| 批量操作面板 | 批量面板、右侧面板、右侧操作面板、右侧批量面板 | `frontend/src/components/home/BatchOperationPanel.vue` 与 `frontend/src/components/home/batch/*`；位于设备卡片主展示区右侧（预留专属空间不遮挡设备卡片，窄屏自然流式堆叠），按职责组件化拆分面板壳、编号设备显隐选择区、批量勾选、离散按键动作、显示设置与逐台结果反馈 |
+| 显示离线设备 | 显示离线、离线过滤开关 | `frontend/src/composables/useHomeFilter.ts`；首页控制胶囊开关，默认关闭（仅展示 `state === 'device'` 设备），开启时在搜索与编号生成前纳入离线与未授权设备，本地持久化布尔配置 |
+| 设备编号小方块选择器 | 编号小方块、编号显隐、数字网格 | `frontend/src/components/home/batch/BatchDeviceGrid.vue`；批量面板内替代旧分页与显隐弹窗的数字网格选择区，按 serial 字典序稳定编号（01..N），不伪造 60 台，点选编号切换设备显隐，提供“全显”与“只显已选” |
 | 技能市场 | 技能列表、APP 自动化技能 | `frontend/src/components/ai-integration/SkillMarket.vue` |
 
 ## 核心概念
@@ -83,6 +88,14 @@
 | `apidocs` | 自动化接口配置解析、OpenAPI 规范过滤与文档页面管理器 |
 
 | `skillsmarket` | AI 集成元数据、技能市场列表与详情、ZIP 包生成、多助手安全原子安装 |
+
+## v1.32 规划术语（尚未实现）
+
+本节登记已确认的规划指代，不改变上文当前页面/路由的事实；实施后再更新正式指向。规划见 `docs/versions/v1.32.0-feature/design.md`。
+
+| 术语 | 别名 | 规划指向 |
+|---|---|---|
+
 
 ## 原型设计中的页面
 

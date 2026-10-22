@@ -1,0 +1,15 @@
+{
+  "css": [
+    "web/dist/assets/index-Q2ktUPuU.css"
+  ],
+  "required_rules": {
+    ".w-\\[200px\\]{width:200px}": true,
+    ".h-\\[380px\\]{height:380px}": true,
+    ".w-\\[270px\\]{width:270px}": true,
+    ".h-\\[508px\\]{height:508px}": true,
+    ".w-\\[348px\\]{width:348px}": true,
+    ".h-\\[648px\\]{height:648px}": true,
+    ".gap-\\[2px\\]{gap:2px}": true
+  },
+  "all_present": true
+}

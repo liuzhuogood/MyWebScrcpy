@@ -1,0 +1,15 @@
+{
+  "css": [
+    "web/dist/assets/index-B_qxV932.css"
+  ],
+  "required_selectors": {
+    ".w-\\[200px\\]": false,
+    ".h-\\[380px\\]": false,
+    ".w-\\[270px\\]": false,
+    ".h-\\[508px\\]": false,
+    ".w-\\[348px\\]": false,
+    ".h-\\[648px\\]": false,
+    ".gap-\\[2px\\]": false
+  },
+  "accepted": false
+}

@@ -1,0 +1,113 @@
+export interface MockDevice {
+  serial: string
+  model: string
+  marketName?: string
+  state: 'device' | 'offline' | 'unauthorized'
+  source: 'auto' | 'manual'
+  batteryLevel?: number
+  batteryCharging?: boolean
+  resolution?: string
+  androidVersion?: string
+}
+
+export const initialMockDevices: MockDevice[] = [
+  {
+    serial: '192.168.1.101:5555',
+    model: 'Pixel 8 Pro',
+    marketName: '谷歌测试机 A',
+    state: 'device',
+    source: 'manual',
+    batteryLevel: 92,
+    batteryCharging: true,
+    resolution: '1344x2992',
+    androidVersion: '14',
+  },
+  {
+    serial: '192.168.1.102:5555',
+    model: 'Xiaomi 14',
+    marketName: '小米自动化 1 号',
+    state: 'device',
+    source: 'manual',
+    batteryLevel: 78,
+    batteryCharging: false,
+    resolution: '1200x2670',
+    androidVersion: '14',
+  },
+  {
+    serial: '192.168.1.103:5555',
+    model: 'Galaxy S24',
+    marketName: '三星回归用机',
+    state: 'device',
+    source: 'manual',
+    batteryLevel: 45,
+    batteryCharging: true,
+    resolution: '1080x2340',
+    androidVersion: '14',
+  },
+  {
+    serial: 'usb-08a1c93f0b21',
+    model: 'Redmi K60',
+    marketName: 'USB 主控机',
+    state: 'device',
+    source: 'auto',
+    batteryLevel: 100,
+    batteryCharging: true,
+    resolution: '1440x3200',
+    androidVersion: '13',
+  },
+  {
+    serial: 'usb-08a1c93f0b22',
+    model: 'vivo X100',
+    marketName: '拍照与视觉机',
+    state: 'device',
+    source: 'auto',
+    batteryLevel: 83,
+    batteryCharging: false,
+    resolution: '1260x2800',
+    androidVersion: '14',
+  },
+  {
+    serial: '192.168.1.106:5555',
+    model: 'OPPO Find X7',
+    marketName: '远程巡检机',
+    state: 'device',
+    source: 'manual',
+    batteryLevel: 61,
+    batteryCharging: false,
+    resolution: '1264x2780',
+    androidVersion: '14',
+  },
+  {
+    serial: '192.168.1.107:5555',
+    model: 'Honor Magic 6',
+    marketName: '多开压测机 1',
+    state: 'device',
+    source: 'manual',
+    batteryLevel: 90,
+    batteryCharging: true,
+    resolution: '1280x2800',
+    androidVersion: '14',
+  },
+  {
+    serial: '192.168.1.108:5555',
+    model: 'Meizu 21',
+    marketName: '离线备用机',
+    state: 'offline',
+    source: 'manual',
+    batteryLevel: 15,
+    batteryCharging: false,
+    resolution: '1080x2340',
+    androidVersion: '14',
+  },
+  {
+    serial: '192.168.1.109:5555',
+    model: 'OnePlus 12',
+    marketName: '未授权设备',
+    state: 'unauthorized',
+    source: 'manual',
+    batteryLevel: 50,
+    batteryCharging: true,
+    resolution: '1440x3168',
+    androidVersion: '14',
+  },
+]
