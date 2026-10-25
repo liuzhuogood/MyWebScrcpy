@@ -2,4 +2,4 @@
 // SDK Python sources are distributed by PyPI, not embedded in the executable.
 package pythonsdk
 
-const Version = "2026.10.25"
+const Version = "2026.10.26"
