@@ -40,6 +40,7 @@
 | 播放器检查器 | 检查器、取色器、放大镜 | 右侧抽屉内:取色坐标、像素放大镜、XML 树、XPath 与元素定位联动 |
 | 检查模式 | 拾取模式、检查开关 | 检查器顶栏的显式开关,仅开启后拦截画面输入;打开面板默认可操控设备,完成取色、元素选择或 OCR 框选后自动退出 |
 | ADB 终端 | Web Shell、交互式终端 | 右侧抽屉内 xterm.js 终端,真实 PTY 分配 |
+| 空闲自动熄屏 | 熄屏设置、空闲熄屏、自动熄屏 | 系统设置 → 通用设置中的开关，默认关闭；开启后按设备计算，无投屏、ADB 终端、命令及设备操作满 10 分钟后由后端自动熄屏，后台遥测与屏幕状态轮询不刷新空闲计时；`internal/idlescreen`，`GET/PUT /api/system/idle-screen` |
 | 系统配置 | 设置、系统设置、系统配置弹窗 | 首页入口弹窗 `frontend/src/components/system/SystemConfigDialog.vue`,页签:主题 / ADB / Python / 模板匹配 / OCR 服务 |
 | 大屏磁贴 | 磁贴、tile | `frontend/src/components/dashboard/DashTile.vue` |
 | 首页手机视图 | 手机视图、第三视图、手机样式视图、手机墙、首页多设备投屏、紧密设备墙 | `frontend/src/components/home/HomePhoneView.vue`；首页三种视图之一，以紧密设备墙规格挂载实时画面（小/中/大/铺满同档位同宽同高，相邻横纵间距统一 2px，画面黑底 contain 等比居中黑边填充、不拉伸不裁图，黑边不发触控），由右侧批量操作面板内真实设备编号小方块选择器统一控制显隐，支持页面全屏，与 `deck`、`compact` 并列 |

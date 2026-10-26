@@ -5036,6 +5036,89 @@
         }
       }
     },
+    "/api/system/idle-screen": {
+      "get": {
+        "summary": "读取空闲自动熄屏设置",
+        "operationId": "getIdleScreenConfig",
+        "responses": {
+          "200": {
+            "description": "当前设置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "enabled"
+                  ],
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "开启后，无投屏、ADB 终端、命令及设备操作满 10 分钟自动熄屏。后台遥测和屏幕状态轮询不刷新计时。"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "保存空闲自动熄屏设置",
+        "operationId": "setIdleScreenConfig",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "enabled"
+                ],
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "开启后，无投屏、ADB 终端、命令及设备操作满 10 分钟自动熄屏。后台遥测和屏幕状态轮询不刷新计时。"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "保存后即时生效的设置",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "enabled"
+                  ],
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean",
+                      "default": false,
+                      "description": "开启后，无投屏、ADB 终端、命令及设备操作满 10 分钟自动熄屏。后台遥测和屏幕状态轮询不刷新计时。"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数无效"
+          },
+          "500": {
+            "description": "保存失败"
+          }
+        }
+      }
+    },
     "/api/system/service-config": {
       "get": {
         "tags": [

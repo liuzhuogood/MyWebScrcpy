@@ -17,6 +17,7 @@ import (
 	"mywebscrcpy/internal/action"
 	"mywebscrcpy/internal/adbcommand"
 	debuglog "mywebscrcpy/internal/debug"
+	"mywebscrcpy/internal/dependencies"
 	"mywebscrcpy/internal/devicegate"
 	"mywebscrcpy/internal/scrcpy"
 )
@@ -82,6 +83,17 @@ type inflightSession struct {
 }
 
 func (h *Hub) acquireSession(serial string) (*managedSession, *handshakeMeta, func(), error) {
+	done := dependencies.BeginDeviceActivity(serial)
+	ms, meta, release, err := h.acquireSessionInner(serial)
+	if err != nil {
+		done()
+		return nil, nil, nil, err
+	}
+	var once sync.Once
+	return ms, meta, func() { once.Do(func() { release(); done() }) }, nil
+}
+
+func (h *Hub) acquireSessionInner(serial string) (*managedSession, *handshakeMeta, func(), error) {
 	h.sessionMu.Lock()
 	closed := h.closed
 	h.sessionMu.Unlock()

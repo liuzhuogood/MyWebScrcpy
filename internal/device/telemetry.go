@@ -149,7 +149,7 @@ func (m *Manager) runHardwareFetch(serial string) {
 	defer cancel()
 
 	cmdStr := "getprop ro.product.brand; echo '==='; getprop ro.product.manufacturer; echo '==='; getprop ro.product.model; echo '==='; getprop ro.build.version.release; echo '==='; getprop ro.build.version.sdk; echo '==='; getprop ro.product.cpu.abi; echo '==='; getprop ro.build.display.id"
-	cmd := dependencies.CommandContext(ctx, m.adbPath, "-s", serial, "shell", cmdStr)
+	cmd := dependencies.CommandContext(dependencies.BackgroundADB(ctx), m.adbPath, "-s", serial, "shell", cmdStr)
 	cmd.Dir = os.TempDir()
 	out, err := cmd.Output()
 	if err != nil {
@@ -172,7 +172,7 @@ func (m *Manager) runTelemetryFetch(serial string) {
 	defer cancel()
 
 	cmdStr := "dumpsys battery; echo '===THERMAL==='; for f in /sys/class/thermal/thermal_zone*/temp; do [ -f \"$f\" ] && echo \"$f:$(cat \"$f\" 2>/dev/null)\"; done"
-	cmd := dependencies.CommandContext(ctx, m.adbPath, "-s", serial, "shell", cmdStr)
+	cmd := dependencies.CommandContext(dependencies.BackgroundADB(ctx), m.adbPath, "-s", serial, "shell", cmdStr)
 	cmd.Dir = os.TempDir()
 	out, err := cmd.Output()
 	if err != nil {

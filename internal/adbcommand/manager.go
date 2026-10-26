@@ -58,11 +58,12 @@ type View struct {
 type job struct {
 	mu sync.Mutex
 	View
-	args     []string
-	timeout  time.Duration
-	parallel bool
-	done     chan struct{}
-	parent   context.Context
+	args            []string
+	timeout         time.Duration
+	parallel        bool
+	done            chan struct{}
+	parent          context.Context
+	releaseActivity func()
 }
 type Manager struct {
 	adbPath               string
@@ -120,6 +121,7 @@ func (m *Manager) SubmitContext(parent context.Context, serial string, req Reque
 		status = Running
 	}
 	j := &job{View: View{CommandID: id, Serial: serial, Status: status, QueuedAt: time.Now().UTC()}, args: append([]string(nil), req.Args...), timeout: timeout, parallel: req.Parallel, done: make(chan struct{}), parent: parent}
+	j.releaseActivity = dependencies.BeginDeviceActivity(serial)
 	m.jobs[id] = j
 	m.mu.Unlock()
 	go m.run(j)
@@ -163,6 +165,7 @@ func (j *job) Snapshot() View { j.mu.Lock(); defer j.mu.Unlock(); v := j.View; r
 
 func (m *Manager) run(j *job) {
 	defer close(j.done)
+	defer j.releaseActivity()
 	queueCtx, cancelQueue := context.WithTimeout(j.parent, m.queueWait)
 	defer cancelQueue()
 	err := m.gateFor(j.Serial).Run(queueCtx, j.parallel, func(_ context.Context) error {

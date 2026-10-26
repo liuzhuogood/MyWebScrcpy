@@ -12,16 +12,18 @@ const ManagedADB = "@mywebscrcpy/adb"
 
 type Cmd struct {
 	*exec.Cmd
-	managed bool
-	release func()
-	once    sync.Once
+	managed         bool
+	release         func()
+	once            sync.Once
+	activityRelease func()
+	passive         bool
 }
 
 func Command(name string, args ...string) *Cmd {
 	return CommandContext(context.Background(), name, args...)
 }
 func CommandContext(ctx context.Context, name string, args ...string) *Cmd {
-	return &Cmd{Cmd: exec.CommandContext(ctx, name, args...), managed: name == ManagedADB}
+	return &Cmd{Cmd: exec.CommandContext(ctx, name, args...), managed: name == ManagedADB, passive: ctx.Value(backgroundADBKey{}) == true}
 }
 
 // Acquire also supports libraries (PTY) that start the underlying exec.Cmd.
@@ -45,10 +47,16 @@ func (c *Cmd) Acquire() error {
 	c.Path = path
 	c.Args[0] = path
 	c.Err = nil
+	if !c.passive {
+		c.activityRelease = BeginDeviceActivity(commandSerial(c.Args[1:]))
+	}
 	return nil
 }
 func (c *Cmd) Release() {
 	c.once.Do(func() {
+		if c.activityRelease != nil {
+			c.activityRelease()
+		}
 		if c.release != nil {
 			c.release()
 		}

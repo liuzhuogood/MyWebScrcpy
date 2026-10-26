@@ -1,6 +1,7 @@
 package scrcpy
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"fmt"
@@ -138,6 +139,8 @@ func (s *Server) Start() error {
 		"audio_codec=" + s.cfg.AudioCodec,
 		"tunnel_forward=true",
 		"control=" + controlStr,
+		// 预览和重连保留设备当前电源状态；任务与手动操作负责显式唤醒。
+		"power_on=false",
 		"video_codec=" + s.cfg.Codec,
 		"send_dummy_byte=true",
 		"send_device_meta=false",
@@ -149,7 +152,7 @@ func (s *Server) Start() error {
 		fmt.Sprintf("max_fps=%d", s.cfg.MaxFPS),
 	}
 
-	s.cmd = dependencies.Command(s.adbPath, args...)
+	s.cmd = dependencies.CommandContext(dependencies.BackgroundADB(context.Background()), s.adbPath, args...)
 	// 把 server 的 stdout/stderr 都收集起来，便于排查
 	lw := logWriter{prefix: "[scrcpy:" + s.cfg.Serial + "] "}
 	s.cmd.Stdout = lw

@@ -13,6 +13,7 @@ import DependencyPanel from '@/components/dependencies/DependencyPanel.vue'
 import MatchingServicePanel from './MatchingServicePanel.vue'
 import OcrServicePanel from './OcrServicePanel.vue'
 import PlayerSettingsContent from './PlayerSettingsContent.vue'
+import IdleScreenSettings from './IdleScreenSettings.vue'
 
 const props = defineProps<{ initialTab?: 'general' | 'player' | 'theme' | 'service' | 'dependencies' | 'matching' | 'ocr' }>()
 
@@ -62,6 +63,7 @@ async function handleServiceSave() {
             <div class="grid grid-cols-3 gap-3" role="group" aria-label="主题">
               <Button v-for="item in themes" :key="item.id" variant="outline" class="h-24 flex-col gap-3" :class="theme === item.id ? 'border-primary bg-primary/5 text-primary' : ''" :aria-pressed="theme === item.id" @click="theme = item.id"><component :is="item.icon" class="size-6" />{{ item.name }}</Button>
             </div>
+            <IdleScreenSettings />
           </TabsContent>
           <TabsContent value="player" class="m-0"><PlayerSettingsContent /></TabsContent>
           <TabsContent value="service" class="m-0 space-y-4">

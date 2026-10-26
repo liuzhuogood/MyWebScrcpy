@@ -29,7 +29,7 @@ func serveApplication(addr string, httpsFlag *bool, readyFlag *string, mux *http
 		if *httpsFlag || os.Getenv("TLS_CERT") != "" || os.Getenv("TLS_KEY") != "" {
 			log.Fatal("桌面内部服务只使用回环 HTTP")
 		}
-		if err := desktop.ServeDesktopWithMaintenance(addr, *readyFlag, mux, updateMiddleware(mux), updatePrepare, updateResume); err != nil {
+		if err := desktop.ServeDesktopWithMaintenance(addr, *readyFlag, mux, updateMiddleware(deviceActivityMiddleware(mux)), updatePrepare, updateResume); err != nil {
 			log.Fatalf("桌面服务失败: %v", err)
 		}
 		return
@@ -83,7 +83,7 @@ func serveApplication(addr string, httpsFlag *bool, readyFlag *string, mux *http
 }
 
 func serveManaged(listener net.Listener, mux *http.ServeMux, secure bool) error {
-	server := &http.Server{Handler: updateMiddleware(mux), ReadHeaderTimeout: 10 * time.Second}
+	server := &http.Server{Handler: updateMiddleware(deviceActivityMiddleware(mux)), ReadHeaderTimeout: 10 * time.Second}
 	if err := updater.PublishHealth(listener, secure, strings.TrimSpace(string(versionBytes))); err != nil {
 		return err
 	}

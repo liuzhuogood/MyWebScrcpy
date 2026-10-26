@@ -125,6 +125,11 @@ func main() {
 	uiPage := uipage.New(adbPath)
 
 	mux := http.NewServeMux()
+	idleScreen := configureIdleScreen(database, dm, adbPath)
+	defer idleScreen.Close()
+	dependencies.SetDeviceActivityObserver(idleScreen.Begin)
+	defer dependencies.SetDeviceActivityObserver(nil)
+	idleScreen.RegisterRoutes(mux)
 
 	inputConfig := inputconfig.New(database)
 	hub.SetInputConfig(inputConfig)
@@ -412,7 +417,7 @@ func main() {
 			return
 		}
 		// 执行 adb shell dumpsys power 获取电源状态
-		out, err := dependencies.Command(adbPath, "-s", serial, "shell", "dumpsys", "power").Output()
+		out, err := dependencies.CommandContext(dependencies.BackgroundADB(r.Context()), adbPath, "-s", serial, "shell", "dumpsys", "power").Output()
 		if err != nil {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]interface{}{
