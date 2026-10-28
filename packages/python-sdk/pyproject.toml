@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mywebscrcpy-sdk"
-version = "2026.10.28"
+version = "2026.10.29"
 description = "Python client for MyWebScrcpy device automation"
 readme = "README.md"
 requires-python = ">=3.10"
