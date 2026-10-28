@@ -108,3 +108,44 @@ cat: /sys/class/thermal/thermal_zone0/temp: Permission denied
 		t.Errorf("expected CPUTemp nil, got %v", tel.CPUTemp)
 	}
 }
+
+func TestParseBatteryAndThermal_WithThermalServiceAndForeground(t *testing.T) {
+	raw := `Current Battery Service state:
+  AC powered: false
+  USB powered: true
+  status: 2
+  level: 68
+  temperature: 295
+===THERMAL_SERVICE===
+Current temperatures from HAL:
+	Temperature{mValue=35.8, mType=0, mName=CPU, mStatus=0}
+	Temperature{mValue=29.1, mType=2, mName=BATTERY, mStatus=0}
+===THERMAL_ZONE===
+===FOREGROUND===
+  mCurrentFocus=Window{3acf701 u0 com.tencent.mm/.ui.LauncherUI}
+  mFocusedApp=ActivityRecord{226ce2f u0 com.tencent.mm/.ui.LauncherUI t127}
+`
+
+	tel := parseBatteryAndThermal(raw)
+	if tel.BatteryLevel == nil || *tel.BatteryLevel != 68 {
+		t.Errorf("expected BatteryLevel 68, got %v", tel.BatteryLevel)
+	}
+	if tel.BatteryTemp == nil || *tel.BatteryTemp != 29.5 {
+		t.Errorf("expected BatteryTemp 29.5, got %v", tel.BatteryTemp)
+	}
+	if tel.CPUTemp == nil || *tel.CPUTemp != 35.8 {
+		t.Errorf("expected CPUTemp 35.8, got %v", tel.CPUTemp)
+	}
+	if !tel.CPUTempSupported {
+		t.Errorf("expected CPUTempSupported true")
+	}
+	if tel.ForegroundPkg != "com.tencent.mm" {
+		t.Errorf("expected ForegroundPkg com.tencent.mm, got %s", tel.ForegroundPkg)
+	}
+	if tel.ForegroundAppName != "微信" {
+		t.Errorf("expected ForegroundAppName 微信, got %s", tel.ForegroundAppName)
+	}
+	if tel.ForegroundAppIcon != "wechat" {
+		t.Errorf("expected ForegroundAppIcon wechat, got %s", tel.ForegroundAppIcon)
+	}
+}

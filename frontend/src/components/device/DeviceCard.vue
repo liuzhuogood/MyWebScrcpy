@@ -2,15 +2,25 @@
 import {
   Battery,
   BatteryCharging,
+  Camera,
   Check,
   ChevronDown,
   ChevronUp,
+  Film,
+  Globe,
+  Image,
   Layers,
+  LayoutGrid,
   Loader2,
+  MapPin,
   MonitorPlay,
+  Music,
   Pencil,
+  Phone,
   RefreshCw,
   RotateCcw,
+  Settings,
+  ShoppingBag,
   Smartphone,
   Thermometer,
   Trash2,
@@ -68,12 +78,6 @@ const isManual = computed(() => props.device.source === 'manual')
 const isOnline = computed(() => props.device.state === 'device')
 const isConnecting = computed(() => props.device.state === 'connecting' || isReconnecting.value)
 const isUnauthorized = computed(() => props.device.state === 'unauthorized')
-
-// 判断当前是否使用了品牌名作为默认名称
-const isUsingBrandDefault = computed(() => {
-  const hasAlias = Boolean(props.device.alias?.trim() || store.aliases[props.device.serial]?.trim())
-  return !hasAlias && Boolean(props.device.brand?.trim())
-})
 
 // 电量状态变色：充电中翡翠绿；放电模式下 <=10% 红色告警，<=20% 暖黄预警，>20% 正常
 const batteryLevelStyle = computed(() => {
@@ -144,22 +148,21 @@ const cpuTempStyle = computed(() => {
 interface ForegroundApp {
   name: string
   pkg: string
+  iconType?: string
 }
 
 const foregroundApp = computed<ForegroundApp>(() => {
   if (!isOnline.value) {
-    return { name: '无前台活跃应用', pkg: '设备处于离线休眠状态' }
+    return { name: '待机', pkg: '设备处于离线状态', iconType: 'standby' }
   }
-  const s = props.device.serial
-  const charCode = s.charCodeAt(s.length - 1) || 0
-  const apps: ForegroundApp[] = [
-    { name: '控制台主页', pkg: 'com.mywebscrcpy.desktop' },
-    { name: '微信', pkg: 'com.tencent.mm' },
-    { name: '系统设置', pkg: 'com.android.settings' },
-    { name: '系统桌面', pkg: 'com.android.launcher3' },
-    { name: '哔哩哔哩', pkg: 'tv.danmaku.bili' },
-  ]
-  return apps[charCode % apps.length]
+  if (props.device.foreground_pkg) {
+    return {
+      name: props.device.foreground_app_name || props.device.foreground_pkg,
+      pkg: props.device.foreground_pkg,
+      iconType: props.device.foreground_app_icon || 'app_default',
+    }
+  }
+  return { name: '待机', pkg: '系统待机中', iconType: 'standby' }
 })
 
 function handleMouseMove(e: MouseEvent) {
@@ -312,17 +315,17 @@ async function openFloatingWindow(e?: Event) {
       <!-- 顶栏状态徽章与来源 -->
       <div class="relative z-10 flex items-center justify-between">
         <div class="flex items-center gap-2">
-          <!-- 状态指示徽章 -->
+          <!-- 状态指示（纯净无边框背景） -->
           <span
-            class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-md"
+            class="inline-flex items-center gap-1.5 text-[11px] font-medium"
             :class="[
               isOnline
-                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                ? 'text-emerald-600 dark:text-emerald-400'
                 : isConnecting
-                  ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30'
+                  ? 'text-blue-600 dark:text-blue-400'
                   : isUnauthorized
-                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
-                    : 'bg-slate-200/70 text-slate-600 border border-slate-300/60 dark:bg-white/5 dark:text-slate-400 dark:border-white/10',
+                    ? 'text-amber-600 dark:text-amber-400'
+                    : 'text-slate-400 dark:text-slate-500',
             ]"
           >
             <span
@@ -371,14 +374,6 @@ async function openFloatingWindow(e?: Event) {
               <h3 class="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
                 {{ store.displayName(device) }}
               </h3>
-              <!-- 标识是否采用了品牌名默认命名 -->
-              <span
-                v-if="isUsingBrandDefault"
-                class="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-normal text-slate-500 dark:bg-white/10 dark:text-slate-400 shrink-0"
-                title="未设置别名时，默认展示品牌名"
-              >
-                品牌默认
-              </span>
             </div>
             <p class="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400 font-mono">
               {{ device.model || 'Android' }} · {{ device.serial }}
@@ -434,8 +429,27 @@ async function openFloatingWindow(e?: Event) {
           </div>
 
           <!-- 前台应用指示 -->
-          <div class="flex items-center justify-end gap-1.5 text-xs text-slate-600 dark:text-slate-300 min-w-0 flex-1 truncate">
-            <Layers class="h-3.5 w-3.5 text-blue-500 shrink-0" />
+          <div
+            class="flex items-center justify-end gap-1.5 text-xs text-slate-600 dark:text-slate-300 min-w-0 flex-1 truncate"
+            :title="`当前前台应用: ${foregroundApp.name} (${foregroundApp.pkg})`"
+          >
+            <template v-if="foregroundApp.iconType === 'wechat'">
+              <svg class="h-3.5 w-3.5 text-[#07C160] shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8.5 2C4.36 2 1 4.91 1 8.5c0 2.05 1.07 3.88 2.76 5.11L3 17.5l4.28-1.43c.4.08.8.13 1.22.13.23 0 .45-.02.67-.04-.26-.67-.42-1.39-.42-2.16 0-3.59 3.36-6.5 7.5-6.5.64 0 1.26.07 1.84.2C16.84 4.54 13.06 2 8.5 2zm-2.25 4a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4.5 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zM15.5 8.5c-3.59 0-6.5 2.46-6.5 5.5s2.91 5.5 6.5 5.5c.36 0 .71-.03 1.05-.09L20 20.5l-.9-3.08C20.9 16.38 22 14.8 22 13c0-3.04-2.91-5.5-6.5-5.5zm-2 3.5a1 1 0 110 2 1 1 0 010-2zm4 0a1 1 0 110 2 1 1 0 010-2z" />
+              </svg>
+            </template>
+            <Settings v-else-if="foregroundApp.iconType === 'settings'" class="h-3.5 w-3.5 text-slate-500 shrink-0" />
+            <LayoutGrid v-else-if="foregroundApp.iconType === 'launcher'" class="h-3.5 w-3.5 text-blue-500 shrink-0" />
+            <Camera v-else-if="foregroundApp.iconType === 'camera'" class="h-3.5 w-3.5 text-amber-500 shrink-0" />
+            <Image v-else-if="foregroundApp.iconType === 'gallery'" class="h-3.5 w-3.5 text-violet-500 shrink-0" />
+            <Phone v-else-if="foregroundApp.iconType === 'phone'" class="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            <Globe v-else-if="foregroundApp.iconType === 'browser'" class="h-3.5 w-3.5 text-cyan-500 shrink-0" />
+            <Film v-else-if="foregroundApp.iconType === 'kuaishou' || foregroundApp.iconType === 'douyin'" class="h-3.5 w-3.5 text-orange-500 shrink-0" />
+            <Tv v-else-if="foregroundApp.iconType === 'bilibili' || foregroundApp.iconType === 'iqiyi' || foregroundApp.iconType === 'qqvideo' || foregroundApp.iconType === 'youku'" class="h-3.5 w-3.5 text-pink-500 shrink-0" />
+            <ShoppingBag v-else-if="foregroundApp.iconType === 'alipay' || foregroundApp.iconType === 'taobao' || foregroundApp.iconType === 'jd' || foregroundApp.iconType === 'pinduoduo' || foregroundApp.iconType === 'market'" class="h-3.5 w-3.5 text-orange-500 shrink-0" />
+            <Music v-else-if="foregroundApp.iconType === 'neteasemusic' || foregroundApp.iconType === 'qqmusic'" class="h-3.5 w-3.5 text-red-500 shrink-0" />
+            <MapPin v-else-if="foregroundApp.iconType === 'amap' || foregroundApp.iconType === 'baidumap'" class="h-3.5 w-3.5 text-blue-500 shrink-0" />
+            <Layers v-else class="h-3.5 w-3.5 text-blue-500 shrink-0" />
             <span class="truncate text-[11px] font-medium">{{ isOnline ? foregroundApp.name : '待机' }}</span>
           </div>
         </div>
@@ -479,34 +493,18 @@ async function openFloatingWindow(e?: Event) {
       <!-- 底部操作条 -->
       <div class="relative z-10 mt-5 border-t border-slate-200/80 dark:border-white/10 pt-3.5" @click.stop>
         <div class="flex items-center gap-2">
-          <!-- 设备投屏主按钮（纯蓝色 #406BDB） -->
+          <!-- 画中画主按钮（纯蓝色 #406BDB，支持打开与恢复画中画小窗） -->
           <Button
             size="sm"
             :disabled="!isOnline"
             class="flex-1 rounded-xl bg-[#406BDB] hover:bg-[#3258be] font-medium text-white shadow-sm transition-colors cursor-pointer text-xs"
-            @click.stop="open"
-          >
-            <MonitorPlay class="mr-1.5 h-3.5 w-3.5" />
-            设备投屏
-          </Button>
-
-          <!-- 设备画中画微窗（支持打开与恢复小窗） -->
-          <Button
-            size="sm"
-            variant="ghost"
-            :disabled="!isOnline"
-            class="h-9 w-9 rounded-xl border p-0 cursor-pointer shadow-2xs transition-all"
-            :class="[
-              windowEffects.player.value
-                ? 'border-blue-500/50 bg-blue-500/10 text-blue-600 dark:border-blue-400/40 dark:bg-blue-500/20 dark:text-blue-300 hover:bg-blue-500/20'
-                : 'border-slate-200/80 bg-white/80 text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white',
-            ]"
-            :title="windowEffects.player.value ? '恢复画中画小窗' : '画中画微窗'"
-            :aria-label="windowEffects.player.value ? '恢复画中画小窗' : '画中画微窗'"
+            :title="windowEffects.needsRecovery.value ? '恢复画中画小窗' : '画中画'"
+            :aria-label="windowEffects.needsRecovery.value ? '恢复画中画小窗' : '画中画'"
             @click.stop="openFloatingWindow"
           >
-            <RotateCcw v-if="windowEffects.needsRecovery.value" class="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-            <Tv v-else class="h-3.5 w-3.5" />
+            <RotateCcw v-if="windowEffects.needsRecovery.value" class="mr-1.5 h-3.5 w-3.5 text-amber-200" />
+            <Tv v-else class="mr-1.5 h-3.5 w-3.5" />
+            {{ windowEffects.needsRecovery.value ? '恢复画中画' : '画中画' }}
           </Button>
 
           <!-- 手动网络设备：离线重试连接 -->

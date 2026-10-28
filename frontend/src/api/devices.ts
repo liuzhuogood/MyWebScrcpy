@@ -19,6 +19,9 @@ export interface Device {
   battery_charging?: boolean
   cpu_temp?: number
   cpu_temp_supported?: boolean
+  foreground_pkg?: string
+  foreground_app_name?: string
+  foreground_app_icon?: string
   telemetry_updated_at?: number
 }
 
