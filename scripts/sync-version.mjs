@@ -3,7 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const version = readFileSync(path.join(root, 'VERSION'), 'utf8').trim().replace(/^v/, '')
-if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('VERSION 必须是正式 SemVer 版本')
+if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error('VERSION 必须是正式 SemVer 版本')
 const check = process.argv.includes('--check')
 function update(file, transform) {
  const full = path.join(root,file), old = readFileSync(full,'utf8')

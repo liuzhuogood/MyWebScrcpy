@@ -6,7 +6,7 @@ import os from 'node:os'
 
 const [bundle, arch, tag, output] = process.argv.slice(2)
 assert.equal(process.platform, 'darwin', 'DMG 必须在 macOS 原生验证')
-assert(bundle && output && /^(arm64|amd64)$/.test(arch) && /^v\d+\.\d+\.\d+$/.test(tag), '需要 bundle、架构、版本标签、输出目录')
+assert(bundle && output && /^(arm64|amd64)$/.test(arch) && /^v\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(tag), '需要 bundle、架构、版本标签、输出目录')
 function run(command, args) {
   const result = spawnSync(command, args, { encoding: 'utf8', timeout: 120000 })
   if (result.error) throw result.error

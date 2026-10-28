@@ -49,8 +49,10 @@ jobs:
           tag = Path('VERSION').read_text().strip()
           if os.environ['RELEASE_REF'].startswith('refs/tags/'):
               assert tag == os.environ['RELEASE_REF_NAME'], 'Tag must match VERSION'
+          from packaging.version import parse
+          canonical = str(parse(tag.removeprefix("v")))
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write(f'version={tag.removeprefix("v")}\n')
+              output.write(f'version={canonical}\n')
           PY
       - name: Build and validate distributions
         run: |
@@ -63,10 +65,11 @@ jobs:
           python -m unittest discover -s packages/python-sdk/tests -v
           python - <<'PY'
           from importlib.metadata import version
+          from packaging.version import parse
           from pathlib import Path
           import mywebscrcpy
           expected = Path('VERSION').read_text().strip().removeprefix('v')
-          assert version('mywebscrcpy-sdk') == mywebscrcpy.__version__ == expected
+          assert parse(version('mywebscrcpy-sdk')) == parse(mywebscrcpy.__version__) == parse(expected)
           PY
       - name: Test source distribution in a clean environment
         run: |

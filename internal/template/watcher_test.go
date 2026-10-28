@@ -52,8 +52,16 @@ func TestDirWatcherCloseWhileEventsPending(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(sub, "template.png"), []byte("asset"), 0o644); err != nil {
 		t.Fatalf("write asset: %v", err)
 	}
-	if err := os.RemoveAll(sub); err != nil {
-		t.Fatalf("remove nested: %v", err)
+	var removeErr error
+	for attempt := 0; attempt < 50; attempt++ {
+		removeErr = os.RemoveAll(sub)
+		if removeErr == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if removeErr != nil {
+		t.Fatalf("remove nested: %v", removeErr)
 	}
 
 	done := make(chan error, 1)
