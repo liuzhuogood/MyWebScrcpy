@@ -43,6 +43,7 @@ jobs:
           node scripts/sync-version.mjs
           node scripts/sync-version.mjs --check
           node --test scripts/sync-version.test.mjs
+          python -m pip install packaging
           python - <<'PY'
           import os
           from pathlib import Path
@@ -146,11 +147,13 @@ jobs:
             fi
             sleep 10
           done
+          python -m pip install packaging
           python - <<'PY'
           import os
           from importlib.metadata import version
+          from packaging.version import parse
           import mywebscrcpy
-          assert version('mywebscrcpy-sdk') == mywebscrcpy.__version__ == os.environ['SDK_VERSION']
+          assert parse(version('mywebscrcpy-sdk')) == parse(mywebscrcpy.__version__) == parse(os.environ['SDK_VERSION'])
           from mywebscrcpy import Client, Device, CommandResult, PageInfo
           print(f'Verified mywebscrcpy-sdk {mywebscrcpy.__version__} installed from PyPI')
           PY

@@ -32,7 +32,9 @@ from importlib.metadata import version
 try:
     from mywebscrcpy import Client, Device, Matcher, FrameTimeout
     from mywebscrcpy.dependencies import vision_dependencies
-    if version("mywebscrcpy-sdk") != sys.argv[1]:
+    v = version("mywebscrcpy-sdk")
+    req = sys.argv[1]
+    if v != req and v.replace(".post", "-") != req and req.replace(".post", "-") != v:
         raise RuntimeError("SDK 版本不符，需要 " + sys.argv[1])
     items.append(dict(name="mywebscrcpy-sdk",available=True,error=""))
 except Exception as e:
