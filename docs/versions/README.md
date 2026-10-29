@@ -80,6 +80,8 @@
 | [v2026.10.29-feature](v2026.10.29-feature/version.md) | 构建失败保留 | 按北京时间日期的例行发布，Windows 桌面任务回归测试遇文件占用竞态未生成 Release，保留标签。 |
 | [v2026.10.29-1-fix](v2026.10.29-1-fix/version.md) | 二进制发布成功 / PyPI 构建失败 | 修复模板监听在 Windows 上由于 fsnotify 句柄占用导致测试删除失败的问题；全量同步版本号；全平台客户端与 Release 资产发布成功，但 PyPI 工作流因缺少 packaging 失败。 |
 | [v2026.10.29-2-fix](v2026.10.29-2-fix/version.md) | 正式发布版本 | 修复 Python SDK 发布工作流中的 packaging 依赖与版本规范比较；全量同步版本号并触发全链路发布。 |
+| [v2026.10.30-feature](v2026.10.30-feature/version.md) | 正式发布版本 | 按北京时间日期的例行发布，包含 v2026.10.29-2 的 Python SDK 发布依赖与测试加固，全量同步版本号。 |
+
 
 ## Vue 前端迁移版本
 
