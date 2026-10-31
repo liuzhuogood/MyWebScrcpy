@@ -1,6 +1,6 @@
 [package]
 name = "mywebscrcpy-gui"
-version = "2026.10.31"
+version = "2026.11.01"
 edition = "2021"
 rust-version = "1.90"
 
