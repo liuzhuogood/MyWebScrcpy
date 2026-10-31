@@ -42,5 +42,7 @@ for (const newline of ['\n', '\r\n']) {
       if (newline === '\r\n') assert.ok(!/(?<!\r)\n/.test(contents), `${file} contains bare LF`)
       else assert.ok(!contents.includes('\r'), `${file} contains CRLF`)
     }
+    writeFileSync(path.join(root, 'VERSION'), `v2026.11.01${newline}`)
+    assert.notEqual(run().status, 0, 'versions with leading zeroes must fail SemVer validation')
   })
 }
