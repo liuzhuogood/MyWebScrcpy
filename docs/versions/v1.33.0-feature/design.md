@@ -83,3 +83,38 @@ graph TD
   - 状态：`batteryLevelStyle`、`batteryTempStyle`、`cpuTempStyle`、`foregroundApp`
   - 虚拟滚动适配：配合 `useDeviceGridVirtual` 的行高计算（按新高度适配）
 - **正式构建隔离**：原型代码仅存在于 `prototypes/`，生产构建 `web/dist/` 不受任何影响。
+
+---
+
+## 5. 首页右侧「操作」面板与无顶部Bar重构设计
+
+### 5.1 需求背景与痛点
+1. **顶部空间浪费**：原 `HomeControlCapsule` 大横条占据显著首屏高度，压缩设备列表垂直可用空间。
+2. **阵列冗余**：现有“紧凑阵列 (`compact`)”与新设计的拟物卡片及手机视图定位重叠，用户明确要求剔除。
+3. **面板更名与定位升级**：原右侧“批量操作面板”只在操作多选时使用；将搜索、筛选、视图切换、刷新与连接等全局能力迁入后，面板正式改名为**“操作”**，并支持收起折叠与自适应展开。
+
+### 5.2 交互形态与实拍效果
+
+#### 展开状态 (Expanded)
+![操作面板展开状态](prototypes/action-panel-v1-expanded.png)
+- **面板顶栏**：图标 + 标题“**操作**” + 在线设备数徽章（`5/6`）+ 刷新按钮 + 连接设备 + 收起按钮（`<PanelRightClose>`）。
+- **设备控制区**：搜索框、来源分段胶囊（全部/直连/无线）、显示离线开关。
+- **视图模式切换**：收敛为“卡片视图 (`deck`)”与“手机视图 (`phone`)”，彻底去掉“紧凑阵列”。
+- **设备显隐控制**：编号小方块网格（01..06），支持单选显隐、全显与只显已选。
+- **批量控制与反馈**：全选/清空、返回/主页/多任务离散按键与执行反馈历史。
+
+#### 收起状态 (Collapsed)
+![操作面板收起状态](prototypes/action-panel-v1-collapsed.png)
+- 停靠在右侧的 52px 极窄轻质玻璃条。
+- 顶部展开按钮（`<PanelRightOpen>`），配合快速搜索展开、快速刷新、视图切换图标与已选 Badge。
+- 竖排微缩文字“操 作”，点击即流畅滑出展开。
+- 左侧设备区自适应扩展宽度，容纳更多列卡片。
+
+### 5.3 源码交接与实施边界
+- **原型源码**：`prototypes/cases/home-action-panel-v1/`
+- **正式替换目标**：
+  - 移除 `frontend/src/components/home/HomeControlCapsule.vue`
+  - 重构 `frontend/src/components/home/BatchOperationPanel.vue` 为 `ActionPanel.vue`（或在现有面板外壳上升级支持收起与全局控制）
+  - 修改 `frontend/src/views/HomeView.vue` 布局结构
+  - 视图模式类型迁移：由 `'deck' | 'compact' | 'phone'` 精简为 `'deck' | 'phone'`
+- **术语字典同步**：在 `docs/glossary.md` 更新“操作面板”条目。
