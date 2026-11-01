@@ -314,39 +314,10 @@ function getAppBadgeBg(iconType: string) {
       </div>
     </div>
 
-    <!-- 真实首页模拟主容器（左右分栏结构） -->
+    <!-- 真实首页模拟主容器（左右分栏结构：完全移除顶部Bar，视野极度纯净） -->
     <div class="relative min-h-[750px] rounded-3xl border border-slate-200/80 bg-slate-100/60 p-4 dark:border-white/10 dark:bg-black/40 overflow-hidden flex flex-col">
-      <!-- 极简主顶栏（无大横条胶囊，仅保留标题与状态，视野完全开阔） -->
-      <div class="flex items-center justify-between pb-4 border-b border-slate-200/80 dark:border-white/10">
-        <div class="flex items-center gap-3">
-          <h1 class="text-lg font-bold text-slate-900 dark:text-white tracking-tight">设备列表</h1>
-          <span class="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/30">
-            {{ onlineCount }} 在线
-          </span>
-          <span class="text-xs text-slate-500 dark:text-slate-400">
-            共 {{ totalCount }} 台设备 · 毫秒级超低时延
-          </span>
-        </div>
-
-        <!-- 当面板收起时，页面右上角提示展开快捷入口 -->
-        <div v-if="!isPanelOpen" class="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            class="h-8 rounded-xl text-xs gap-1.5 border-violet-500/40 text-violet-700 dark:text-violet-300 hover:bg-violet-500/10 cursor-pointer"
-            @click="isPanelOpen = true"
-          >
-            <SlidersHorizontal class="h-3.5 w-3.5" />
-            <span>打开操作面板</span>
-            <Badge v-if="selectedSerials.length > 0" class="h-4 px-1 text-[10px] bg-violet-600 text-white leading-none">
-              {{ selectedSerials.length }}
-            </Badge>
-          </Button>
-        </div>
-      </div>
-
-      <!-- 核心工作区：左侧设备卡片区 + 右侧可收起“操作”面板 -->
-      <div class="flex-1 flex items-start gap-4 pt-4 w-full min-w-0">
+      <!-- 核心工作区：直接顶格展示，左侧设备区 + 右侧可收起“操作”面板 -->
+      <div class="flex-1 flex items-start gap-4 w-full min-w-0">
         
         <!-- 左侧：设备主展示区（随右侧面板收起自动扩展宽度） -->
         <main class="flex-1 min-w-0 transition-all duration-300">
