@@ -108,3 +108,102 @@ cat: /sys/class/thermal/thermal_zone0/temp: Permission denied
 		t.Errorf("expected CPUTemp nil, got %v", tel.CPUTemp)
 	}
 }
+
+func TestParseBatteryAndThermal_WithThermalServiceAndForeground(t *testing.T) {
+	raw := `Current Battery Service state:
+  AC powered: false
+  USB powered: true
+  status: 2
+  level: 68
+  temperature: 295
+===THERMAL_SERVICE===
+Current temperatures from HAL:
+	Temperature{mValue=35.8, mType=0, mName=CPU, mStatus=0}
+	Temperature{mValue=29.1, mType=2, mName=BATTERY, mStatus=0}
+===THERMAL_ZONE===
+===FOREGROUND===
+  mCurrentFocus=Window{3acf701 u0 com.tencent.mm/.ui.LauncherUI}
+  mFocusedApp=ActivityRecord{226ce2f u0 com.tencent.mm/.ui.LauncherUI t127}
+`
+
+	tel := parseBatteryAndThermal(raw)
+	if tel.BatteryLevel == nil || *tel.BatteryLevel != 68 {
+		t.Errorf("expected BatteryLevel 68, got %v", tel.BatteryLevel)
+	}
+	if tel.BatteryTemp == nil || *tel.BatteryTemp != 29.5 {
+		t.Errorf("expected BatteryTemp 29.5, got %v", tel.BatteryTemp)
+	}
+	if tel.CPUTemp == nil || *tel.CPUTemp != 35.8 {
+		t.Errorf("expected CPUTemp 35.8, got %v", tel.CPUTemp)
+	}
+	if !tel.CPUTempSupported {
+		t.Errorf("expected CPUTempSupported true")
+	}
+	if tel.ForegroundPkg != "com.tencent.mm" {
+		t.Errorf("expected ForegroundPkg com.tencent.mm, got %s", tel.ForegroundPkg)
+	}
+	if tel.ForegroundAppName != "微信" {
+		t.Errorf("expected ForegroundAppName 微信, got %s", tel.ForegroundAppName)
+	}
+	if tel.ForegroundAppIcon != "wechat" {
+		t.Errorf("expected ForegroundAppIcon wechat, got %s", tel.ForegroundAppIcon)
+	}
+}
+
+func TestParseScreenState(t *testing.T) {
+	// 场景 1: 黑屏休眠
+	powerAsleep := `  mWakefulness=Asleep
+Display Power: state=OFF`
+	keyguardShowing := `      showing=true`
+	sOn, sLocked := parseScreenState(powerAsleep, keyguardShowing)
+	if sOn == nil || *sOn != false {
+		t.Errorf("expected screenOn false, got %v", sOn)
+	}
+	if sLocked == nil || *sLocked != true {
+		t.Errorf("expected screenLocked true, got %v", sLocked)
+	}
+
+	// 场景 2: 亮屏已解锁
+	powerAwake := `  mWakefulness=Awake
+Display Power: com.android.server.power.PowerManagerService$1@3e78445`
+	keyguardHidden := `      showing=false`
+	sOn2, sLocked2 := parseScreenState(powerAwake, keyguardHidden)
+	if sOn2 == nil || *sOn2 != true {
+		t.Errorf("expected screenOn true, got %v", sOn2)
+	}
+	if sLocked2 == nil || *sLocked2 != false {
+		t.Errorf("expected screenLocked false, got %v", sLocked2)
+	}
+
+	// 场景 3: 亮屏但在锁屏界面
+	sOn3, sLocked3 := parseScreenState(powerAwake, keyguardShowing)
+	if sOn3 == nil || *sOn3 != true {
+		t.Errorf("expected screenOn true, got %v", sOn3)
+	}
+	if sLocked3 == nil || *sLocked3 != true {
+		t.Errorf("expected screenLocked true, got %v", sLocked3)
+	}
+}
+
+func TestParseBatteryAndThermal_WithPowerAndKeyguard(t *testing.T) {
+	raw := `Current Battery Service state:
+  level: 90
+  temperature: 300
+===THERMAL_SERVICE===
+===THERMAL_ZONE===
+===FOREGROUND===
+  mCurrentFocus=Window{90d2071 u0 StatusBar}
+===POWER===
+  mWakefulness=Asleep
+Display Power: state=OFF
+===KEYGUARD===
+      showing=true
+`
+	tel := parseBatteryAndThermal(raw)
+	if tel.ScreenOn == nil || *tel.ScreenOn != false {
+		t.Errorf("expected ScreenOn false for asleep device, got %v", tel.ScreenOn)
+	}
+	if tel.ScreenLocked == nil || *tel.ScreenLocked != true {
+		t.Errorf("expected ScreenLocked true for asleep device, got %v", tel.ScreenLocked)
+	}
+}

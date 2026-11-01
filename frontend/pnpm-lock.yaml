@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@tanstack/vue-virtual':
+        specifier: ^3.13.47
+        version: 3.13.47(vue@3.5.42(typescript@6.0.3))
       '@tauri-apps/api':
         specifier: ^2.12.3
         version: 2.12.3
@@ -342,8 +345,16 @@ packages:
   '@tanstack/virtual-core@3.17.11':
     resolution: {integrity: sha512-+ILjvtHup6Y2hzQ6YzwMgX1Q+oQpxEGOXCEsCNaPoIP0VxMbizIBTmYTDtkerkIQS8/CbP1BRuyt8V/8BCsy1g==}
 
+  '@tanstack/virtual-core@3.19.6':
+    resolution: {integrity: sha512-CsTW892z23gy7IyxYTTorVu1uZWB+0N349rSMgKz4rFLPpLza7F7TpcCKeI5iUAwYQCt8QUlOU67J+KXCxtpGw==}
+
   '@tanstack/vue-virtual@3.13.39':
     resolution: {integrity: sha512-AG8sI+6nfrDvN6ixuHJL9LaJTf3//0V5VITZYW3UOaIuSVexnEzsbMu4LH/JhMfRTxwhUXPnLqkl1DlzkZbRtg==}
+    peerDependencies:
+      vue: ^2.7.0 || ^3.0.0
+
+  '@tanstack/vue-virtual@3.13.47':
+    resolution: {integrity: sha512-6HzdYK9bDyDoD9Q/NjepnC4wGDaZ7mFl5zz8tbn3Fmy7FDicI98ZJ+R37ztFssnoTMoCQhY3GfUhlz+pW/vOTg==}
     peerDependencies:
       vue: ^2.7.0 || ^3.0.0
 
@@ -1166,9 +1177,16 @@ snapshots:
 
   '@tanstack/virtual-core@3.17.11': {}
 
+  '@tanstack/virtual-core@3.19.6': {}
+
   '@tanstack/vue-virtual@3.13.39(vue@3.5.42(typescript@6.0.3))':
     dependencies:
       '@tanstack/virtual-core': 3.17.11
+      vue: 3.5.42(typescript@6.0.3)
+
+  '@tanstack/vue-virtual@3.13.47(vue@3.5.42(typescript@6.0.3))':
+    dependencies:
+      '@tanstack/virtual-core': 3.19.6
       vue: 3.5.42(typescript@6.0.3)
 
   '@tauri-apps/api@2.12.3': {}

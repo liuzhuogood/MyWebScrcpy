@@ -34,6 +34,11 @@ type Device struct {
 	BatteryCharging    *bool    `json:"battery_charging,omitempty"`
 	CPUTemp            *float64 `json:"cpu_temp,omitempty"`
 	CPUTempSupported   bool     `json:"cpu_temp_supported"`
+	ForegroundPkg      string   `json:"foreground_pkg,omitempty"`
+	ForegroundAppName  string   `json:"foreground_app_name,omitempty"`
+	ForegroundAppIcon  string   `json:"foreground_app_icon,omitempty"`
+	ScreenOn           *bool    `json:"screen_on,omitempty"`
+	ScreenLocked       *bool    `json:"screen_locked,omitempty"`
 	TelemetryUpdatedAt int64    `json:"telemetry_updated_at,omitempty"`
 }
 
@@ -213,6 +218,11 @@ func (m *Manager) attachTelemetry(d *Device) {
 		d.BatteryCharging = tel.BatteryCharging
 		d.CPUTemp = tel.CPUTemp
 		d.CPUTempSupported = tel.CPUTempSupported
+		d.ForegroundPkg = tel.ForegroundPkg
+		d.ForegroundAppName = tel.ForegroundAppName
+		d.ForegroundAppIcon = tel.ForegroundAppIcon
+		d.ScreenOn = tel.ScreenOn
+		d.ScreenLocked = tel.ScreenLocked
 		d.TelemetryUpdatedAt = tel.UpdatedAt
 	}
 }

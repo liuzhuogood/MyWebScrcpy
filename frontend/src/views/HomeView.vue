@@ -1,22 +1,20 @@
 <script setup lang="ts">
 import {
   CheckCircle2,
-  CheckSquare,
   EyeOff,
   Globe,
   Loader2,
   Smartphone,
-  Square,
 } from 'lucide-vue-next'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useFullscreen } from '@vueuse/core'
 import AppHeader from '@/components/layout/AppHeader.vue'
-import DeviceCard from '@/components/device/DeviceCard.vue'
 import FloatingPlayer from '@/components/player/FloatingPlayer.vue'
 import HomeAuroraBackground from '@/components/home/HomeAuroraBackground.vue'
 import HomeControlCapsule from '@/components/home/HomeControlCapsule.vue'
 import HomePhoneView from '@/components/home/HomePhoneView.vue'
 import BatchOperationPanel from '@/components/home/BatchOperationPanel.vue'
+import DeviceGridItem from '@/components/device/DeviceGridItem.vue'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -32,6 +30,7 @@ import { useHomePhoneView } from '@/composables/useHomePhoneView'
 import { useDeviceSelection } from '@/composables/useDeviceSelection'
 import { useDeviceBatch } from '@/composables/useDeviceBatch'
 import { useHomeFilter } from '@/composables/useHomeFilter'
+import { useDeviceGridVirtual } from '@/composables/useDeviceGridVirtual'
 import { toast } from 'vue-sonner'
 
 type ViewMode = 'deck' | 'compact' | 'phone'
@@ -97,6 +96,18 @@ const {
   showOnlySelected,
   setDashSize,
 } = useHomePhoneView(() => homeFilteredDevices.value)
+
+// 设备网格虚拟滚动：紧凑视图窗口化渲染可视区行，支撑 500+ 设备流畅滚动
+const compactGridEl = ref<HTMLElement | null>(null)
+
+// 紧凑网格实际渲染的设备集合
+const gridDevices = computed(() => visibleDevices.value)
+
+const compactVirtual = useDeviceGridVirtual({
+  devices: () => gridDevices.value,
+  viewMode: () => 'compact',
+  gridEl: () => compactGridEl.value,
+})
 
 // 批量面板折叠状态
 const isBatchPanelOpen = ref(false)
@@ -359,7 +370,7 @@ onUnmounted(() => {
 
             <!-- 所有设备已隐藏状态（当有匹配设备但均被编号面板隐藏时，甲板与紧凑视图友好呈现恢复入口） -->
             <div
-              v-else-if="visibleDevices.length === 0 && viewMode !== 'phone'"
+              v-else-if="visibleDevices.length === 0 && viewMode === 'compact'"
               class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 dark:border-white/10 bg-white/40 dark:bg-white/[0.01] p-12 text-center"
             >
               <EyeOff class="h-8 w-8 text-slate-400 mb-2" />
@@ -375,9 +386,11 @@ onUnmounted(() => {
               </Button>
             </div>
 
-            <!-- 视图模式三：手机视图 (Phone View) -->
+            <!-- 视图模式一：手机卡片视图 (Deck View) 与 视图模式三：手机实时投屏视图 (Phone View) -->
+            <!-- 统一采用同宽同高紧密设备墙规格与 2px 间隙体系，两边切换尺寸完全对齐零断层 -->
             <HomePhoneView
-              v-else-if="viewMode === 'phone'"
+              v-else-if="viewMode === 'deck' || viewMode === 'phone'"
+              :view-mode="viewMode"
               :visible-devices="visibleDevices"
               :dash-size="dashSize"
               :serial-to-number-map="serialToNumberMap"
@@ -387,69 +400,32 @@ onUnmounted(() => {
               @show-all="showAllDevices"
             />
 
-            <!-- 视图模式一：3D 全息设备甲板视图 (Deck View) 铺满全屏 -->
-            <div
-              v-else-if="viewMode === 'deck'"
-              class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-            >
-              <!-- 宿主层独立多选控件：三视图统一渲染可见设备 -->
-              <div
-                v-for="d in visibleDevices"
-                :key="d.serial"
-                class="group relative transition-all duration-150"
-              >
-                <!-- 宿主独立勾选按钮（左上角悬浮，点击不穿透，独立多选） -->
-                <button
-                  v-if="d.state === 'device' && !store.mockEnabled"
-                  type="button"
-                  class="absolute left-3 top-3 z-20 flex h-6 w-6 items-center justify-center rounded-lg border border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-md transition-all cursor-pointer dark:border-white/15 dark:bg-slate-900/90 text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  :class="{ '!border-violet-500 !bg-violet-600 !text-white': selectedSerials.includes(d.serial) }"
-                  :title="selectedSerials.includes(d.serial) ? '取消勾选' : '勾选此设备进行批量操作'"
-                  @click.stop="toggleSelect(d.serial)"
-                >
-                  <component :is="selectedSerials.includes(d.serial) ? CheckSquare : Square" class="h-3.5 w-3.5" />
-                </button>
-
-                <div :class="{ 'ring-2 ring-violet-500 rounded-3xl': selectedSerials.includes(d.serial) }">
-                  <DeviceCard
-                    :device="d"
-                    view-mode="deck"
-                    @open-floating="openFloating"
-                  />
-                </div>
-              </div>
-            </div>
-
             <!-- 视图模式二：紧凑型设备阵列视图 (Compact View) 铺满全屏 -->
             <div
               v-else
-              class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+              ref="compactGridEl"
+              class="relative"
+              :style="{ height: compactVirtual.totalSize.value + 'px' }"
             >
-              <!-- 宿主层独立多选控件：三视图统一渲染可见设备 -->
               <div
-                v-for="d in visibleDevices"
-                :key="d.serial"
-                class="group relative transition-all duration-150"
+                v-for="vi in compactVirtual.virtualItems.value"
+                :key="String(vi.key)"
+                class="absolute left-0 top-0 grid w-full gap-4"
+                :style="{
+                  transform: 'translateY(' + vi.start + 'px)',
+                  gridTemplateColumns: 'repeat(' + compactVirtual.cols.value + ', minmax(0, 1fr))',
+                }"
               >
-                <!-- 宿主独立勾选按钮（左上角悬浮，点击不穿透，独立多选） -->
-                <button
-                  v-if="d.state === 'device' && !store.mockEnabled"
-                  type="button"
-                  class="absolute left-3 top-3 z-20 flex h-6 w-6 items-center justify-center rounded-lg border border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-md transition-all cursor-pointer dark:border-white/15 dark:bg-slate-900/90 text-slate-400 hover:text-slate-900 dark:hover:text-white"
-                  :class="{ '!border-violet-500 !bg-violet-600 !text-white': selectedSerials.includes(d.serial) }"
-                  :title="selectedSerials.includes(d.serial) ? '取消勾选' : '勾选此设备进行批量操作'"
-                  @click.stop="toggleSelect(d.serial)"
-                >
-                  <component :is="selectedSerials.includes(d.serial) ? CheckSquare : Square" class="h-3.5 w-3.5" />
-                </button>
-
-                <div :class="{ 'ring-2 ring-violet-500 rounded-2xl': selectedSerials.includes(d.serial) }">
-                  <DeviceCard
-                    :device="d"
-                    view-mode="compact"
-                    @open-floating="openFloating"
-                  />
-                </div>
+                <DeviceGridItem
+                  v-for="d in compactVirtual.rows.value[vi.index]"
+                  :key="d.serial"
+                  :device="d"
+                  view-mode="compact"
+                  :selected="selectedSerials.includes(d.serial)"
+                  :mock-enabled="store.mockEnabled"
+                  @toggle-select="toggleSelect"
+                  @open-floating="openFloating"
+                />
               </div>
             </div>
           </div>

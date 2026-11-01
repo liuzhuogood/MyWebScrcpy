@@ -128,8 +128,8 @@ const emit = defineEmits<{
           :class="viewMode === 'deck'
             ? 'bg-white text-slate-950 shadow-xs dark:bg-white/15 dark:text-white'
             : 'text-slate-600 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white'"
-          title="3D 全息甲板"
-          aria-label="3D 全息甲板"
+          title="手机卡片视图"
+          aria-label="手机卡片视图"
           @click="emit('update:viewMode', 'deck')"
         >
           <LayoutGrid class="h-4 w-4" />

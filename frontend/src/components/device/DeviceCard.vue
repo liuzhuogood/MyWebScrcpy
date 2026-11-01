@@ -2,15 +2,24 @@
 import {
   Battery,
   BatteryCharging,
+  Camera,
   Check,
-  ChevronDown,
-  ChevronUp,
+  Film,
+  Globe,
+  Image,
   Layers,
+  LayoutGrid,
   Loader2,
+  Lock,
+  MapPin,
   MonitorPlay,
+  Music,
   Pencil,
+  Phone,
   RefreshCw,
   RotateCcw,
+  Settings,
+  ShoppingBag,
   Smartphone,
   Thermometer,
   Trash2,
@@ -50,14 +59,6 @@ const router = useRouter()
 const playerSettings = usePlayerSettings()
 const windowEffects = usePlayerWindows(computed(() => props.device.serial))
 
-const cardRef = ref<HTMLDivElement | null>(null)
-const rotateX = ref(0)
-const rotateY = ref(0)
-const glowX = ref(50)
-const glowY = ref(50)
-const isHovering = ref(false)
-const isExpanded = ref(false)
-
 const isEditing = computed(() => store.editingSerial === props.device.serial)
 const draft = ref('')
 const inputRef = ref<ComponentPublicInstance | null>(null)
@@ -69,10 +70,10 @@ const isOnline = computed(() => props.device.state === 'device')
 const isConnecting = computed(() => props.device.state === 'connecting' || isReconnecting.value)
 const isUnauthorized = computed(() => props.device.state === 'unauthorized')
 
-// 判断当前是否使用了品牌名作为默认名称
-const isUsingBrandDefault = computed(() => {
-  const hasAlias = Boolean(props.device.alias?.trim() || store.aliases[props.device.serial]?.trim())
-  return !hasAlias && Boolean(props.device.brand?.trim())
+// 手机黑屏或锁屏状态感知：黑屏 (screen_on === false) 或锁屏 (screen_locked === true) 时判定为锁定
+const isLocked = computed(() => {
+  if (!isOnline.value) return false
+  return props.device.screen_on === false || props.device.screen_locked === true
 })
 
 // 电量状态变色：充电中翡翠绿；放电模式下 <=10% 红色告警，<=20% 暖黄预警，>20% 正常
@@ -144,43 +145,60 @@ const cpuTempStyle = computed(() => {
 interface ForegroundApp {
   name: string
   pkg: string
+  iconType?: string
 }
 
 const foregroundApp = computed<ForegroundApp>(() => {
   if (!isOnline.value) {
-    return { name: '无前台活跃应用', pkg: '设备处于离线休眠状态' }
+    return { name: '待机', pkg: '设备处于离线状态', iconType: 'standby' }
   }
-  const s = props.device.serial
-  const charCode = s.charCodeAt(s.length - 1) || 0
-  const apps: ForegroundApp[] = [
-    { name: '控制台主页', pkg: 'com.mywebscrcpy.desktop' },
-    { name: '微信', pkg: 'com.tencent.mm' },
-    { name: '系统设置', pkg: 'com.android.settings' },
-    { name: '系统桌面', pkg: 'com.android.launcher3' },
-    { name: '哔哩哔哩', pkg: 'tv.danmaku.bili' },
-  ]
-  return apps[charCode % apps.length]
+  if (props.device.foreground_pkg) {
+    return {
+      name: props.device.foreground_app_name || props.device.foreground_pkg,
+      pkg: props.device.foreground_pkg,
+      iconType: props.device.foreground_app_icon || 'app_default',
+    }
+  }
+  return { name: '待机', pkg: '系统待机中', iconType: 'standby' }
 })
 
-function handleMouseMove(e: MouseEvent) {
-  if (!cardRef.value || props.viewMode !== 'deck') return
-  const rect = cardRef.value.getBoundingClientRect()
-  const x = e.clientX - rect.left
-  const y = e.clientY - rect.top
-  const centerX = rect.width / 2
-  const centerY = rect.height / 2
-
-  rotateX.value = ((y - centerY) / centerY) * -6
-  rotateY.value = ((x - centerX) / centerX) * 6
-  glowX.value = (x / rect.width) * 100
-  glowY.value = (y / rect.height) * 100
-  isHovering.value = true
-}
-
-function handleMouseLeave() {
-  rotateX.value = 0
-  rotateY.value = 0
-  isHovering.value = false
+function getAppVisual(iconType?: string) {
+  switch (iconType) {
+    case 'wechat':
+      return 'bg-[#07c160]/12 border-[#07c160]/25 text-[#07c160]'
+    case 'kuaishou':
+    case 'douyin':
+      return 'bg-orange-500/12 border-orange-500/25 text-orange-400'
+    case 'bilibili':
+    case 'iqiyi':
+    case 'qqvideo':
+    case 'youku':
+      return 'bg-pink-500/12 border-pink-500/25 text-pink-400'
+    case 'neteasemusic':
+    case 'qqmusic':
+      return 'bg-rose-500/12 border-rose-500/25 text-rose-400'
+    case 'settings':
+      return 'bg-neutral-800/80 border-neutral-700 text-neutral-300'
+    case 'camera':
+      return 'bg-amber-500/12 border-amber-500/25 text-amber-400'
+    case 'gallery':
+      return 'bg-violet-500/12 border-violet-500/25 text-violet-400'
+    case 'phone':
+      return 'bg-emerald-500/12 border-emerald-500/25 text-emerald-400'
+    case 'browser':
+      return 'bg-cyan-500/12 border-cyan-500/25 text-cyan-400'
+    case 'alipay':
+    case 'taobao':
+    case 'jd':
+    case 'pinduoduo':
+    case 'market':
+      return 'bg-amber-500/12 border-amber-500/25 text-amber-400'
+    case 'amap':
+    case 'baidumap':
+      return 'bg-blue-500/12 border-blue-500/25 text-blue-400'
+    default:
+      return 'bg-sky-500/12 border-sky-500/25 text-sky-400'
+  }
 }
 
 async function startEdit(e: Event) {
@@ -276,266 +294,246 @@ async function openFloatingWindow(e?: Event) {
 </script>
 
 <template>
-  <!-- 模式一：自适应可折叠设备卡片 (方案 C 落地) -->
+  <!-- 模式一：真实手机拟物卡片 (Deck View, 1:1 对齐直接显示屏幕 270×508 规格) -->
   <div
     v-if="viewMode === 'deck'"
-    class="perspective-1000"
-    style="perspective: 1000px;"
+    class="flex items-center justify-center w-full select-none"
   >
     <div
-      ref="cardRef"
-      class="group relative flex flex-col justify-between overflow-hidden rounded-3xl border p-5 transition-all duration-200 ease-out will-change-transform cursor-pointer select-none"
+      class="group relative flex flex-col w-[270px] h-[508px] overflow-hidden bg-[#0d0e11] text-white rounded-[36px] p-2 border-[3px] shadow-xl shadow-black/60 transition-all duration-200 hover:-translate-y-1 cursor-pointer select-none"
       :class="[
         isOnline
-          ? 'border-slate-200/90 bg-white/85 shadow-[0_10px_30px_rgba(0,0,0,0.06)] backdrop-blur-xl hover:border-blue-500/50 hover:bg-white/95 hover:shadow-[0_20px_40px_rgba(64,107,219,0.14)] text-slate-900 dark:border-white/10 dark:bg-slate-900/60 dark:shadow-[0_20px_50px_rgba(0,0,0,0.5)] dark:backdrop-blur-2xl dark:hover:border-blue-400/40 dark:hover:bg-slate-900/80 dark:text-white'
+          ? 'border-neutral-800 hover:border-neutral-700 ring-1 ring-white/5'
           : isConnecting
-            ? 'border-blue-500/30 bg-blue-50/70 text-slate-900 dark:border-blue-500/25 dark:bg-blue-950/30 dark:text-white backdrop-blur-xl'
+            ? 'border-blue-500/40 opacity-80'
             : isUnauthorized
-              ? 'border-amber-500/30 bg-amber-50/70 text-slate-900 dark:border-amber-500/25 dark:bg-amber-950/30 dark:text-white backdrop-blur-xl'
-              : 'border-slate-200/70 bg-white/60 text-slate-600 opacity-75 hover:opacity-100 dark:border-white/5 dark:bg-slate-900/30 dark:text-slate-300 backdrop-blur-xl',
+              ? 'border-amber-500/40 opacity-80'
+              : 'border-neutral-900 opacity-55 grayscale',
       ]"
-      :style="{
-        transform: `rotateX(${rotateX}deg) rotateY(${rotateY}deg) ${isHovering ? 'scale3d(1.015, 1.015, 1.015)' : 'scale3d(1, 1, 1)'}`,
-      }"
-      @mousemove="handleMouseMove"
-      @mouseleave="handleMouseLeave"
+      title="点击手机屏幕直接启动投屏"
       @click="open"
     >
-      <!-- 3D 玻璃动态反光高光层 -->
+      <!-- 手机左侧物理按键凹凸微雕 (音量键 + / -) -->
+      <div class="absolute -left-[3px] top-18 h-8 w-[3px] rounded-r-sm bg-neutral-700" />
+      <div class="absolute -left-[3px] top-28 h-8 w-[3px] rounded-r-sm bg-neutral-700" />
+      <!-- 手机右侧物理按键凹凸微雕 (电源锁屏键) -->
+      <div class="absolute -right-[3px] top-22 h-10 w-[3px] rounded-l-sm bg-neutral-700" />
+
+      <!-- 手机内屏区域 (OLED 纯黑沉浸屏幕，整屏点击直接启动投屏) -->
       <div
-        class="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
-        :style="{
-          background: `radial-gradient(circle at ${glowX}% ${glowY}%, rgba(64, 107, 219, 0.12) 0%, rgba(59, 130, 246, 0.06) 35%, transparent 70%)`,
-        }"
-      />
-
-      <!-- 顶栏状态徽章与来源 -->
-      <div class="relative z-10 flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <!-- 状态指示徽章 -->
-          <span
-            class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold backdrop-blur-md"
-            :class="[
-              isOnline
-                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
-                : isConnecting
-                  ? 'bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-500/30'
-                  : isUnauthorized
-                    ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30'
-                    : 'bg-slate-200/70 text-slate-600 border border-slate-300/60 dark:bg-white/5 dark:text-slate-400 dark:border-white/10',
-            ]"
-          >
-            <span
-              v-if="!isConnecting"
-              class="h-1.5 w-1.5 rounded-full"
-              :class="isOnline ? 'bg-emerald-500 dark:bg-emerald-400 animate-pulse' : isUnauthorized ? 'bg-amber-500' : 'bg-slate-400'"
-            />
-            <Loader2 v-else class="h-3 w-3 animate-spin text-blue-500" />
-            {{ isOnline ? '在线' : isConnecting ? '连接中...' : isUnauthorized ? '待授权' : '离线' }}
-          </span>
-
-          <!-- 系统版本胶囊 -->
-          <span class="rounded-full bg-slate-100/90 text-slate-700 border border-slate-200/80 px-2 py-0.5 text-[10px] font-mono shrink-0 dark:bg-white/5 dark:text-slate-300 dark:border-white/10">
-            Android {{ device.android_release || device.product || device.device || '14' }}
-          </span>
-        </div>
-
-        <!-- 来源类型与详情展开开关 -->
-        <div class="flex items-center gap-2">
-          <div class="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-            <Usb v-if="!isManual" class="h-3.5 w-3.5 text-cyan-600 dark:text-cyan-400" />
-            <Wifi v-else class="h-3.5 w-3.5 text-violet-600 dark:text-violet-400" />
-            <span class="text-[11px] font-medium">{{ !isManual ? 'USB' : 'Wi-Fi' }}</span>
-          </div>
-
-          <!-- 方案 C 核心：一键展开/收起硬件遥测明细抽屉 -->
-          <Button
-            variant="ghost"
-            size="sm"
-            class="h-7 px-2 text-[11px] text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white cursor-pointer rounded-lg"
-            title="查看完整硬件与遥测明细"
-            @click.stop="isExpanded = !isExpanded"
-          >
-            <span class="mr-0.5">{{ isExpanded ? '收起' : '详情' }}</span>
-            <ChevronUp v-if="isExpanded" class="h-3.5 w-3.5" />
-            <ChevronDown v-else class="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      </div>
-
-      <!-- 设备核心信息区：默认品牌名为设备名称 -->
-      <div class="relative z-10 mt-4">
-        <div v-if="!isEditing" class="flex items-center justify-between gap-2">
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <h3 class="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors">
-                {{ store.displayName(device) }}
-              </h3>
-              <!-- 标识是否采用了品牌名默认命名 -->
-              <span
-                v-if="isUsingBrandDefault"
-                class="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-normal text-slate-500 dark:bg-white/10 dark:text-slate-400 shrink-0"
-                title="未设置别名时，默认展示品牌名"
-              >
-                品牌默认
+        class="group/screen relative flex flex-col justify-between overflow-hidden bg-black rounded-[28px] p-3 flex-1 transition-colors"
+      >
+        <!-- 屏幕顶部：灵动岛/听筒打孔 + 顶栏遥测状态 -->
+        <div class="relative z-10 flex flex-col gap-2 shrink-0">
+          <!-- 顶部中央灵动岛 / 听筒打孔 -->
+          <div class="mx-auto flex items-center justify-center">
+            <div
+              class="h-4 rounded-full bg-black/95 px-3 flex items-center gap-1.5 border border-white/15 shadow-inner"
+              :title="device.model || 'Android'"
+            >
+              <!-- 前置摄像头打孔微点 -->
+              <span class="h-2 w-2 rounded-full bg-slate-900 border border-slate-700/80 flex items-center justify-center">
+                <span class="h-0.5 w-0.5 rounded-full bg-blue-400/60" />
+              </span>
+              <span class="text-[9px] font-mono text-slate-400 font-semibold tracking-wider scale-90">
+                {{ device.brand || 'Android' }}
               </span>
             </div>
-            <p class="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400 font-mono">
-              {{ device.model || 'Android' }} · {{ device.serial }}
+          </div>
+
+          <!-- 顶栏状态信息：左侧连接模式/状态，右侧遥测（电池、温度） -->
+          <div class="flex items-center justify-between text-[11px] pt-0.5 px-1.5">
+            <!-- 左侧：连接模式 (USB / Wi-Fi) 与状态指示 -->
+            <div class="flex items-center gap-1 font-mono">
+              <span
+                class="flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium"
+                :class="isManual ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'"
+              >
+                <Wifi v-if="isManual" class="h-2.5 w-2.5" />
+                <Usb v-else class="h-2.5 w-2.5" />
+                <span>{{ isManual ? 'Wi-Fi' : 'USB' }}</span>
+              </span>
+
+              <span
+                v-if="!isOnline"
+                class="text-[9px] font-mono px-1 rounded"
+                :class="isConnecting ? 'text-blue-400 animate-pulse' : isUnauthorized ? 'text-amber-400' : 'text-neutral-500'"
+              >
+                {{ isConnecting ? '连接中' : isUnauthorized ? '待授权' : '离线' }}
+              </span>
+            </div>
+
+            <!-- 右侧：电池与温度遥测核心区 -->
+            <div class="flex items-center gap-2 font-mono">
+              <!-- 电池温度指示 -->
+              <div
+                class="flex items-center gap-0.5 text-[10px]"
+                :class="batteryTempStyle.text"
+                :title="`电池温度: ${device.battery_temp && device.battery_temp > 0 ? `${device.battery_temp.toFixed(1)}°C` : '--'}`"
+              >
+                <Thermometer class="h-3 w-3" :class="batteryTempStyle.icon" />
+                <span>{{ isOnline && device.battery_temp && device.battery_temp > 0 ? `${device.battery_temp.toFixed(0)}°C` : '--' }}</span>
+              </div>
+
+              <!-- CPU 温度（若硬件支持） -->
+              <div
+                v-if="device.cpu_temp_supported && device.cpu_temp"
+                class="flex items-center gap-0.5 text-[10px]"
+                :class="cpuTempStyle.text"
+                :title="`CPU 核心温度: ${device.cpu_temp.toFixed(1)}°C`"
+              >
+                <span class="text-[9px] text-neutral-500">CPU</span>
+                <span>{{ device.cpu_temp.toFixed(0) }}°</span>
+              </div>
+
+              <!-- 电量百分比与充电标识 -->
+              <div
+                class="flex items-center gap-1 text-[10px]"
+                :class="batteryLevelStyle.text"
+                :title="`当前电量: ${device.battery_level !== undefined ? `${device.battery_level}%` : '--'} ${device.battery_charging ? '(充电中)' : ''}`"
+              >
+                <span>{{ isOnline && device.battery_level !== undefined ? `${device.battery_level}%` : '--' }}</span>
+                <BatteryCharging v-if="device.battery_charging" class="h-3.5 w-3.5" :class="batteryLevelStyle.icon" />
+                <Battery v-else class="h-3.5 w-3.5" :class="batteryLevelStyle.icon" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 手机中央屏幕区域：支持黑屏已锁定 vs 在线运行应用 vs 设备离线 -->
+        <!-- 场景 1：手机黑屏/锁屏 -> 显示已锁定，不再显示运行的应用 -->
+        <div v-if="isOnline && isLocked" class="relative my-auto flex flex-col items-center justify-center py-4 text-center">
+          <div class="relative flex items-center justify-center rounded-2xl h-15 w-15 bg-neutral-900/90 border border-neutral-700/60 shadow-inner transition-transform duration-200 group-hover/screen:scale-105">
+            <Lock class="h-7 w-7 text-neutral-400" />
+          </div>
+          <div class="mt-3 w-full px-2">
+            <h4 class="text-sm font-medium tracking-tight text-neutral-300">
+              已锁定
+            </h4>
+          </div>
+        </div>
+
+        <!-- 场景 2：设备在线且未锁定 -> 显示当前正在运行的应用 -->
+        <div v-else-if="isOnline" class="relative my-auto flex flex-col items-center justify-center py-4 text-center">
+          <div
+            class="relative flex items-center justify-center border shadow-lg transition-transform duration-200 group-hover/screen:scale-102 rounded-2xl h-15 w-15"
+            :class="getAppVisual(foregroundApp.iconType)"
+          >
+            <!-- 微信图标 -->
+            <svg
+              v-if="foregroundApp.iconType === 'wechat'"
+              class="h-7.5 w-7.5 text-[#07C160]"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M8.5 2C4.36 2 1 4.91 1 8.5c0 2.05 1.07 3.88 2.76 5.11L3 17.5l4.28-1.43c.4.08.8.13 1.22.13.23 0 .45-.02.67-.04-.26-.67-.42-1.39-.42-2.16 0-3.59 3.36-6.5 7.5-6.5.64 0 1.26.07 1.84.2C16.84 4.54 13.06 2 8.5 2zm-2.25 4a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zm4.5 0a1.25 1.25 0 110 2.5 1.25 1.25 0 010-2.5zM15.5 8.5c-3.59 0-6.5 2.46-6.5 5.5s2.91 5.5 6.5 5.5c.36 0 .71-.03 1.05-.09L20 20.5l-.9-3.08C20.9 16.38 22 14.8 22 13c0-3.04-2.91-5.5-6.5-5.5zm-2 3.5a1 1 0 110 2 1 1 0 010-2zm4 0a1 1 0 110 2 1 1 0 010-2z" />
+            </svg>
+            <Settings v-else-if="foregroundApp.iconType === 'settings'" class="h-7.5 w-7.5" />
+            <LayoutGrid v-else-if="foregroundApp.iconType === 'launcher'" class="h-7.5 w-7.5" />
+            <Camera v-else-if="foregroundApp.iconType === 'camera'" class="h-7.5 w-7.5" />
+            <Image v-else-if="foregroundApp.iconType === 'gallery'" class="h-7.5 w-7.5" />
+            <Phone v-else-if="foregroundApp.iconType === 'phone'" class="h-7.5 w-7.5" />
+            <Globe v-else-if="foregroundApp.iconType === 'browser'" class="h-7.5 w-7.5" />
+            <Film v-else-if="foregroundApp.iconType === 'kuaishou' || foregroundApp.iconType === 'douyin'" class="h-7.5 w-7.5" />
+            <Tv v-else-if="foregroundApp.iconType === 'bilibili' || foregroundApp.iconType === 'iqiyi' || foregroundApp.iconType === 'qqvideo' || foregroundApp.iconType === 'youku'" class="h-7.5 w-7.5" />
+            <ShoppingBag v-else-if="foregroundApp.iconType === 'alipay' || foregroundApp.iconType === 'taobao' || foregroundApp.iconType === 'jd' || foregroundApp.iconType === 'pinduoduo' || foregroundApp.iconType === 'market'" class="h-7.5 w-7.5" />
+            <Music v-else-if="foregroundApp.iconType === 'neteasemusic' || foregroundApp.iconType === 'qqmusic'" class="h-7.5 w-7.5" />
+            <MapPin v-else-if="foregroundApp.iconType === 'amap' || foregroundApp.iconType === 'baidumap'" class="h-7.5 w-7.5" />
+            <Layers v-else class="h-7.5 w-7.5" />
+          </div>
+
+          <!-- 运行应用文字信息 -->
+          <div class="mt-3 w-full px-2">
+            <h4 class="truncate text-sm font-medium tracking-tight text-neutral-100 group-hover/screen:text-white transition-colors">
+              {{ foregroundApp.name }}
+            </h4>
+            <p v-if="foregroundApp.pkg" class="truncate font-mono text-[10px] text-neutral-500 mt-0.5">
+              {{ foregroundApp.pkg }}
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            class="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer shrink-0"
-            title="重命名设备"
-            aria-label="重命名设备"
-            @click.stop="startEdit"
-          >
-            <Pencil class="h-3.5 w-3.5" />
-          </Button>
         </div>
 
-        <!-- 编辑别名状态 -->
-        <div v-else class="flex items-center gap-1.5 py-1" @click.stop>
-          <Input
-            ref="inputRef"
-            v-model="draft"
-            maxlength="20"
-            :placeholder="device.brand || '输入设备名称'"
-            aria-label="设备名称"
-            class="h-8 rounded-xl border-slate-300 bg-white text-xs text-slate-900 dark:border-white/20 dark:bg-black/40 dark:text-white"
-            @keydown.enter.prevent="save"
-            @keydown.esc.prevent="cancel"
-          />
-          <Button size="sm" class="h-8 rounded-xl bg-[#406BDB] hover:bg-[#3258be] text-white px-2.5 cursor-pointer" @click="save">
-            <Check class="h-3.5 w-3.5" />
-          </Button>
-          <Button size="sm" variant="ghost" class="h-8 rounded-xl text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white px-2.5 cursor-pointer" @click="cancel">
-            <X class="h-3.5 w-3.5" />
-          </Button>
+        <!-- 场景 3：设备离线/连接中 -->
+        <div v-else class="relative my-auto flex flex-col items-center justify-center py-4 text-center">
+          <div class="relative flex items-center justify-center rounded-2xl h-15 w-15 bg-neutral-900/60 border border-neutral-800 text-neutral-600">
+            <Smartphone class="h-7 w-7" />
+          </div>
+          <div class="mt-3 w-full px-2">
+            <h4 class="text-sm font-medium text-neutral-500">
+              设备离线
+            </h4>
+          </div>
         </div>
 
-        <!-- 常规核心指标摘要条（电量、电池温度、前台应用，带分级变色） -->
-        <div class="mt-3.5 flex items-center justify-between gap-3 rounded-xl bg-slate-50/80 dark:bg-white/[0.03] p-2.5 border border-slate-200/70 dark:border-white/5">
-          <div class="flex items-center gap-3.5 shrink-0">
-            <!-- 电量指示（分级变色） -->
-            <div class="flex items-center gap-1.5 text-xs font-mono" :class="batteryLevelStyle.text">
-              <BatteryCharging v-if="device.battery_charging" class="h-3.5 w-3.5" :class="batteryLevelStyle.icon" />
-              <Battery v-else class="h-3.5 w-3.5" :class="batteryLevelStyle.icon" />
-              <span>{{ isOnline && device.battery_level !== undefined ? `${device.battery_level}%` : '--' }}</span>
+        <!-- 手机底部区域：纯粹设备信息与 Android 手势条 (彻底去按钮，保留呼吸间距) -->
+        <div class="relative z-10 shrink-0 border-t border-neutral-800/80 pt-2 pb-0.5 flex flex-col gap-1.5" @click.stop>
+          <div class="flex items-center justify-between gap-1.5 px-0.5">
+            <div class="min-w-0 flex-1 truncate">
+              <!-- 编辑别名状态 -->
+              <div v-if="isEditing" class="flex items-center gap-1" @click.stop>
+                <Input
+                  ref="inputRef"
+                  v-model="draft"
+                  class="h-6 rounded-md bg-neutral-900 border-neutral-700 text-xs px-1.5 text-white"
+                  @keydown.enter="save"
+                  @keydown.esc="cancel"
+                />
+                <button type="button" class="text-emerald-400 hover:text-emerald-300 p-0.5" @click.stop="save">
+                  <Check class="h-3 w-3" />
+                </button>
+                <button type="button" class="text-neutral-400 hover:text-neutral-300 p-0.5" @click.stop="cancel">
+                  <X class="h-3 w-3" />
+                </button>
+              </div>
+
+              <!-- 显示别名状态 -->
+              <div v-else class="flex items-center gap-1.5">
+                <span class="font-medium text-neutral-200 truncate text-xs">
+                  {{ store.displayName(device) }}
+                </span>
+                <button
+                  type="button"
+                  class="text-neutral-500 hover:text-neutral-200 transition-colors cursor-pointer"
+                  title="编辑别名"
+                  @click.stop="startEdit"
+                >
+                  <Pencil class="h-2.5 w-2.5" />
+                </button>
+              </div>
+
+              <p class="truncate font-mono text-[9px] text-neutral-500 mt-0.5">
+                {{ device.model || 'Android' }} · {{ device.serial }}
+              </p>
             </div>
 
-            <!-- 电池温度指示（分级变色） -->
-            <div class="flex items-center gap-1.5 text-xs font-mono" :class="batteryTempStyle.text">
-              <Thermometer class="h-3.5 w-3.5" :class="batteryTempStyle.icon" />
-              <span>{{ isOnline && device.battery_temp && device.battery_temp > 0 ? `${device.battery_temp.toFixed(1)}°C` : '--' }}</span>
-            </div>
-          </div>
-
-          <!-- 前台应用指示 -->
-          <div class="flex items-center justify-end gap-1.5 text-xs text-slate-600 dark:text-slate-300 min-w-0 flex-1 truncate">
-            <Layers class="h-3.5 w-3.5 text-blue-500 shrink-0" />
-            <span class="truncate text-[11px] font-medium">{{ isOnline ? foregroundApp.name : '待机' }}</span>
-          </div>
-        </div>
-
-        <!-- 展开状态：ADB 完整硬件与运行遥测明细抽屉 (方案 C 特色) -->
-        <div
-          v-if="isExpanded"
-          class="mt-3 rounded-2xl border border-blue-500/20 bg-blue-50/40 p-3 text-xs dark:border-blue-500/20 dark:bg-blue-950/20 space-y-2 animate-in fade-in slide-in-from-top-2 duration-150"
-          @click.stop
-        >
-          <div class="text-[11px] font-semibold text-blue-700 dark:text-blue-300 flex items-center justify-between">
-            <span>ADB 硬件与系统明细</span>
-            <span class="font-mono text-[10px] text-slate-400">ro.* & dumpsys</span>
-          </div>
-
-          <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-[11px] text-slate-600 dark:text-slate-300">
-            <div class="truncate"><span class="text-slate-400">品牌:</span> <span class="font-medium ml-1">{{ device.brand || '未知' }}</span></div>
-            <div class="truncate"><span class="text-slate-400">厂商:</span> <span class="font-medium ml-1">{{ device.manufacturer || '未知' }}</span></div>
-            <div class="truncate"><span class="text-slate-400">型号:</span> <span class="font-medium ml-1">{{ device.model || 'Android' }}</span></div>
-            <div class="truncate"><span class="text-slate-400">系统:</span> <span class="font-medium ml-1">Android {{ device.android_release || '--' }}</span> <span v-if="device.sdk_version" class="text-[10px] text-slate-400 ml-0.5">(API {{ device.sdk_version }})</span></div>
-            <div class="truncate"><span class="text-slate-400">CPU 架构:</span> <span class="font-medium font-mono ml-1">{{ device.cpu_abi || '--' }}</span></div>
-            <div class="truncate">
-              <span class="text-slate-400">CPU 温度:</span>
-              <span
-                v-if="device.cpu_temp_supported && device.cpu_temp"
-                class="font-mono ml-1 font-semibold"
-                :class="cpuTempStyle.text"
+            <!-- 网络设备快捷重连 / 删除操作 -->
+            <div v-if="isManual && !isOnline" class="flex items-center gap-1 shrink-0" @click.stop>
+              <button
+                type="button"
+                class="p-1 rounded text-neutral-400 hover:text-blue-400 transition-colors cursor-pointer"
+                title="重新连接"
+                :disabled="isConnecting"
+                @click.stop="handleReconnect"
               >
-                {{ device.cpu_temp.toFixed(1) }}°C
-              </span>
-              <span v-else class="text-slate-400 ml-1">未开放</span>
+                <Loader2 v-if="isConnecting" class="h-3 w-3 animate-spin text-blue-400" />
+                <RefreshCw v-else class="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                class="p-1 rounded text-neutral-400 hover:text-rose-400 transition-colors cursor-pointer"
+                title="删除设备"
+                :disabled="isDeleting"
+                @click.stop="handleDelete"
+              >
+                <Trash2 class="h-3 w-3" />
+              </button>
             </div>
           </div>
 
-          <div v-if="device.build_display_id" class="pt-1.5 border-t border-blue-200/50 dark:border-white/5 text-[10px] text-slate-400 truncate font-mono">
-            构建 ID: {{ device.build_display_id }}
-          </div>
-        </div>
-      </div>
-
-      <!-- 底部操作条 -->
-      <div class="relative z-10 mt-5 border-t border-slate-200/80 dark:border-white/10 pt-3.5" @click.stop>
-        <div class="flex items-center gap-2">
-          <!-- 设备投屏主按钮（纯蓝色 #406BDB） -->
-          <Button
-            size="sm"
-            :disabled="!isOnline"
-            class="flex-1 rounded-xl bg-[#406BDB] hover:bg-[#3258be] font-medium text-white shadow-sm transition-colors cursor-pointer text-xs"
-            @click.stop="open"
-          >
-            <MonitorPlay class="mr-1.5 h-3.5 w-3.5" />
-            设备投屏
-          </Button>
-
-          <!-- 设备画中画微窗（支持打开与恢复小窗） -->
-          <Button
-            size="sm"
-            variant="ghost"
-            :disabled="!isOnline"
-            class="h-9 w-9 rounded-xl border p-0 cursor-pointer shadow-2xs transition-all"
-            :class="[
-              windowEffects.player.value
-                ? 'border-blue-500/50 bg-blue-500/10 text-blue-600 dark:border-blue-400/40 dark:bg-blue-500/20 dark:text-blue-300 hover:bg-blue-500/20'
-                : 'border-slate-200/80 bg-white/80 text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white',
-            ]"
-            :title="windowEffects.player.value ? '恢复画中画小窗' : '画中画微窗'"
-            :aria-label="windowEffects.player.value ? '恢复画中画小窗' : '画中画微窗'"
-            @click.stop="openFloatingWindow"
-          >
-            <RotateCcw v-if="windowEffects.needsRecovery.value" class="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-            <Tv v-else class="h-3.5 w-3.5" />
-          </Button>
-
-          <!-- 手动网络设备：离线重试连接 -->
-          <Button
-            v-if="isManual && !isOnline"
-            size="sm"
-            variant="ghost"
-            class="h-9 w-9 rounded-xl border border-slate-200/80 bg-white/80 text-slate-700 hover:bg-slate-100 hover:text-slate-950 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white p-0 cursor-pointer shadow-2xs"
-            :title="isConnecting ? '正在重连' : '重新连接'"
-            :disabled="isConnecting"
-            @click.stop="handleReconnect"
-          >
-            <Loader2 v-if="isConnecting" class="h-3.5 w-3.5 animate-spin text-blue-500" />
-            <RefreshCw v-else class="h-3.5 w-3.5" />
-          </Button>
-
-          <!-- 手动网络设备：删除设备 -->
-          <Button
-            v-if="isManual"
-            size="sm"
-            variant="ghost"
-            class="h-9 w-9 rounded-xl border border-slate-200/80 bg-white/80 text-slate-600 hover:bg-red-50 hover:text-red-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-red-500/20 dark:hover:text-red-400 p-0 cursor-pointer shadow-2xs"
-            title="删除设备"
-            aria-label="删除设备"
-            :disabled="isDeleting"
-            @click.stop="handleDelete"
-          >
-            <Trash2 class="h-3.5 w-3.5" />
-          </Button>
+          <!-- 手机底部 Android 手势条 (Home Indicator) -->
+          <div
+            class="mx-auto rounded-full bg-neutral-800 transition-colors group-hover/screen:bg-neutral-600 h-1 w-14 mt-1 mb-0.5"
+          />
         </div>
       </div>
     </div>

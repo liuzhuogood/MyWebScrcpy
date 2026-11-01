@@ -41,7 +41,7 @@ const sizes: { key: DashSize, label: string }[] = [
 
     <!-- 手机视图卡片尺寸档位 -->
     <div
-      v-if="viewMode === 'phone'"
+      v-if="viewMode === 'phone' || viewMode === 'deck'"
       class="flex items-center gap-1 rounded-xl border border-slate-200/80 bg-slate-100/80 p-0.5 dark:border-white/10 dark:bg-black/20"
     >
       <button
