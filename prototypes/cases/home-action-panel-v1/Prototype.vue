@@ -319,21 +319,8 @@ function getAppBadgeBg(iconType: string) {
       <!-- 核心工作区：直接顶格展示，左侧设备区 + 右侧可收起“操作”面板 -->
       <div class="flex-1 flex items-start gap-4 w-full min-w-0">
         
-        <!-- 左侧：设备主展示区（随右侧面板收起自动扩展宽度） -->
+        <!-- 左侧：设备主展示区（完全无横条/提示条干扰，随右侧面板收起自动扩展宽度） -->
         <main class="flex-1 min-w-0 transition-all duration-300">
-          
-          <!-- 筛选状态轻量提示条（当有过滤时显示） -->
-          <div v-if="keyword || sourceFilter !== 'all' || hiddenSerials.length > 0" class="mb-3 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 bg-white/60 dark:bg-white/5 px-3 py-1.5 rounded-xl border border-slate-200/60 dark:border-white/5">
-            <span>当前筛选显示 {{ visibleDevices.length }} / {{ devices.length }} 台设备</span>
-            <button
-              type="button"
-              class="text-violet-600 dark:text-violet-400 hover:underline cursor-pointer"
-              @click="keyword = ''; sourceFilter = 'all'; hiddenSerials = []"
-            >
-              清空筛选条件
-            </button>
-          </div>
-
           <!-- 空结果提示 -->
           <div v-if="visibleDevices.length === 0" class="py-20 text-center text-slate-400 dark:text-slate-500">
             <Smartphone class="mx-auto h-12 w-12 stroke-[1.2] mb-3 opacity-60" />
