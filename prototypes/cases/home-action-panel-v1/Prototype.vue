@@ -13,6 +13,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Plus,
+  Radio,
   RefreshCw,
   Search,
   SlidersHorizontal,
@@ -56,8 +57,7 @@ const qualityLabel = computed(() => {
   return '100% 原画'
 })
 
-// 手机视图显示尺寸
-const dashSize = ref<'small' | 'medium' | 'large' | 'fill'>('medium')
+// 网页全屏展示状态
 const isPageFullscreen = ref(false)
 
 // 显隐过滤状态（存储隐藏的 serial）
@@ -68,40 +68,21 @@ const selectedSerials = ref<string[]>([devices.value[0].serial, devices.value[1]
 
 // 批量操作运行状态
 const batchRunning = ref(false)
-const currentAction = ref('')
 
-// 操作反馈历史记录
-interface ActionResult {
-  id: string
-  time: string
-  action: string
-  serial: string
-  name: string
-  status: 'success' | 'failed'
-  message: string
+// 同步操作模式状态
+const isSyncActive = ref(false)
+function toggleSync() {
+  if (selectedSerials.value.length === 0) {
+    toast.error('请先勾选需要参与同步操作的设备')
+    return
+  }
+  isSyncActive.value = !isSyncActive.value
+  if (isSyncActive.value) {
+    toast.success(`已开启同步操作：对主控设备的操作将实时同步至已选的 ${selectedSerials.value.length} 台设备`)
+  } else {
+    toast.info('已关闭同步操作')
+  }
 }
-const actionHistory = ref<ActionResult[]>([
-  {
-    id: '1',
-    time: '23:58:12',
-    action: '返回 (Back)',
-    serial: devices.value[0].serial,
-    name: devices.value[0].alias || devices.value[0].serial,
-    status: 'success',
-    message: '注入按键返回成功',
-  },
-  {
-    id: '2',
-    time: '23:58:12',
-    action: '返回 (Back)',
-    serial: devices.value[1].serial,
-    name: devices.value[1].alias || devices.value[1].serial,
-    status: 'success',
-    message: '注入按键返回成功',
-  },
-])
-
-
 
 // 刷新状态
 const isRefreshing = ref(false)
@@ -200,7 +181,7 @@ function clearSelection() {
   selectedSerials.value = []
 }
 
-// 模拟触发批量操作
+// 模拟触发批量操作（轻量即时反馈）
 function triggerBatchAction(actionName: 'back' | 'home' | 'app_switch') {
   if (selectedSerials.value.length === 0) {
     toast.error('请先勾选需要操作的设备')
@@ -214,27 +195,11 @@ function triggerBatchAction(actionName: 'back' | 'home' | 'app_switch') {
   }
   const label = labelMap[actionName]
   batchRunning.value = true
-  currentAction.value = label
 
   setTimeout(() => {
     batchRunning.value = false
-    currentAction.value = ''
-
-    const timeStr = new Date().toTimeString().split(' ')[0]
-    selectedSerials.value.forEach((s) => {
-      const dev = devices.value.find(d => d.serial === s)
-      actionHistory.value.unshift({
-        id: Math.random().toString(36).slice(2, 9),
-        time: timeStr,
-        action: label,
-        serial: s,
-        name: dev?.alias || s,
-        status: 'success',
-        message: '指令已下发并执行',
-      })
-    })
-    toast.success(`批量执行「${label}」完成（共 ${selectedSerials.value.length} 台）`)
-  }, 500)
+    toast.success(`批量执行「${label}」完成（共 ${selectedSerials.value.length} 台设备）`)
+  }, 350)
 }
 
 // 模拟添加设备
@@ -367,6 +332,9 @@ function getAppBadgeBg(iconType: string) {
                     {{ dev.telemetry.batteryLevel }}%
                   </span>
                   <span v-else class="text-rose-500 font-medium">离线</span>
+                  <span v-if="isSyncActive && selectedSerials.includes(dev.serial)" class="flex items-center gap-0.5 text-violet-600 dark:text-violet-400 font-semibold animate-pulse text-[10px]">
+                    <Radio class="h-2.5 w-2.5" /> 同步
+                  </span>
                 </div>
               </div>
 
@@ -502,6 +470,16 @@ function getAppBadgeBg(iconType: string) {
                 <Plus class="h-3.5 w-3.5" />
               </button>
 
+              <!-- 全屏切换 -->
+              <button
+                type="button"
+                class="p-1.5 rounded-xl text-slate-400 hover:text-slate-900 hover:bg-slate-100 dark:hover:text-white dark:hover:bg-white/10 cursor-pointer transition-colors"
+                :title="isPageFullscreen ? '退出全屏' : '全屏展示'"
+                @click="isPageFullscreen = !isPageFullscreen; toast.info(isPageFullscreen ? '进入全屏展示' : '退出全屏展示')"
+              >
+                <Maximize class="h-3.5 w-3.5" />
+              </button>
+
               <!-- 收起按钮 -->
               <button
                 type="button"
@@ -518,10 +496,8 @@ function getAppBadgeBg(iconType: string) {
           <!-- 面板内容滚动区 -->
           <div class="p-4 space-y-4 overflow-y-auto max-h-[calc(100vh-16rem)] flex-1 overscroll-contain text-xs">
             
-            <!-- ====== 模块 1：设备查找、过滤与视图模式（原设备列表 Bar 核心功能） ====== -->
+            <!-- ====== 模块 1：搜索框、视图模式与滑动调节 ====== -->
             <div class="space-y-2.5 pb-3 border-b border-slate-200/80 dark:border-white/10">
-              <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">设备控制</span>
-              
               <!-- 搜索框 -->
               <div class="relative w-full">
                 <Search class="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400 dark:text-slate-500" />
@@ -729,106 +705,53 @@ function getAppBadgeBg(iconType: string) {
                 </Button>
               </div>
 
-              <!-- 批量动作按钮行 -->
-              <div class="grid grid-cols-3 gap-2 pt-1">
+              <!-- 批量动作按钮行（4 个纯图标按钮，鼠标悬停展示提示） -->
+              <div class="grid grid-cols-4 gap-2 pt-1">
                 <Button
                   size="sm"
                   variant="secondary"
-                  class="h-8 rounded-xl text-xs gap-1 cursor-pointer"
+                  class="h-8.5 rounded-xl cursor-pointer"
                   :disabled="batchRunning || selectedSerials.length === 0"
+                  title="返回 (Back)"
+                  aria-label="返回 (Back)"
                   @click="triggerBatchAction('back')"
                 >
-                  <ArrowLeft class="h-3 w-3" />
-                  <span>返回</span>
+                  <ArrowLeft class="h-4 w-4" />
                 </Button>
                 <Button
                   size="sm"
                   variant="secondary"
-                  class="h-8 rounded-xl text-xs gap-1 cursor-pointer"
+                  class="h-8.5 rounded-xl cursor-pointer"
                   :disabled="batchRunning || selectedSerials.length === 0"
+                  title="主页 (Home)"
+                  aria-label="主页 (Home)"
                   @click="triggerBatchAction('home')"
                 >
-                  <Home class="h-3 w-3" />
-                  <span>主页</span>
+                  <Home class="h-4 w-4" />
                 </Button>
                 <Button
                   size="sm"
                   variant="secondary"
-                  class="h-8 rounded-xl text-xs gap-1 cursor-pointer"
+                  class="h-8.5 rounded-xl cursor-pointer"
                   :disabled="batchRunning || selectedSerials.length === 0"
+                  title="多任务 (AppSwitch)"
+                  aria-label="多任务 (AppSwitch)"
                   @click="triggerBatchAction('app_switch')"
                 >
-                  <Layers class="h-3 w-3" />
-                  <span>多任务</span>
+                  <Layers class="h-4 w-4" />
                 </Button>
-              </div>
-            </div>
-
-            <!-- ====== 模块 4：显示设置（仅在手机视图生效） ====== -->
-            <div v-if="viewMode === 'phone'" class="space-y-2 pb-3 border-b border-slate-200/80 dark:border-white/10">
-              <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">网格显示规格</span>
-              <div class="flex items-center justify-between gap-1">
-                <div class="flex items-center rounded-xl border border-slate-200/80 bg-slate-100/80 dark:border-white/10 dark:bg-black/20 p-0.5 text-[11px]">
-                  <button
-                    v-for="size in (['small', 'medium', 'large', 'fill'] as const)"
-                    :key="size"
-                    type="button"
-                    class="rounded-lg px-2 py-0.5 font-medium transition-all cursor-pointer capitalize"
-                    :class="dashSize === size
-                      ? 'bg-white text-slate-950 shadow-xs font-semibold dark:bg-white/15 dark:text-white'
-                      : 'text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white'"
-                    @click="dashSize = size"
-                  >
-                    {{ size === 'fill' ? '铺满' : size === 'small' ? '小' : size === 'medium' ? '中' : '大' }}
-                  </button>
-                </div>
-
                 <Button
                   size="sm"
-                  variant="ghost"
-                  class="h-7 px-2 text-xs rounded-xl cursor-pointer"
-                  @click="isPageFullscreen = !isPageFullscreen; toast.info(isPageFullscreen ? '进入全屏' : '退出全屏')"
+                  :variant="isSyncActive ? 'default' : 'secondary'"
+                  class="h-8.5 rounded-xl cursor-pointer transition-all"
+                  :class="{ 'bg-violet-600 text-white hover:bg-violet-700 shadow-xs ring-1 ring-violet-500': isSyncActive }"
+                  :disabled="selectedSerials.length === 0"
+                  title="同步操作：通过一台手机，把对它的操作同步到所有已选设备"
+                  aria-label="同步操作"
+                  @click="toggleSync"
                 >
-                  <Maximize class="h-3 w-3 mr-1" />
-                  <span>{{ isPageFullscreen ? '还原' : '全屏' }}</span>
+                  <Radio class="h-4 w-4" :class="{ 'animate-pulse': isSyncActive }" />
                 </Button>
-              </div>
-            </div>
-
-            <!-- ====== 模块 5：操作执行历史 ====== -->
-            <div class="space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">执行反馈</span>
-                <button
-                  v-if="actionHistory.length > 0"
-                  type="button"
-                  class="text-[10px] text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
-                  @click="actionHistory = []"
-                >
-                  清空
-                </button>
-              </div>
-
-              <div v-if="actionHistory.length === 0" class="text-center py-4 text-slate-400">
-                暂无操作记录
-              </div>
-              <div v-else class="space-y-1.5 max-h-36 overflow-y-auto">
-                <div
-                  v-for="item in actionHistory"
-                  :key="item.id"
-                  class="flex items-start justify-between p-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 text-[11px]"
-                >
-                  <div class="space-y-0.5 truncate">
-                    <div class="flex items-center gap-1.5 font-medium text-slate-800 dark:text-slate-200">
-                      <span class="text-emerald-500">●</span>
-                      <span>{{ item.action }}</span>
-                      <span class="text-slate-400">·</span>
-                      <span class="truncate max-w-[100px] text-slate-500">{{ item.name }}</span>
-                    </div>
-                    <p class="text-[10px] text-slate-400">{{ item.message }}</p>
-                  </div>
-                  <span class="font-mono text-[10px] text-slate-400 shrink-0">{{ item.time }}</span>
-                </div>
               </div>
             </div>
 
