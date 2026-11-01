@@ -31,6 +31,8 @@ type TelemetryInfo struct {
 	ForegroundPkg     string
 	ForegroundAppName string
 	ForegroundAppIcon string
+	ScreenOn          *bool
+	ScreenLocked      *bool
 	UpdatedAt         int64
 }
 
@@ -340,13 +342,81 @@ func resolveAppInfo(pkg string) (name string, iconKey string) {
 	return pkg, "app_default"
 }
 
+// parseScreenState 从 dumpsys power 与 dumpsys window policy 输出中提取屏幕亮灭与锁屏状态
+func parseScreenState(powerOutput string, keyguardOutput string) (screenOn *bool, screenLocked *bool) {
+	if powerOutput != "" {
+		pLines := strings.Split(powerOutput, "\n")
+		for _, rawLine := range pLines {
+			line := strings.TrimSpace(rawLine)
+			if strings.Contains(line, "mWakefulness=") {
+				if strings.Contains(line, "mWakefulness=Asleep") || strings.Contains(line, "mWakefulness=Dozing") {
+					f := false
+					screenOn = &f
+				} else if strings.Contains(line, "mWakefulness=Awake") {
+					t := true
+					screenOn = &t
+				}
+			}
+			if screenOn == nil && strings.Contains(line, "Display Power:") {
+				if strings.Contains(line, "state=OFF") {
+					f := false
+					screenOn = &f
+				} else if strings.Contains(line, "state=ON") {
+					t := true
+					screenOn = &t
+				}
+			}
+		}
+	}
+
+	if keyguardOutput != "" {
+		kLines := strings.Split(keyguardOutput, "\n")
+		for _, rawLine := range kLines {
+			line := strings.TrimSpace(rawLine)
+			if strings.Contains(line, "showing=true") || strings.Contains(line, "isStatusBarKeyguard=true") {
+				t := true
+				screenLocked = &t
+				break
+			} else if strings.Contains(line, "showing=false") {
+				f := false
+				screenLocked = &f
+			}
+		}
+	}
+
+	if screenOn != nil && !*screenOn {
+		t := true
+		screenLocked = &t
+	}
+
+	return screenOn, screenLocked
+}
+
 // parseBatteryAndThermal 解析 dumpsys battery, thermalservice, thermal_zone 及前台应用输出
 func parseBatteryAndThermal(output string) TelemetryInfo {
 	info := TelemetryInfo{
 		UpdatedAt: time.Now().UnixMilli(),
 	}
 
-	// 0. 拆分前台应用信息
+	// 0. 拆分锁屏、电源与前台应用信息
+	var keyguardPart string
+	if strings.Contains(output, "===KEYGUARD===") {
+		kParts := strings.SplitN(output, "===KEYGUARD===", 2)
+		output = kParts[0]
+		if len(kParts) > 1 {
+			keyguardPart = kParts[1]
+		}
+	}
+
+	var powerPart string
+	if strings.Contains(output, "===POWER===") {
+		pParts := strings.SplitN(output, "===POWER===", 2)
+		output = pParts[0]
+		if len(pParts) > 1 {
+			powerPart = pParts[1]
+		}
+	}
+
 	var foregroundPart string
 	if strings.Contains(output, "===FOREGROUND===") {
 		fgParts := strings.SplitN(output, "===FOREGROUND===", 2)
@@ -474,6 +544,11 @@ func parseBatteryAndThermal(output string) TelemetryInfo {
 		}
 	}
 
+	// 6. 解析屏幕与锁屏状态
+	sOn, sLocked := parseScreenState(powerPart, keyguardPart)
+	info.ScreenOn = sOn
+	info.ScreenLocked = sLocked
+
 	return info
 }
 
@@ -515,6 +590,8 @@ func (m *Manager) updateDeviceTelemetryInMemory(serial string, tel TelemetryInfo
 			m.devices[i].ForegroundPkg = tel.ForegroundPkg
 			m.devices[i].ForegroundAppName = tel.ForegroundAppName
 			m.devices[i].ForegroundAppIcon = tel.ForegroundAppIcon
+			m.devices[i].ScreenOn = tel.ScreenOn
+			m.devices[i].ScreenLocked = tel.ScreenLocked
 			m.devices[i].TelemetryUpdatedAt = tel.UpdatedAt
 			break
 		}
@@ -552,7 +629,7 @@ func (m *Manager) runTelemetryFetch(serial string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	cmdStr := "dumpsys battery; echo '===THERMAL_SERVICE==='; dumpsys thermalservice 2>/dev/null; echo '===THERMAL_ZONE==='; for f in /sys/class/thermal/thermal_zone*/temp; do [ -f \"$f\" ] && echo \"$f:$(cat \"$f\" 2>/dev/null)\"; done; echo '===FOREGROUND==='; dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'; exit 0"
+	cmdStr := "dumpsys battery; echo '===THERMAL_SERVICE==='; dumpsys thermalservice 2>/dev/null; echo '===THERMAL_ZONE==='; for f in /sys/class/thermal/thermal_zone*/temp; do [ -f \"$f\" ] && echo \"$f:$(cat \"$f\" 2>/dev/null)\"; done; echo '===FOREGROUND==='; dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'; echo '===POWER==='; dumpsys power | grep -E 'mWakefulness=|Display Power:'; echo '===KEYGUARD==='; dumpsys window policy | grep -E 'showing=|isStatusBarKeyguard'; exit 0"
 	cmd := dependencies.CommandContext(ctx, m.adbPath, "-s", serial, "shell", cmdStr)
 	cmd.Dir = os.TempDir()
 	out, err := cmd.Output()

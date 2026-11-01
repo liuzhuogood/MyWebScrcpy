@@ -37,6 +37,8 @@ type Device struct {
 	ForegroundPkg      string   `json:"foreground_pkg,omitempty"`
 	ForegroundAppName  string   `json:"foreground_app_name,omitempty"`
 	ForegroundAppIcon  string   `json:"foreground_app_icon,omitempty"`
+	ScreenOn           *bool    `json:"screen_on,omitempty"`
+	ScreenLocked       *bool    `json:"screen_locked,omitempty"`
 	TelemetryUpdatedAt int64    `json:"telemetry_updated_at,omitempty"`
 }
 
@@ -219,6 +221,8 @@ func (m *Manager) attachTelemetry(d *Device) {
 		d.ForegroundPkg = tel.ForegroundPkg
 		d.ForegroundAppName = tel.ForegroundAppName
 		d.ForegroundAppIcon = tel.ForegroundAppIcon
+		d.ScreenOn = tel.ScreenOn
+		d.ScreenLocked = tel.ScreenLocked
 		d.TelemetryUpdatedAt = tel.UpdatedAt
 	}
 }

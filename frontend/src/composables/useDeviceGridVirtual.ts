@@ -50,19 +50,21 @@ export function useDeviceGridVirtual(options: DeviceGridVirtualOptions) {
     const w = el.clientWidth
     if (options.viewMode() === 'compact')
       return w >= 1280 ? 3 : w >= 768 ? 2 : 1
-    return w >= 1536 ? 4 : w >= 1280 ? 3 : w >= 768 ? 2 : 1
+    return w >= 1700 ? 5 : w >= 1350 ? 4 : w >= 1000 ? 3 : w >= 650 ? 2 : 1
   })
 
-  /** 行高：列宽 / 卡片宽高比 + 行间距（卡片为竖向矩形，高 > 宽） */
+  /** 行高：deck 模式对齐拟物手机真实高度 508px + 行间距 GAP */
   const rowHeight = computed(() => {
     void gridSize.width.value
     const el = options.gridEl()
     if (!el)
       return 320
+    if (options.viewMode() === 'deck')
+      return 508 + GAP
     const w = el.clientWidth
     const c = cols.value
     const colW = (w - GAP * (c - 1)) / c
-    const ratio = options.viewMode() === 'compact' ? 1.08 : 1.12
+    const ratio = 1.08
     return Math.round(colW * ratio) + GAP
   })
 

@@ -97,18 +97,11 @@ const {
   setDashSize,
 } = useHomePhoneView(() => homeFilteredDevices.value)
 
-// 设备网格虚拟滚动：窗口化渲染可视区行，支撑 500+ 设备流畅滚动
-const deckGridEl = ref<HTMLElement | null>(null)
+// 设备网格虚拟滚动：紧凑视图窗口化渲染可视区行，支撑 500+ 设备流畅滚动
 const compactGridEl = ref<HTMLElement | null>(null)
 
-// 甲板/紧凑网格实际渲染的设备集合
+// 紧凑网格实际渲染的设备集合
 const gridDevices = computed(() => visibleDevices.value)
-
-const deckVirtual = useDeviceGridVirtual({
-  devices: () => gridDevices.value,
-  viewMode: () => 'deck',
-  gridEl: () => deckGridEl.value,
-})
 
 const compactVirtual = useDeviceGridVirtual({
   devices: () => gridDevices.value,
@@ -377,7 +370,7 @@ onUnmounted(() => {
 
             <!-- 所有设备已隐藏状态（当有匹配设备但均被编号面板隐藏时，甲板与紧凑视图友好呈现恢复入口） -->
             <div
-              v-else-if="visibleDevices.length === 0 && viewMode !== 'phone'"
+              v-else-if="visibleDevices.length === 0 && viewMode === 'compact'"
               class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 dark:border-white/10 bg-white/40 dark:bg-white/[0.01] p-12 text-center"
             >
               <EyeOff class="h-8 w-8 text-slate-400 mb-2" />
@@ -393,9 +386,11 @@ onUnmounted(() => {
               </Button>
             </div>
 
-            <!-- 视图模式三：手机视图 (Phone View) -->
+            <!-- 视图模式一：手机卡片视图 (Deck View) 与 视图模式三：手机实时投屏视图 (Phone View) -->
+            <!-- 统一采用同宽同高紧密设备墙规格与 2px 间隙体系，两边切换尺寸完全对齐零断层 -->
             <HomePhoneView
-              v-else-if="viewMode === 'phone'"
+              v-else-if="viewMode === 'deck' || viewMode === 'phone'"
+              :view-mode="viewMode"
               :visible-devices="visibleDevices"
               :dash-size="dashSize"
               :serial-to-number-map="serialToNumberMap"
@@ -404,35 +399,6 @@ onUnmounted(() => {
               @toggle-select="toggleSelect"
               @show-all="showAllDevices"
             />
-
-            <!-- 视图模式一：3D 全息设备甲板视图 (Deck View) 铺满全屏 -->
-            <div
-              v-else-if="viewMode === 'deck'"
-              ref="deckGridEl"
-              class="relative"
-              :style="{ height: deckVirtual.totalSize.value + 'px' }"
-            >
-              <div
-                v-for="vi in deckVirtual.virtualItems.value"
-                :key="String(vi.key)"
-                class="absolute left-0 top-0 grid w-full gap-5"
-                :style="{
-                  transform: 'translateY(' + vi.start + 'px)',
-                  gridTemplateColumns: 'repeat(' + deckVirtual.cols.value + ', minmax(0, 1fr))',
-                }"
-              >
-                <DeviceGridItem
-                  v-for="d in deckVirtual.rows.value[vi.index]"
-                  :key="d.serial"
-                  :device="d"
-                  view-mode="deck"
-                  :selected="selectedSerials.includes(d.serial)"
-                  :mock-enabled="store.mockEnabled"
-                  @toggle-select="toggleSelect"
-                  @open-floating="openFloating"
-                />
-              </div>
-            </div>
 
             <!-- 视图模式二：紧凑型设备阵列视图 (Compact View) 铺满全屏 -->
             <div

@@ -22,6 +22,8 @@ export interface Device {
   foreground_pkg?: string
   foreground_app_name?: string
   foreground_app_icon?: string
+  screen_on?: boolean
+  screen_locked?: boolean
   telemetry_updated_at?: number
 }
 

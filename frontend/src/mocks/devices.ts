@@ -66,6 +66,13 @@ function buildMockDevices(): Device[] {
       ...(t.cpu_temp_supported && !offline
         ? { cpu_temp: Math.round((38 + rand() * 10) * 10) / 10, cpu_temp_supported: true }
         : { cpu_temp_supported: false }),
+      ...(!offline ? {
+        screen_on: (i % 4 !== 1),
+        screen_locked: (i % 4 === 1),
+        foreground_app_name: ['微信', '快手极速版', '哔哩哔哩', '系统设置', '网易云音乐', '抖音'][i % 6],
+        foreground_pkg: ['com.tencent.mm', 'com.kuaishou.nebula', 'tv.danmaku.bili', 'com.android.settings', 'com.netease.cloudmusic', 'com.ss.android.ugc.aweme'][i % 6],
+        foreground_app_icon: ['wechat', 'kuaishou', 'bilibili', 'settings', 'neteasemusic', 'douyin'][i % 6],
+      } : {}),
     })
   }
   return devices

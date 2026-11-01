@@ -17,20 +17,23 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div class="group relative transition-all duration-150">
-    <!-- 宿主独立勾选按钮（左上角悬浮，点击不穿透，独立多选） -->
-    <button
-      v-if="device.state === 'device' && !mockEnabled"
-      type="button"
-      class="absolute left-3 top-3 z-20 flex h-6 w-6 items-center justify-center rounded-lg border border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-md transition-all cursor-pointer dark:border-white/15 dark:bg-slate-900/90 text-slate-400 hover:text-slate-900 dark:hover:text-white"
-      :class="{ '!border-violet-500 !bg-violet-600 !text-white': selected }"
-      :title="selected ? '取消勾选' : '勾选此设备进行批量操作'"
-      @click.stop="emit('toggleSelect', device.serial)"
+  <div class="group relative flex items-center justify-center transition-all duration-150">
+    <div
+      class="relative"
+      :class="viewMode === 'deck' ? { 'ring-2 ring-violet-500 rounded-[38px]': selected } : { 'ring-2 ring-violet-500 rounded-2xl w-full': selected, 'w-full': true }"
     >
-      <component :is="selected ? CheckSquare : Square" class="h-3.5 w-3.5" />
-    </button>
+      <!-- 宿主独立勾选按钮（点击不穿透，跟随卡片左上角） -->
+      <button
+        v-if="device.state === 'device' && !mockEnabled"
+        type="button"
+        class="absolute -left-2 -top-2 z-20 flex h-6 w-6 items-center justify-center rounded-lg border border-slate-200/90 bg-white shadow-md backdrop-blur-md transition-all cursor-pointer dark:border-white/20 dark:bg-slate-900 text-slate-400 hover:text-slate-900 dark:hover:text-white"
+        :class="{ '!border-violet-500 !bg-violet-600 !text-white': selected }"
+        :title="selected ? '取消勾选' : '勾选此设备进行批量操作'"
+        @click.stop="emit('toggleSelect', device.serial)"
+      >
+        <component :is="selected ? CheckSquare : Square" class="h-3.5 w-3.5" />
+      </button>
 
-    <div :class="viewMode === 'deck' ? { 'ring-2 ring-violet-500 rounded-3xl': selected } : { 'ring-2 ring-violet-500 rounded-2xl': selected }">
       <DeviceCard
         :device="device"
         :view-mode="viewMode"
