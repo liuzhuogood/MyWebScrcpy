@@ -1,16 +1,31 @@
 # v1.33.0-feature 任务清单
 
-状态：精简交付阶段 (Lean Delivery)，L1 - L4 顺利通过，等待 L5 提交与交付。
+状态：需求原型已就绪并通过实测验证，进入版本文档与准备接入主干阶段。
 
-## 精简交付流程 (Lean Delivery: L1 - L5)
+## 阶段进展清单
 
-- ✅ L1 [设计确认] 原型验证完成：拟物手机卡片外观、1:1 对齐直接显示屏幕规格（270×508 / 200×380）、点击整屏投屏、去详情按钮、去 AI 弥散光斑。
-- ✅ L2 [版本文档] 更新版本清单与精简交付记录；边界：`tasks.md`、`version.md`、`design.md`。
-- ✅ L3 [业务实施] 将选定的拟物手机卡片正式重构至 `frontend/src/components/device/DeviceCard.vue`，并适配 `useDeviceGridVirtual.ts` 508px 拟物手机行高。
-- ✅ L4 [全测门禁] 执行项目全量自动化测试套件（Go 后端测试全部通过、前端生产构建 `build` 成功通过、原型构建 `proto:build` 成功通过）。
-- ✅ L5 [原型扩展] 完成首页右侧“操作”面板与无顶部Bar重构原型：
-  - 沉淀交互原型：`prototypes/cases/home-action-panel-v1/`
-  - 迁入顶部 Bar 功能、收起/展开动效、剔除紧凑阵列
-  - 产出实拍截图证据：`action-panel-v1-expanded.png`、`action-panel-v1-collapsed.png`
-  - 自动化构建门禁全部通过
-- ⏳ L6 [提交与落地评估] 提交原型成果入库，等待评审授权后正式接入主视图。
+- ✅ **T1 [需求澄清与视觉减负]**：
+  - 彻底移除顶部常驻 `HomeControlCapsule` 大横条，释放纵向视口；
+  - 彻底移除设备展示区上方“当前筛选显示 X / Y 台设备 · 清空筛选条件”提示条，实现卡片 0 间隙顶格排布；
+  - 去除低频僵硬的“全部、直连、无线、离线”分类过滤；
+  - 剔除“紧凑阵列 (`compact`)”，视图模式精简为“卡片视图 (`deck`)”与“手机视图 (`phone`)”。
+
+- ✅ **T2 [操作面板重构与滑动调节]**：
+  - 右侧面板更名为“操作”，支持 320px 展开态与 52px 极窄收起态两态平滑折叠；
+  - 数量胶囊 `5/6` 下沉至“设备显隐”标题旁，面板 Header 保持极简；
+  - 引入三大连续滑动调节：手机大小（70%~140% 联动缩放）、投屏码率（2~16 Mbps）、投屏质量（50%~100%）。
+
+- ✅ **T3 [独立原型与实拍证据]**：
+  - 完成独立原型案例：`prototypes/cases/home-action-panel-v1/`；
+  - 本地预览服务实时验证：`http://127.0.0.1:5174/#home-action-panel-v1`；
+  - 生成展开态与收起态高分辨率实拍图：`action-panel-v1-expanded.png`、`action-panel-v1-collapsed.png`；
+  - 全套构建套件 `proto:check`、`proto:build`、`build` 验证通过。
+
+- ✅ **T4 [版本资产文档]**：
+  - 完成 `version.md`、`design.md`、`tasks.md` 的体系化更新。
+
+- ⏳ **T5 [正式实施与主干合入 (待授权启动)]**：
+  - 废弃 `HomeControlCapsule.vue`，重构 `ActionPanel.vue`，改造 `HomeView.vue`；
+  - 全量自动化测试回归（Go 后端测试 + 前端生产构建 + 原型隔离校验）；
+  - 更新 `docs/glossary.md` 术语字典；
+  - 原子提交并推进。

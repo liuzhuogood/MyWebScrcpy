@@ -27,7 +27,6 @@ import { toast } from 'vue-sonner'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Switch } from '@/components/ui/switch'
 import { MOCK_DEVICES, type MockDevice } from './mockDevices'
 
 // 设备数据源
@@ -36,12 +35,26 @@ const devices = ref<MockDevice[]>(JSON.parse(JSON.stringify(MOCK_DEVICES)))
 // 面板展开/收起状态（默认展开）
 const isPanelOpen = ref(true)
 
-// 原设备列表 Bar 迁入的状态
+// 原设备列表 Bar 迁入的状态与全新滑动调节
 const keyword = ref('')
-const sourceFilter = ref<'all' | 'auto' | 'manual'>('all')
-const showOffline = ref(false)
 // 视图模式：去掉 compact，仅保留 'deck'（卡片）与 'phone'（手机视图）
 const viewMode = ref<'deck' | 'phone'>('deck')
+
+// 1. 手机大小滑动调节（70% ~ 140%，默认 100% 对齐 270px 拟物手机标准宽）
+const phoneScale = ref(100)
+const cardWidth = computed(() => Math.round(270 * (phoneScale.value / 100)))
+
+// 2. 投屏码率滑动调节（2 Mbps ~ 16 Mbps，默认 8 Mbps）
+const bitrateMbps = ref(8)
+
+// 3. 投屏质量滑动调节（50% ~ 100%，默认 90%）
+const qualityPercent = ref(90)
+const qualityLabel = computed(() => {
+  if (qualityPercent.value <= 60) return '720P 标清'
+  if (qualityPercent.value <= 80) return '1080P 高清'
+  if (qualityPercent.value < 100) return '2K 超清'
+  return '100% 原画'
+})
 
 // 手机视图显示尺寸
 const dashSize = ref<'small' | 'medium' | 'large' | 'fill'>('medium')
@@ -112,14 +125,6 @@ function expandAndFocusSearch() {
 // 过滤后的设备列表
 const filteredDevices = computed(() => {
   return devices.value.filter((d) => {
-    // 离线过滤
-    if (!showOffline.value && d.state === 'offline')
-      return false
-
-    // 来源过滤
-    if (sourceFilter.value !== 'all' && d.source !== sourceFilter.value)
-      return false
-
     // 关键字搜索
     if (keyword.value.trim()) {
       const q = keyword.value.trim().toLowerCase()
@@ -328,13 +333,11 @@ function getAppBadgeBg(iconType: string) {
             <p class="text-xs mt-1">请尝试在右侧操作面板中调整搜索词、来源或取消隐藏</p>
           </div>
 
-          <!-- 模式一：手机拟物卡片视图 (deck) -->
+          <!-- 模式一：手机拟物卡片视图 (deck，支持滑块无级调节尺寸) -->
           <div
             v-else-if="viewMode === 'deck'"
-            class="grid gap-4 transition-all duration-300"
-            :class="isPanelOpen
-              ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-3'
-              : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5'"
+            class="grid gap-4 transition-all duration-200"
+            :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${cardWidth}px, 1fr))` }"
           >
             <div
               v-for="(dev, idx) in visibleDevices"
@@ -418,13 +421,11 @@ function getAppBadgeBg(iconType: string) {
             </div>
           </div>
 
-          <!-- 模式二：首页手机视图 / 紧密网格投屏 (phone) -->
+          <!-- 模式二：首页手机视图 / 紧密网格投屏 (phone，支持滑块无级调节尺寸) -->
           <div
             v-else-if="viewMode === 'phone'"
-            class="grid gap-2 transition-all duration-300"
-            :class="isPanelOpen
-              ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-4'
-              : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6'"
+            class="grid gap-2 transition-all duration-200"
+            :style="{ gridTemplateColumns: `repeat(auto-fill, minmax(${Math.round(cardWidth * 0.75)}px, 1fr))` }"
           >
             <div
               v-for="(dev, idx) in visibleDevices"
@@ -478,9 +479,6 @@ function getAppBadgeBg(iconType: string) {
             <div class="flex items-center gap-2">
               <SlidersHorizontal class="h-4 w-4 text-violet-600 dark:text-violet-400" />
               <span class="font-bold text-sm text-slate-900 dark:text-white">操作</span>
-              <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/30">
-                {{ onlineCount }}/{{ totalCount }}
-              </span>
             </div>
             
             <div class="flex items-center gap-1">
@@ -543,57 +541,8 @@ function getAppBadgeBg(iconType: string) {
                 </button>
               </div>
 
-              <!-- 来源单选胶囊群 + 显示离线开关 -->
-              <div class="flex items-center justify-between gap-1">
-                <!-- 来源胶囊 -->
-                <div class="flex items-center rounded-xl border border-slate-200/80 bg-slate-100/80 dark:border-white/10 dark:bg-black/20 p-0.5 text-[11px]">
-                  <button
-                    type="button"
-                    class="rounded-lg px-2 py-0.5 font-medium transition-all cursor-pointer"
-                    :class="sourceFilter === 'all'
-                      ? 'bg-white text-slate-950 shadow-xs font-semibold dark:bg-white/15 dark:text-white'
-                      : 'text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white'"
-                    @click="sourceFilter = 'all'"
-                  >
-                    全部
-                  </button>
-                  <button
-                    type="button"
-                    class="flex items-center gap-0.5 rounded-lg px-1.5 py-0.5 font-medium transition-all cursor-pointer"
-                    :class="sourceFilter === 'auto'
-                      ? 'bg-white text-slate-950 shadow-xs font-semibold dark:bg-white/15 dark:text-white'
-                      : 'text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white'"
-                    @click="sourceFilter = 'auto'"
-                  >
-                    <Usb class="h-2.5 w-2.5 text-cyan-600 dark:text-cyan-400" />
-                    直连
-                  </button>
-                  <button
-                    type="button"
-                    class="flex items-center gap-0.5 rounded-lg px-1.5 py-0.5 font-medium transition-all cursor-pointer"
-                    :class="sourceFilter === 'manual'
-                      ? 'bg-white text-slate-950 shadow-xs font-semibold dark:bg-white/15 dark:text-white'
-                      : 'text-slate-500 hover:text-slate-950 dark:text-slate-400 dark:hover:text-white'"
-                    @click="sourceFilter = 'manual'"
-                  >
-                    <Wifi class="h-2.5 w-2.5 text-violet-600 dark:text-violet-400" />
-                    无线
-                  </button>
-                </div>
-
-                <!-- 显示离线开关 -->
-                <label class="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer select-none">
-                  <Switch
-                    :model-value="showOffline"
-                    aria-label="显示离线设备"
-                    @update:model-value="(v) => showOffline = !!v"
-                  />
-                  <span>离线</span>
-                </label>
-              </div>
-
               <!-- 视图模式切换（剔除紧凑阵列，仅保留手机卡片与手机视图） -->
-              <div class="flex items-center justify-between pt-1">
+              <div class="flex items-center justify-between pt-0.5">
                 <span class="text-slate-600 dark:text-slate-400">视图模式</span>
                 <div class="flex items-center rounded-xl border border-slate-200/80 bg-slate-100/80 dark:border-white/10 dark:bg-black/20 p-0.5 text-xs">
                   <button
@@ -622,12 +571,89 @@ function getAppBadgeBg(iconType: string) {
                   </button>
                 </div>
               </div>
+
+              <!-- ====== 滑动调节组：手机大小、投屏码率、画质 ====== -->
+              <div class="space-y-3 pt-2">
+                <!-- 1. 手机大小滑动条 -->
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-medium text-slate-700 dark:text-slate-300">手机大小</span>
+                    <span class="font-mono text-[11px] font-semibold text-violet-600 dark:text-violet-400">
+                      {{ phoneScale }}% ({{ cardWidth }}px)
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="70"
+                    max="140"
+                    step="5"
+                    v-model.number="phoneScale"
+                    class="w-full h-1.5 rounded-lg appearance-none cursor-pointer bg-slate-200 dark:bg-white/15 accent-violet-600"
+                  />
+                  <div class="flex justify-between text-[10px] text-slate-400">
+                    <span class="cursor-pointer hover:text-violet-600" @click="phoneScale = 75">紧凑 75%</span>
+                    <span class="cursor-pointer hover:text-violet-600" @click="phoneScale = 100">标准 100%</span>
+                    <span class="cursor-pointer hover:text-violet-600" @click="phoneScale = 130">超大 130%</span>
+                  </div>
+                </div>
+
+                <!-- 2. 投屏码率滑动条 -->
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-medium text-slate-700 dark:text-slate-300">投屏码率</span>
+                    <span class="font-mono text-[11px] font-semibold text-violet-600 dark:text-violet-400">
+                      {{ bitrateMbps }} Mbps
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="2"
+                    max="16"
+                    step="1"
+                    v-model.number="bitrateMbps"
+                    class="w-full h-1.5 rounded-lg appearance-none cursor-pointer bg-slate-200 dark:bg-white/15 accent-violet-600"
+                  />
+                  <div class="flex justify-between text-[10px] text-slate-400">
+                    <span class="cursor-pointer hover:text-violet-600" @click="bitrateMbps = 2">2M 流畅</span>
+                    <span class="cursor-pointer hover:text-violet-600" @click="bitrateMbps = 8">8M 超清</span>
+                    <span class="cursor-pointer hover:text-violet-600" @click="bitrateMbps = 16">16M 极致</span>
+                  </div>
+                </div>
+
+                <!-- 3. 投屏画质滑动条 -->
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-medium text-slate-700 dark:text-slate-300">投屏质量</span>
+                    <span class="font-mono text-[11px] font-semibold text-violet-600 dark:text-violet-400">
+                      {{ qualityPercent }}% · {{ qualityLabel }}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="50"
+                    max="100"
+                    step="5"
+                    v-model.number="qualityPercent"
+                    class="w-full h-1.5 rounded-lg appearance-none cursor-pointer bg-slate-200 dark:bg-white/15 accent-violet-600"
+                  />
+                  <div class="flex justify-between text-[10px] text-slate-400">
+                    <span class="cursor-pointer hover:text-violet-600" @click="qualityPercent = 60">720P</span>
+                    <span class="cursor-pointer hover:text-violet-600" @click="qualityPercent = 80">1080P</span>
+                    <span class="cursor-pointer hover:text-violet-600" @click="qualityPercent = 100">100% 原画</span>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- ====== 模块 2：编号设备显隐小方块选择区 ====== -->
             <div class="space-y-2 pb-3 border-b border-slate-200/80 dark:border-white/10">
               <div class="flex items-center justify-between">
-                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">设备显隐</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">设备显隐</span>
+                  <span class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/30">
+                    {{ onlineCount }}/{{ totalCount }}
+                  </span>
+                </div>
                 <div class="flex items-center gap-1.5 text-[11px]">
                   <button
                     type="button"
