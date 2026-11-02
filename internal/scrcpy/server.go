@@ -23,6 +23,16 @@ type ServerConfig struct {
 	AudioCodec string // 当前仅支持 aac，便于网页播放和 MP4 封装
 }
 
+// QualityPercentToMaxSize maps the home action panel's quality percentage to
+// the scrcpy max-size contract. 100% keeps the original stream resolution.
+func QualityPercentToMaxSize(percent int) int {
+	if percent <= 0 || percent >= 100 {
+		return 0
+	}
+	const base = 1080
+	return base * percent / 100
+}
+
 // DefaultConfig 返回适合 web 投屏 + 操作的默认参数。
 func DefaultConfig(serial string) ServerConfig {
 	return ServerConfig{

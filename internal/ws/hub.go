@@ -128,6 +128,7 @@ func (h *Hub) resolveActionMode(requested string) string {
 type deviceStreamConfig struct {
 	bitRate int
 	maxFPS  int
+	maxSize int
 }
 
 // VideoFrame is an encoded frame exactly as it arrived from the active scrcpy
@@ -270,7 +271,17 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	bitrate, _ := strconv.Atoi(r.URL.Query().Get("bitrate"))
 	maxFps, _ := strconv.Atoi(r.URL.Query().Get("max_fps"))
-	if bitrate > 0 || maxFps > 0 {
+	quality := r.URL.Query().Get("quality")
+	var maxSize int
+	if quality != "" {
+		parsedQuality, err := strconv.Atoi(quality)
+		if err != nil || parsedQuality < 50 || parsedQuality > 100 {
+			http.Error(w, "quality must be an integer from 50 to 100", http.StatusBadRequest)
+			return
+		}
+		maxSize = scrcpy.QualityPercentToMaxSize(parsedQuality)
+	}
+	if bitrate > 0 || maxFps > 0 || quality != "" {
 		h.deviceConfigsMu.Lock()
 		cfg := h.deviceConfigs[serial]
 		if bitrate > 0 {
@@ -279,6 +290,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		if maxFps > 0 {
 			cfg.maxFPS = maxFps
 		}
+		cfg.maxSize = maxSize
 		h.deviceConfigs[serial] = cfg
 		h.deviceConfigsMu.Unlock()
 	}
@@ -377,6 +389,9 @@ func (h *Hub) startSessionOnce(serial string, forcePush bool) (*session, *handsh
 		}
 		if pref.maxFPS > 0 {
 			cfg.MaxFPS = pref.maxFPS
+		}
+		if pref.maxSize >= 0 {
+			cfg.MaxSize = pref.maxSize
 		}
 	}
 	h.deviceConfigsMu.Unlock()

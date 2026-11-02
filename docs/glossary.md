@@ -46,7 +46,7 @@
 | 手机卡片视图 | 手机卡片、卡片视图、甲板、3D全息 | `frontend/src/components/device/DeviceCard.vue` (`viewMode === 'deck'`)；首页三种视图之一，采用真实手机拟物卡片展示设备遥测（温度、电量）与当前运行应用，在熄屏或黑屏锁屏时展示已锁定状态，不挂载实时投屏流，点击整机可直达投屏，与 `compact`、`phone` 并列 |
 | 首页手机视图 | 手机视图、第三视图、手机样式视图、手机墙、首页多设备投屏、紧密设备墙 | `frontend/src/components/home/HomePhoneView.vue`；首页三种视图之一，以紧密设备墙规格挂载实时画面（小/中/大/铺满同档位同宽同高，相邻横纵间距统一 2px，画面黑底 contain 等比居中黑边填充、不拉伸不裁图，黑边不发触控），由右侧批量操作面板内真实设备编号小方块选择器统一控制显隐，支持页面全屏，与 `deck`、`compact` 并列 |
 | 手机视图统一格 | 统一格、同宽同高手机格子、紧密设备格 | `frontend/src/utils/phoneGrid.ts` 与 `frontend/src/components/home/HomePhoneView.vue`；首页手机视图在小/中/大/铺满各档位所使用的等宽等高规格与 2px 间隙体系，横屏、长屏与旋转均保持卡片尺寸恒定，视口内黑底等比 contain 居中显示 |
-| 批量操作面板 | 批量面板、右侧面板、右侧操作面板、右侧批量面板 | `frontend/src/components/home/BatchOperationPanel.vue` 与 `frontend/src/components/home/batch/*`；位于设备卡片主展示区右侧（预留专属空间不遮挡设备卡片，窄屏自然流式堆叠），按职责组件化拆分面板壳、编号设备显隐选择区、批量勾选、离散按键动作、显示设置与逐台结果反馈 |
+| 操作面板 | 批量操作面板、批量面板、右侧面板、右侧操作面板 | `frontend/src/components/home/ActionPanel.vue`；位于设备卡片主展示区右侧，支持展开与极窄收起态，收纳搜索、视图切换、投屏参数调节、编号设备显隐、批量目标与图标动作，作为首页统一控制入口 |
 | 显示离线设备 | 显示离线、离线过滤开关 | `frontend/src/composables/useHomeFilter.ts`；首页控制胶囊开关，默认关闭（仅展示 `state === 'device'` 设备），开启时在搜索与编号生成前纳入离线与未授权设备，本地持久化布尔配置 |
 | 设备编号小方块选择器 | 编号小方块、编号显隐、数字网格 | `frontend/src/components/home/batch/BatchDeviceGrid.vue`；批量面板内替代旧分页与显隐弹窗的数字网格选择区，按 serial 字典序稳定编号（01..N），不伪造 60 台，点选编号切换设备显隐，提供“全显”与“只显已选” |
 | 技能市场 | 技能列表、APP 自动化技能 | `frontend/src/components/ai-integration/SkillMarket.vue` |

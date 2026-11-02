@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   CheckCircle2,
-  EyeOff,
   Globe,
   Loader2,
   Smartphone,
@@ -9,12 +8,9 @@ import {
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useFullscreen } from '@vueuse/core'
 import AppHeader from '@/components/layout/AppHeader.vue'
-import FloatingPlayer from '@/components/player/FloatingPlayer.vue'
 import HomeAuroraBackground from '@/components/home/HomeAuroraBackground.vue'
-import HomeControlCapsule from '@/components/home/HomeControlCapsule.vue'
 import HomePhoneView from '@/components/home/HomePhoneView.vue'
-import BatchOperationPanel from '@/components/home/BatchOperationPanel.vue'
-import DeviceGridItem from '@/components/device/DeviceGridItem.vue'
+import ActionPanel from '@/components/home/ActionPanel.vue'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -29,60 +25,33 @@ import { useDeviceStore } from '@/stores/devices'
 import { useHomePhoneView } from '@/composables/useHomePhoneView'
 import { useDeviceSelection } from '@/composables/useDeviceSelection'
 import { useDeviceBatch } from '@/composables/useDeviceBatch'
-import { useHomeFilter } from '@/composables/useHomeFilter'
-import { useDeviceGridVirtual } from '@/composables/useDeviceGridVirtual'
+import {
+  type HomeViewMode,
+  normalizeHomeViewMode,
+} from '@/composables/usePlayerSettings'
 import { toast } from 'vue-sonner'
 
-type ViewMode = 'deck' | 'compact' | 'phone'
+type ViewMode = HomeViewMode
 
 const store = useDeviceStore()
-const isDevelopment = import.meta.env.DEV
-const floatingWindows = ref<string[]>([])
-const focusedSerial = ref<string | null>(null)
 
 // 页面全屏控制
 const { isFullscreen: isPageFs, toggle: togglePageFs } = useFullscreen()
 
-// 视图布局：支持 deck | compact | phone
 const VIEW_MODE_KEY = 'mywebscrcpy.view_mode'
-const rawViewMode = localStorage.getItem(VIEW_MODE_KEY)
-const viewMode = ref<ViewMode>(
-  (rawViewMode === 'deck' || rawViewMode === 'compact' || rawViewMode === 'phone')
-    ? rawViewMode
-    : 'deck',
-)
+const viewMode = ref<ViewMode>(normalizeHomeViewMode(localStorage.getItem(VIEW_MODE_KEY)))
 
 function setViewMode(mode: ViewMode) {
   viewMode.value = mode
   localStorage.setItem(VIEW_MODE_KEY, mode)
 }
 
-function openFloating(serial: string) {
-  if (!floatingWindows.value.includes(serial)) {
-    floatingWindows.value.push(serial)
-  }
-  focusedSerial.value = serial
-}
-
-function closeFloating(serial: string) {
-  floatingWindows.value = floatingWindows.value.filter(s => s !== serial)
-  if (focusedSerial.value === serial) {
-    focusedSerial.value = floatingWindows.value[floatingWindows.value.length - 1] || null
-  }
-}
-
-function focusFloating(serial: string) {
-  focusedSerial.value = serial
-}
-
 const onlineCount = computed(() => {
   return store.devices.filter(d => d.state === 'device').length
 })
 
-// 首页专属过滤：默认仅显示在线设备，开启后包含离线/未授权设备
-const { showOffline, filterOnlineDevices } = useHomeFilter()
 const homeFilteredDevices = computed(() => {
-  return filterOnlineDevices(store.filtered, showOffline.value)
+  return store.filtered.filter(d => d.state === 'device')
 })
 
 // 手机视图及三视图显隐状态管理
@@ -94,23 +63,10 @@ const {
   toggleDeviceVisibility,
   showAllDevices,
   showOnlySelected,
-  setDashSize,
 } = useHomePhoneView(() => homeFilteredDevices.value)
 
-// 设备网格虚拟滚动：紧凑视图窗口化渲染可视区行，支撑 500+ 设备流畅滚动
-const compactGridEl = ref<HTMLElement | null>(null)
-
-// 紧凑网格实际渲染的设备集合
-const gridDevices = computed(() => visibleDevices.value)
-
-const compactVirtual = useDeviceGridVirtual({
-  devices: () => gridDevices.value,
-  viewMode: () => 'compact',
-  gridEl: () => compactGridEl.value,
-})
-
 // 批量面板折叠状态
-const isBatchPanelOpen = ref(false)
+const isPanelOpen = ref(true)
 
 // 当前选择范围（三视图严格统一仅允许操作可见设备，隐藏设备不接受新动作）
 const currentScopeDevices = computed(() => {
@@ -131,7 +87,7 @@ const {
 
 // 切换筛选、切换离线显示或切换视图时，清空选择，避免操作隐藏设备
 watch(
-  [() => store.keyword, () => store.sourceFilter, showOffline, viewMode],
+  [() => store.keyword, viewMode],
   () => {
     clearSelection()
   },
@@ -174,6 +130,34 @@ async function handleBatchAction(action: 'back' | 'home' | 'app_switch') {
 
   await runBatch(validTargets, action, deviceMap)
 }
+
+// 同步操作状态
+const isSyncActive = ref(false)
+
+function handleToggleSync() {
+  if (store.mockEnabled) {
+    toast.error('当前处于 Mock 模拟状态，无法启用同步操作')
+    return
+  }
+  if (selectedSerials.value.length === 0) {
+    toast.error('请先勾选需要参与同步操作的设备')
+    return
+  }
+  isSyncActive.value = !isSyncActive.value
+  if (isSyncActive.value) {
+    toast.success(`已开启同步操作：对主控设备的操作将实时同步至已选的 ${selectedSerials.value.length} 台设备`)
+  }
+  else {
+    toast.info('已关闭同步操作')
+  }
+}
+
+watch(selectedSerials, (serials) => {
+  if (serials.length === 0 && isSyncActive.value) {
+    isSyncActive.value = false
+    toast.info('已选择设备已清空，同步操作已自动关闭')
+  }
+})
 
 // 添加设备对话框状态
 const isAddDialogOpen = ref(false)
@@ -238,41 +222,17 @@ onUnmounted(() => {
     <!-- 主工作区：单列铺满主视口，批量面板为独立浮动图层不占用宽度 -->
     <div class="relative z-10 flex-1 w-full min-w-0">
       <main class="w-full min-w-0 px-4 sm:px-6 py-5 space-y-5">
-        <!-- 顶部搜索/筛选控制中枢：占满整行，不受右侧面板影响 -->
-        <HomeControlCapsule
-          :keyword="store.keyword"
-          :source-filter="store.sourceFilter"
-          :show-offline="showOffline"
-          :view-mode="viewMode"
-          :total-count="store.devices.length"
-          :online-count="onlineCount"
-          :is-development="isDevelopment"
-          :mock-enabled="store.mockEnabled"
-          :is-panel-open="isBatchPanelOpen"
-          :selected-count="selectedSerials.length"
-          @update:keyword="store.keyword = $event"
-          @update:source-filter="store.sourceFilter = $event"
-          @update:show-offline="showOffline = $event"
-          @update:view-mode="setViewMode"
-          @toggle-panel="isBatchPanelOpen = !isBatchPanelOpen"
-          @refresh="store.load(true)"
-          @open-add="openAddDialog"
-          @toggle-mock="store.setMock($event)"
-        />
-
-        <!-- 主内容区域：左侧设备卡片区域 + 右侧预留批量面板位置（不遮挡卡片，桌面端并排预留；窄屏就近置顶） -->
-        <div class="flex flex-col lg:flex-row items-start gap-5 w-full min-w-0">
-          <!-- 批量操作面板（窄屏通过 order-first 就近置于上方避免长滚动，桌面端 lg:order-last 置于右侧预留空间且顶端对齐） -->
-          <BatchOperationPanel
-            v-if="isBatchPanelOpen"
-            class="w-full lg:w-80 xl:w-88 shrink-0 order-first lg:order-last"
-            :is-open="isBatchPanelOpen"
+        <!-- 主内容区域：左侧设备卡片区域 + 右侧全局操作面板 -->
+        <div class="flex flex-col items-start gap-4 lg:flex-row lg:items-stretch">
+          <ActionPanel
+            v-model:isOpen="isPanelOpen"
+            :keyword="store.keyword"
             :view-mode="viewMode"
             :devices="homeFilteredDevices"
             :hidden-serials="hiddenSerials"
             :selected-serials="selectedSerials"
             :display-name="store.displayName"
-            :selected-count="selectedSerials.length"
+            :online-count="onlineCount"
             :is-all-selected="isAllSelected"
             :has-selectable="selectableDevices.length > 0"
             :batch-running="batchRunning"
@@ -281,16 +241,20 @@ onUnmounted(() => {
             :batch-summary="batchSummary"
             :dash-size="dashSize"
             :is-page-fullscreen="isPageFs"
-            @update:is-open="isBatchPanelOpen = $event"
+            :is-sync-active="isSyncActive"
+            @update:keyword="store.keyword = $event"
+            @update:view-mode="setViewMode"
             @toggle-hide="toggleDeviceVisibility"
             @show-all="showAllDevices"
             @show-only-selected="showOnlySelected(selectedSerials)"
             @select-all="selectAll"
             @clear-selection="clearSelection"
             @trigger-action="handleBatchAction"
+            @toggle-sync="handleToggleSync"
             @cancel-batch="cancelBatch"
             @clear-results="clearResults"
-            @update:dash-size="setDashSize"
+            @refresh="store.load(true)"
+            @open-add="openAddDialog"
             @toggle-page-fullscreen="togglePageFs"
           />
 
@@ -347,7 +311,7 @@ onUnmounted(() => {
                 {{ store.keyword ? '没有找到匹配的设备' : '未检测到在线设备' }}
               </h3>
               <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400 max-w-md">
-                {{ store.keyword ? '请尝试更换搜索关键字，或重置分类筛选' : (showOffline ? '请通过 USB 数据线连接 Android 设备，或点击上方「连接设备」输入 IP 端口' : '当前无在线可用设备。可开启上方「显示离线」查看所有设备，或连接 USB 手机') }}
+                {{ store.keyword ? '请尝试更换搜索关键字' : '请通过 USB 数据线连接 Android 设备，或点击「连接设备」输入 IP 端口' }}
               </p>
               <div class="mt-6 flex items-center gap-3">
                 <Button
@@ -368,26 +332,6 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <!-- 所有设备已隐藏状态（当有匹配设备但均被编号面板隐藏时，甲板与紧凑视图友好呈现恢复入口） -->
-            <div
-              v-else-if="visibleDevices.length === 0 && viewMode === 'compact'"
-              class="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 dark:border-white/10 bg-white/40 dark:bg-white/[0.01] p-12 text-center"
-            >
-              <EyeOff class="h-8 w-8 text-slate-400 mb-2" />
-              <h3 class="text-sm font-bold text-slate-900 dark:text-white">所有设备已隐藏</h3>
-              <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">可通过右侧面板点击「全显」或单机编号方块重新显示</p>
-              <Button
-                variant="outline"
-                size="sm"
-                class="mt-4 rounded-xl cursor-pointer"
-                @click="showAllDevices"
-              >
-                全显
-              </Button>
-            </div>
-
-            <!-- 视图模式一：手机卡片视图 (Deck View) 与 视图模式三：手机实时投屏视图 (Phone View) -->
-            <!-- 统一采用同宽同高紧密设备墙规格与 2px 间隙体系，两边切换尺寸完全对齐零断层 -->
             <HomePhoneView
               v-else-if="viewMode === 'deck' || viewMode === 'phone'"
               :view-mode="viewMode"
@@ -400,34 +344,6 @@ onUnmounted(() => {
               @show-all="showAllDevices"
             />
 
-            <!-- 视图模式二：紧凑型设备阵列视图 (Compact View) 铺满全屏 -->
-            <div
-              v-else
-              ref="compactGridEl"
-              class="relative"
-              :style="{ height: compactVirtual.totalSize.value + 'px' }"
-            >
-              <div
-                v-for="vi in compactVirtual.virtualItems.value"
-                :key="String(vi.key)"
-                class="absolute left-0 top-0 grid w-full gap-4"
-                :style="{
-                  transform: 'translateY(' + vi.start + 'px)',
-                  gridTemplateColumns: 'repeat(' + compactVirtual.cols.value + ', minmax(0, 1fr))',
-                }"
-              >
-                <DeviceGridItem
-                  v-for="d in compactVirtual.rows.value[vi.index]"
-                  :key="d.serial"
-                  :device="d"
-                  view-mode="compact"
-                  :selected="selectedSerials.includes(d.serial)"
-                  :mock-enabled="store.mockEnabled"
-                  @toggle-select="toggleSelect"
-                  @open-floating="openFloating"
-                />
-              </div>
-            </div>
           </div>
         </div>
       </main>
@@ -512,15 +428,5 @@ onUnmounted(() => {
       </DialogContent>
     </Dialog>
 
-    <!-- 独立悬浮小窗 -->
-    <FloatingPlayer
-      v-for="(s, idx) in floatingWindows"
-      :key="s"
-      :serial="s"
-      :z-index="focusedSerial === s ? 60 : 50 + idx"
-      :offset-index="idx"
-      @close="closeFloating(s)"
-      @focus="focusFloating(s)"
-    />
   </div>
 </template>

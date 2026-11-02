@@ -30,6 +30,11 @@ import DashTile from '@/components/dashboard/DashTile.vue'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import type { Device } from '@/api/devices'
+import {
+  HOME_PHONE_BASE_WIDTH,
+  type HomeViewMode,
+  usePlayerSettings,
+} from '@/composables/usePlayerSettings'
 import { useDeviceStore } from '@/stores/devices'
 import { computeMonitorGrid } from '@/utils/monitorGrid'
 import { getPhoneTileDimensionClasses } from '@/utils/phoneGrid'
@@ -45,7 +50,7 @@ const props = withDefaults(
     serialToNumberMap: Map<string, string>
     selectedSerials: string[]
     mockEnabled?: boolean
-    viewMode?: 'deck' | 'phone'
+    viewMode?: HomeViewMode
   }>(),
   {
     viewMode: 'phone',
@@ -59,13 +64,26 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const deviceStore = useDeviceStore()
+const { homePhoneScale } = usePlayerSettings()
+const cardWidth = computed(() => Math.round(HOME_PHONE_BASE_WIDTH * homePhoneScale.value / 100))
+const cardHeight = computed(() => Math.round(cardWidth.value * 1.88))
 const containerRef = ref<HTMLElement | null>(null)
 const { width: containerWidth, height: containerHeight } = useElementSize(containerRef)
 
 const dimensionConfig = computed(() => getPhoneTileDimensionClasses(props.dashSize))
 
 const gridStyle = computed(() => {
-  if (props.dashSize !== 'fit' || props.visibleDevices.length === 0)
+  if (props.dashSize === 'fit') {
+    return {
+      display: 'grid',
+      gridTemplateColumns: `repeat(auto-fill, minmax(${cardWidth.value}px, 1fr))`,
+      gridAutoRows: `${cardHeight.value}px`,
+      gap: '2px',
+      width: '100%',
+    }
+  }
+
+  if (props.visibleDevices.length === 0)
     return {}
 
   const N = props.visibleDevices.length
@@ -204,7 +222,7 @@ function openPlayer(serial: string) {
         :key="d.serial"
         class="group relative flex flex-col rounded-[2px] border border-neutral-800 bg-slate-900 overflow-hidden transition-all duration-150 select-none"
         :class="[
-          dimensionConfig.cardClass,
+          props.dashSize === 'fit' ? 'min-h-0 min-w-0' : dimensionConfig.cardClass,
           selectedSerials.includes(d.serial) ? 'ring-1 ring-violet-500 border-violet-500' : 'hover:border-neutral-600',
         ]"
       >

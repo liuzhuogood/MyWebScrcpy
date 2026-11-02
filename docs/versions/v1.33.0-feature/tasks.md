@@ -25,8 +25,11 @@
 - ✅ **T4 [版本资产文档]**：
   - 完成 `version.md`、`design.md`、`tasks.md` 的体系化更新。
 
-- ⏳ **T5 [正式实施与主干合入 (待授权启动)]**：
-  - 废弃 `HomeControlCapsule.vue`，重构 `ActionPanel.vue`，改造 `HomeView.vue`；
-  - 全量自动化测试回归（Go 后端测试 + 前端生产构建 + 原型隔离校验）；
+- ✅ **T5 [正式实施与主干合入]**：
+  - 移除首页顶部控制横条引用，改造 `HomeView.vue` 为左侧设备区 + 右侧全局操作面板；
+  - 新增 `ActionPanel.vue`，收纳搜索、卡片/手机视图切换、手机大小/投屏码率/投屏质量调节、编号显隐与纯图标批量动作（含同步操作开关）；
+  - 后端 `/ws` 新增受控 `quality=50..100` 参数并映射到 scrcpy `max_size`，投屏码率沿用既有 `bitrate` 契约，补齐单测覆盖；
+  - 视图模式归一为 `deck | phone`，旧 `compact` 本地值回落 `deck`，卡片/手机视图在铺满模式下接入连续尺寸；
+  - 清理旧版 `HomeControlCapsule.vue`、`BatchOperationPanel.vue` 及 `batch/` 冗余组件；
   - 更新 `docs/glossary.md` 术语字典；
-  - 原子提交并推进。
+  - 完成 Go 全量单测、前端生产构建与类型检查。
