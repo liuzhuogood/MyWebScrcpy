@@ -250,8 +250,8 @@ fn recover(app: &AppHandle, label: &str, restore_frame: bool) -> Result<(), Stri
     render_opacity(&window, 100)?;
     player.opacity = 100;
     if restore_frame {
-        window.set_decorations(true).map_err(|e| e.to_string())?;
-        player.borderless = false;
+        window.set_decorations(false).map_err(|e| e.to_string())?;
+        player.borderless = true;
     }
     eprintln!("[Desktop] 小窗 {label} 已恢复");
     Ok(())

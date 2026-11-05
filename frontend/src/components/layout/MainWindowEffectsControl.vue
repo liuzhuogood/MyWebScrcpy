@@ -4,7 +4,6 @@ import { Blend, MousePointer2, Pin, PinOff } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
-import { Switch } from '@/components/ui/switch'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -88,15 +87,6 @@ function enableClickThrough() {
           >
             {{ op }}%
           </Button>
-        </div>
-        <div class="flex items-center justify-between gap-4 text-sm pt-1">
-          <span>无边框</span>
-          <Switch
-            :model-value="effects.state.value.borderless"
-            :disabled="effects.busy.value"
-            aria-label="主窗口无边框"
-            @update:model-value="effects.setBorderless(!!$event)"
-          />
         </div>
         <p v-if="effects.shortcut.value" class="text-xs text-muted-foreground">
           按 {{ effects.shortcut.value }} 或菜单“窗口 → 恢复主窗口”可恢复

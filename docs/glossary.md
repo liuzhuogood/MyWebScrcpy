@@ -34,22 +34,24 @@
 | 小窗顶栏 | 小窗工具条、投屏工具栏 | `frontend/src/components/player/DevicePlayer.vue` 内的工具栏;自动隐藏至小横条，鼠标悬停小横条自动滑出显示，亦可用恢复小窗快捷键或菜单“视图 → 恢复所有小窗”恢复 |
 | 小窗窗口设置 | 透明度菜单、鼠标穿透菜单 | `frontend/src/components/player/WindowEffectsControl.vue`;原生小窗的透明度、鼠标穿透与无边框开关 |
 | 主窗口窗口设置 | 主窗口透明度菜单、主窗口效果 | `frontend/src/components/layout/MainWindowEffectsControl.vue` 与原生菜单栏“窗口”菜单;主窗口置顶、透明度调节、鼠标穿透与恢复默认 |
-| 无边框 | 隐藏系统标题栏 | 原生投屏小窗的系统窗口装饰开关,独立于小窗顶栏;系统设置的“投屏设置”保存新小窗默认值,小窗窗口设置与投屏设置侧栏控制当前窗口 |
+| 无边框 | 隐藏系统标题栏 | 原生投屏小窗默认无系统边框；窗口、设置与菜单中的切换入口已移除。小窗工具栏为半透明覆盖层，显隐不改变视频尺寸；主窗口保持原有系统标题栏覆盖外观 |
 | 投屏设置 | 播放器设置 | 系统设置页签 `frontend/src/components/system/PlayerSettingsContent.vue` 保存默认配置;投屏详情页侧栏 `frontend/src/components/player/PlayerSettingsPanel.vue` 调整当前投屏 |
 | 右侧抽屉 | 抽屉、侧栏、侧边栏 | 投屏详情页右侧自适应面板,收纳检查器、文件管理、模板管理、ADB 终端(`frontend/src/components/player/DevicePlayer.vue`) |
 | 播放器检查器 | 检查器、取色器、放大镜 | 右侧抽屉内:取色坐标、像素放大镜、XML 树、XPath 与元素定位联动 |
 | 检查模式 | 拾取模式、检查开关 | 检查器顶栏的显式开关,仅开启后拦截画面输入;打开面板默认可操控设备,完成取色、元素选择或 OCR 框选后自动退出 |
 | ADB 终端 | Web Shell、交互式终端 | 右侧抽屉内 xterm.js 终端,真实 PTY 分配 |
 | 空闲自动熄屏 | 熄屏设置、空闲熄屏、自动熄屏 | 系统设置 → 通用设置中的开关，默认关闭；开启后按设备计算，无投屏、ADB 终端、命令及设备操作满 10 分钟后由后端自动熄屏，后台遥测与屏幕状态轮询不刷新空闲计时；`internal/idlescreen`，`GET/PUT /api/system/idle-screen` |
-| 系统配置 | 设置、系统设置、系统配置弹窗 | 首页入口弹窗 `frontend/src/components/system/SystemConfigDialog.vue`,页签:主题 / ADB / Python / 模板匹配 / OCR 服务 |
+| 系统配置 | 设置、系统设置、系统配置弹窗 | 首页入口弹窗 `frontend/src/components/system/SystemConfigDialog.vue`,页签:通用设置 / 投屏设置 / 服务 / 依赖（内含模板匹配与 OCR）；本次打开期间保留面板实例，切换不重建投屏控件 |
 | 大屏磁贴 | 磁贴、tile | `frontend/src/components/dashboard/DashTile.vue` |
-| 手机卡片视图 | 手机卡片、卡片视图、甲板、3D全息 | `frontend/src/components/home/HomePhoneView.vue` (`viewMode === 'deck'`)；首页卡片与手机两种视图之一，采用手机拟物卡片展示设备遥测（温度、电量）与当前运行应用，熄屏或锁屏时展示已锁定状态，不挂载实时投屏流；卡片按序列号正序靠左紧凑排列（8px 间隙），点击卡片打开投屏小窗，支持鼠标拉框批量框选 |
+| 手机卡片视图 | 手机卡片、卡片视图、甲板、3D全息 | `frontend/src/components/home/HomePhoneView.vue` (`viewMode === 'deck'`)；首页卡片与手机两种视图之一，采用手机拟物卡片展示设备遥测（温度、电量）与当前运行应用，熄屏或锁屏时展示已锁定状态，不挂载实时投屏流；卡片按持久化拖动顺序靠左紧凑排列（8px 间隙），默认按 serial 排序；底部仅显示真实 serial/地址，不展示连接类型标志，点击卡片打开投屏小窗，支持鼠标拉框批量框选 |
 | 首页手机视图 | 手机视图、第三视图、手机样式视图、手机墙、首页多设备投屏、紧密设备墙 | `frontend/src/components/home/HomePhoneView.vue`；首页卡片与手机两种视图之一，以紧密设备墙规格挂载实时画面（同档位同宽同高，相邻横纵间距统一 8px，画面黑底 contain 等比居中黑边填充、不拉伸不裁图；首页为实时预览，左键拖动框选、单击打开小窗，直接操控在小窗/详情页进行），设备显隐由 iOS 悬浮底栏的编号小方块控制，支持页面全屏 |
 | 手机视图统一格 | 统一格、同宽同高手机格子、紧密设备格 | `frontend/src/utils/phoneGrid.ts` 与 `frontend/src/components/home/HomePhoneView.vue`；首页手机视图在小/中/大/铺满各档位所使用的等宽等高规格与 2px 间隙体系，横屏、长屏与旋转均保持卡片尺寸恒定，视口内黑底等比 contain 居中显示 |
-| iOS 悬浮底栏 | 悬浮底栏、底栏、操作栏、Dock栏、浮动药丸栏、控制中心、操作面板、批量操作面板、批量面板、右侧面板 | `frontend/src/components/home/HomeIosDockBar.vue`；首页底部居中悬浮 Liquid Glass 胶囊操作栏，整合操作、视图、设备（支持鼠标原生框选）与更多服务四组 iOS 浮动卡片 Sheet，支持最小化、设备编号区域紧凑展开、滚动框选；无遮罩、Esc 收起且外部点击收起并透传，取代原右侧固定操作侧栏（ActionPanel） |
+| iOS 悬浮底栏 | 悬浮底栏、底栏、操作栏、Dock栏、浮动药丸栏、控制中心、操作面板、批量操作面板、批量面板、右侧面板 | `frontend/src/components/home/HomeIosDockBar.vue`；首页底部居中悬浮 Liquid Glass 胶囊操作栏，整合操作、视图、设备（支持鼠标原生框选）与更多服务四组 iOS 浮动卡片 Sheet，支持最小化、设备编号区域紧凑展开、滚动框选；无遮罩、点击外部或操作手机保持展开，关闭按钮/胶囊切换/Esc 可收起；群控作为独立模式开关，导航及锁屏作用于已选在线设备，取代原右侧固定操作侧栏（ActionPanel） |
 | 显示离线设备 | 显示离线、离线过滤开关 | `frontend/src/composables/useHomeFilter.ts`；首页控制胶囊开关，默认关闭（仅展示 `state === 'device'` 设备），开启时在搜索与编号生成前纳入离线与未授权设备，本地持久化布尔配置 |
-| 设备编号小方块选择器 | 编号小方块、编号显隐、数字网格、设备矩阵 | `frontend/src/components/home/HomeIosDockBar.vue`（【设备】浮动卡片）；按 serial 字典序稳定编号（01..N），纳管离线设备，点选可切换已选状态，支持鼠标拉框批量框选与 Ctrl/Cmd 增量选择 |
-| 设备添加与发现 | 扫码配对、范围扫描、常态扫描 | `frontend/src/components/home/AddDeviceDialog.vue` 与 `internal/device/discovery.go`；二维码按 Android 无线调试机制由电脑生成、手机扫码，IP 范围支持末段缩写和多端口，持续扫描可停止、关闭对话框或租约断开后停止；`/api/device-discovery/*` |
+| 设备编号小方块选择器 | 编号小方块、编号显隐、数字网格、设备矩阵 | `frontend/src/components/home/HomeIosDockBar.vue`（【设备】浮动卡片）；与卡片共用设备 Store 的全量 serial→编号映射（含离线设备与编号空位）；拖动重排持久化后重新编号，选择身份仍为 serial；支持点选、拉框、Ctrl/Cmd 增量选择与同一右键菜单 |
+| 设备添加与发现 | 扫码配对、范围扫描、常态扫描 | `frontend/src/components/home/AddDeviceDialog.vue` 与 `internal/device/discovery.go`；二维码按 Android 无线调试机制由电脑生成、手机扫码，弹窗打开预生成真实会话二维码，终止/过期清空；IP 起止各四段输入，真实网卡地址与掩码给出默认范围，最多8个范围/合计1024个地址/8个端口，原单范围API保留，持续扫描可停止、关闭对话框或租约断开后停止；`/api/device-discovery/*` |
+| 设备可见性 | 只显示已选、显示全部、隐藏、显示隐藏设备 | `useHomePhoneView.ts`；只显示已选是临时 serial 集合筛选，“显示全部”仅解除此筛选；右键隐藏写入本地持久偏好，“显示隐藏设备”恢复持久隐藏；删除仅移除手动设备条目，不删除手机数据，自动发现设备不开放删除 |
+| 设备右键菜单 | 卡片右键、编号右键 | `DeviceContextMenu.vue`；卡片与底栏编号均按 serial 执行隐藏、手动条目删除、打开小窗、进入详情；离线设备不执行投屏，Mock 不派发真机操作 |
 | 投屏音量 | 小窗声音、音量调节 | `frontend/src/components/player/AudioControl.vue` 与 `frontend/src/scrcpy/audio.ts`；调节本地播放增益并保留静音，不改变设备系统音量 |
 | 技能市场 | 技能列表、APP 自动化技能 | `frontend/src/components/ai-integration/SkillMarket.vue` |
 

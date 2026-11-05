@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Loader2, Monitor, Moon, Sun } from 'lucide-vue-next'
+import { Monitor, Moon, Sun } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -48,7 +48,7 @@ async function handleServiceSave() {
   <Dialog v-model:open="open">
     <DialogContent class="flex h-[min(720px,90dvh)] flex-col gap-0 overflow-hidden p-0 sm:max-w-2xl" :aria-describedby="undefined">
       <DialogHeader class="shrink-0 border-b px-5 py-4"><DialogTitle>系统设置</DialogTitle></DialogHeader>
-      <Tabs v-model="tab" class="flex min-h-0 flex-1 flex-col gap-0">
+      <Tabs v-model="tab" :unmount-on-hide="false" class="flex min-h-0 flex-1 flex-col gap-0">
         <div class="shrink-0 px-5 pt-4">
           <TabsList class="grid h-auto w-full grid-cols-4">
             <TabsTrigger value="general">通用设置</TabsTrigger>
@@ -57,7 +57,7 @@ async function handleServiceSave() {
             <TabsTrigger value="dependencies">依赖</TabsTrigger>
           </TabsList>
         </div>
-        <div v-if="tab !== 'dependencies'" class="min-h-0 flex-1 overflow-y-auto px-5 py-5 [scrollbar-gutter:stable]">
+        <div v-show="tab !== 'dependencies'" class="min-h-0 flex-1 overflow-y-auto px-5 py-5 [scrollbar-gutter:stable]">
           <TabsContent value="general" class="m-0 min-h-56 space-y-4">
             <p class="text-sm font-medium">外观</p>
             <div class="grid grid-cols-3 gap-3" role="group" aria-label="主题">
@@ -164,10 +164,10 @@ async function handleServiceSave() {
           <Button
             v-if="tab === 'service'"
             size="sm"
+            class="bg-blue-600 text-white hover:bg-blue-700"
             :disabled="desktopConfig.saving.value || serviceConfig.saving.value"
             @click="handleServiceSave"
           >
-            <Loader2 v-if="desktopConfig.saving.value || serviceConfig.saving.value" class="size-3.5 animate-spin mr-1" />
             保存
           </Button>
         </div>

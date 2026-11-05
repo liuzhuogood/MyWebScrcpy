@@ -272,16 +272,13 @@ async function openFloatingWindow(e?: Event) {
       return
     }
     try {
-      const HEADER_HEIGHT = 56
       const targetW = playerSettings.floatingSize.value === 'compact' ? 320 : playerSettings.floatingSize.value === 'large' ? 440 : 380
       const baseH = playerSettings.floatingSize.value === 'compact' ? 680 : playerSettings.floatingSize.value === 'large' ? 880 : 780
-      const targetH = baseH + HEADER_HEIGHT
       await invoke('open_device_window', {
         serial: props.device.serial,
         title: store.displayName(props.device),
         width: targetW,
-        height: targetH,
-        borderless: playerSettings.borderless.value,
+        height: baseH,
       })
       return
     }

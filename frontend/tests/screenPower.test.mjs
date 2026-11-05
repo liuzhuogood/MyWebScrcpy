@@ -191,3 +191,18 @@ test('opening a player never guesses an unknown keyguard result', async t => {
   mockRequests(t, [completed, screen(true), completed, { data: { screenOn: true, screenLocked: null } }])
   await assert.rejects(wakeAndUnlockOnOpen('phone', new AbortController().signal), /无法确认设备锁屏状态/)
 })
+
+test('lock uses KEYCODE_SLEEP and verifies screen off even if already asleep', async t => {
+ const { requestScreenLock } = await import('../src/scrcpy/screenPower.ts')
+ const calls = mockRequests(t, [completed, screen(false), completed, screen(false)])
+ await requestScreenLock('c:5555',new AbortController().signal)
+ await requestScreenLock('c:5555',new AbortController().signal)
+ assert.ok(calls.filter(c=>c.method==='POST').every(c=>JSON.stringify(c.body.args) === JSON.stringify(['shell','input','keyevent','KEYCODE_SLEEP'])))
+ assert.ok(calls.every(c=>c.url.endsWith('serial=c%3A5555')))
+})
+test('lock rejects failed commands and unknown screen state', async t => {
+ const { requestScreenLock } = await import('../src/scrcpy/screenPower.ts')
+ mockRequests(t,[{data:{status:'failed',exit_code:1}},completed,{data:{screenOn:null}}])
+ await assert.rejects(requestScreenLock('x',new AbortController().signal))
+ await assert.rejects(requestScreenLock('x',new AbortController().signal),/无法确认/)
+})

@@ -159,13 +159,6 @@ pub fn toggle_always_on_top(app: &AppHandle) {
     }
 }
 
-pub fn toggle_borderless(app: &AppHandle) {
-    let current = get_state(app).borderless;
-    if let Err(e) = set_borderless_internal(app, !current) {
-        eprintln!("[Desktop] 切换主窗口无边框失败: {e}");
-    }
-}
-
 pub fn toggle_click_through(app: &AppHandle) {
     let current = get_state(app).click_through;
     if let Err(e) = set_click_through_internal(app, !current) {

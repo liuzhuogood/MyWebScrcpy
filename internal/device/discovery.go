@@ -52,10 +52,11 @@ type discoveryJob struct {
 	done    chan struct{}
 }
 type ScanRequest struct {
-	Range           string `json:"range"`
-	Ports           []int  `json:"ports"`
-	Continuous      bool   `json:"continuous"`
-	IntervalSeconds int    `json:"interval_seconds"`
+	Range           string   `json:"range"`
+	Ranges          []string `json:"ranges"`
+	Ports           []int    `json:"ports"`
+	Continuous      bool     `json:"continuous"`
+	IntervalSeconds int      `json:"interval_seconds"`
 }
 
 func NewDiscovery(m *Manager) *Discovery {
@@ -187,6 +188,36 @@ func (d *Discovery) found(j *discoveryJob, address string) {
 }
 
 func scanAddresses(req ScanRequest) ([]string, error) {
+	if len(req.Ranges) == 0 {
+		return scanRangeAddresses(req)
+	}
+	if req.Range != "" || len(req.Ranges) > 8 {
+		return nil, fmt.Errorf("请使用单个范围或最多 8 个范围")
+	}
+	var addresses []string
+	seen := map[string]bool{}
+	for _, input := range req.Ranges {
+		single := req
+		single.Range = input
+		single.Ranges = nil
+		values, err := scanRangeAddresses(single)
+		if err != nil {
+			return nil, err
+		}
+		for _, address := range values {
+			if !seen[address] {
+				seen[address] = true
+				addresses = append(addresses, address)
+			}
+		}
+	}
+	if len(addresses) > 1024*len(req.Ports) {
+		return nil, fmt.Errorf("所有范围合计最多 1024 个地址")
+	}
+	return addresses, nil
+}
+
+func scanRangeAddresses(req ScanRequest) ([]string, error) {
 	input := strings.NewReplacer("到", "-", "至", "-", "~", "-").Replace(strings.TrimSpace(req.Range))
 	ends := strings.Split(input, "-")
 	if len(ends) > 2 {
@@ -417,6 +448,35 @@ func (d *Discovery) pair(ctx context.Context, j *discoveryJob, name, password st
 	}
 }
 func (d *Discovery) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /api/device-discovery/networks", func(w http.ResponseWriter, r *http.Request) {
+		networks := []ScanNetwork{}
+		interfaces, err := net.Interfaces()
+		if err != nil {
+			log.Printf("[Discovery] Read interfaces failed: %v", err)
+			http.Error(w, "读取网卡失败", 500)
+			return
+		}
+		for _, iface := range interfaces {
+			if iface.Flags&net.FlagUp == 0 || iface.Flags&(net.FlagLoopback|net.FlagPointToPoint) != 0 {
+				continue
+			}
+			addrs, err := iface.Addrs()
+			if err != nil {
+				log.Printf("[Discovery] Read interface %s failed: %v", iface.Name, err)
+				continue
+			}
+			for _, addr := range addrs {
+				if network, ok := addr.(*net.IPNet); ok {
+					if value, valid := networkScanRange(iface.Name, network); valid {
+						networks = append(networks, value)
+					}
+				}
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		json.NewEncoder(w).Encode(networks)
+	})
 	mux.HandleFunc("POST /api/device-discovery/scan", func(w http.ResponseWriter, r *http.Request) {
 		var req ScanRequest
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096)).Decode(&req); err != nil {

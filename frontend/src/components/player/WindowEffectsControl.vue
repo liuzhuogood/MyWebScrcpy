@@ -4,23 +4,20 @@ import { Blend, MousePointer2 } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Slider } from '@/components/ui/slider'
-import { Switch } from '@/components/ui/switch'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   opacity: number
   clickThrough: boolean
-  borderless?: boolean
   shortcut: string | null
   busy: boolean
-}>(), { borderless: false })
+}>()
 const emit = defineEmits<{
   opacity: [value: number]
   clickThrough: [enabled: boolean]
-  borderless: [enabled: boolean]
   restore: []
   activeChange: [active: boolean]
 }>()
@@ -60,15 +57,11 @@ function enableClickThrough() {
       <Slider :model-value="value" :min="0" :max="100" :step="1" :disabled="!shortcut" aria-label="小窗透明度" @update:model-value="updateOpacity" />
       <p v-if="shortcut" class="text-xs text-muted-foreground">{{ shortcut }} 恢复小窗</p>
       <p v-else class="text-xs text-destructive">恢复快捷键不可用</p>
-      <div class="flex items-center justify-between gap-4 text-sm">
-        <span>无边框</span>
-        <Switch :model-value="borderless" :disabled="busy" aria-label="无边框" @update:model-value="emit('borderless', !!$event)" />
-      </div>
       <div class="flex items-center justify-between gap-2">
         <Button variant="outline" size="sm" :disabled="busy || !shortcut" @click="clickThrough ? emit('clickThrough', false) : (confirmOpen = true)">
           <MousePointer2 class="h-4 w-4" />{{ clickThrough ? '解除穿透' : '鼠标穿透' }}
         </Button>
-        <Button variant="ghost" size="sm" :disabled="busy || (opacity === 100 && !clickThrough && !borderless)" @click="emit('restore')">恢复</Button>
+        <Button variant="ghost" size="sm" :disabled="busy || (opacity === 100 && !clickThrough)" @click="emit('restore')">恢复</Button>
       </div>
     </PopoverContent>
   </Popover>

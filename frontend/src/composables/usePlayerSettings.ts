@@ -1,4 +1,4 @@
-import { useStorage } from '@vueuse/core'
+import { createSharedComposable, useStorage } from '@vueuse/core'
 
 export type OpenMode = 'floating' | 'page'
 export type FloatingSize = 'compact' | 'normal' | 'large'
@@ -31,10 +31,10 @@ export function clampPercentage(value: unknown, min: number, max: number, fallba
   return Math.min(max, Math.max(min, Math.round(parsed)))
 }
 
-export function usePlayerSettings() {
+// Share one storage subscription set across cards, windows and settings in this WebView.
+export const usePlayerSettings = createSharedComposable(() => {
   const openMode = useStorage<OpenMode>('player-open-mode', 'floating')
   const floatingSize = useStorage<FloatingSize>('player-floating-size', 'normal')
-  const borderless = useStorage<boolean>('player-borderless', false)
   const autoAudio = useStorage<boolean>('player-auto-audio', false)
   const bitrate = useStorage<number>('player-bitrate', 4000000)
   const maxFps = useStorage<number>('player-max-fps', 30)
@@ -78,7 +78,6 @@ export function usePlayerSettings() {
   return {
     openMode,
     floatingSize,
-    borderless,
     autoAudio,
     bitrate,
     maxFps,
@@ -92,4 +91,4 @@ export function usePlayerSettings() {
     touchVisible,
     boxesVisible,
   }
-}
+})

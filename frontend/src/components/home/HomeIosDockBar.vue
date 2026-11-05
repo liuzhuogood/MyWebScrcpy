@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref } from 'vue'
-import { onClickOutside, onKeyStroke } from '@vueuse/core'
+import { onKeyStroke } from '@vueuse/core'
 import {
   ArrowLeft,
   ChevronDown,
@@ -13,7 +13,7 @@ import {
   Maximize2,
   Minimize2,
   Plus,
-  Radio,
+  Lock,
   Search,
   Settings,
   SlidersHorizontal,
@@ -21,6 +21,8 @@ import {
   Sparkles,
   X,
 } from 'lucide-vue-next'
+import DeviceContextMenu from './DeviceContextMenu.vue'
+import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -43,6 +45,9 @@ const props = withDefaults(
     keyword: string
     viewMode: HomeViewMode
     devices: Device[]
+    numberMap: Map<string, string>
+    hiddenCount?: number
+    mockEnabled?: boolean
     selectedSerials: string[]
     onlineCount: number
     isAllSelected?: boolean
@@ -80,7 +85,7 @@ const emit = defineEmits<{
   (e: 'toggleSelect', serial: string): void
   (e: 'selectAll'): void
   (e: 'clearSelection'): void
-  (e: 'triggerAction', action: 'back' | 'home' | 'app_switch'): void
+  (e: 'triggerAction', action: 'back' | 'home' | 'app_switch' | 'lock'): void
   (e: 'toggleSync'): void
   (e: 'cancelBatch'): void
   (e: 'clearResults'): void
@@ -89,6 +94,10 @@ const emit = defineEmits<{
   (e: 'openAi'): void
   (e: 'openShortcuts'): void
   (e: 'openDocs'): void
+  (e: 'showOnlySelected'): void
+  (e: 'showAll'): void
+  (e: 'restoreHidden'): void
+  (e: 'deviceAction', action: string, serial: string): void
 }>()
 
 const settings = usePlayerSettings()
@@ -96,8 +105,6 @@ const { homePhoneScale, homeQuality, homeBitrate: bitrateValue } = settings
 
 // 当前激活展开的标签页（null 表示收起浮动卡片）
 const activeTab = ref<TabKey | null>(null)
-const dockRootRef = ref<HTMLElement | null>(null)
-onClickOutside(dockRootRef, closePanel)
 onKeyStroke('Escape', event => {
   // Let input methods and nested dialogs consume Escape first.
   queueMicrotask(() => {
@@ -134,12 +141,11 @@ function closePanel() {
   activeTab.value = null
 }
 
-// 编号设备生成 (稳定按 serial 排序，包含离线设备)
+// Use the full store mapping, including offline gaps, after filtering.
 const numberedDevices = computed(() => {
   return [...props.devices]
-    .sort((a, b) => a.serial.localeCompare(b.serial))
-    .map((device, index) => {
-      const label = index + 1 < 10 ? `0${index + 1}` : String(index + 1)
+    .map((device) => {
+      const label = props.numberMap.get(device.serial) ?? ''
       return { device, label, serial: device.serial }
     })
 })
@@ -274,7 +280,7 @@ function handleDeviceClick(serial: string) {
 </script>
 
 <template>
-  <div ref="dockRootRef" class="fixed bottom-0 left-0 right-0 pointer-events-none z-50 flex flex-col items-center justify-end pb-5 px-4">
+  <div class="fixed bottom-0 left-0 right-0 pointer-events-none z-50 flex flex-col items-center justify-end pb-5 px-4">
     <!-- iOS 风格浮动弹层卡片 (Floating Sheet Card) -->
     <Transition
       enter-active-class="transition duration-250 ease-out"
@@ -382,32 +388,13 @@ function handleDeviceClick(serial: string) {
                 <span class="text-xs">多任务</span>
               </Button>
 
-              <Button
-                size="sm"
-                :variant="isSyncActive ? 'default' : 'secondary'"
-                class="h-9 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all border border-slate-200/60 shadow-xs"
-                :class="isSyncActive
-                  ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-md ring-2 ring-purple-500/30 border-transparent'
-                  : 'bg-white/70 text-slate-700 hover:border-purple-400 hover:bg-purple-50/50 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:border-purple-500/30 dark:hover:bg-purple-950/20'"
-                :disabled="selectedSerials.length === 0 || batchRunning"
-                title="群控：操作一台手机时，把操作实时同步到其他已选手机"
-                @click="emit('toggleSync')"
-              >
-                <Radio class="h-4 w-4" :class="{ 'animate-pulse text-white': isSyncActive, 'text-purple-600 dark:text-purple-400': !isSyncActive }" />
-                <span class="text-xs font-medium">{{ isSyncActive ? '群控中' : '群控' }}</span>
-              </Button>
+              <Button variant="secondary" size="sm" class="h-9 rounded-xl" :disabled="selectedSerials.length === 0 || batchRunning" @click="emit('triggerAction', 'lock')"><Lock class="h-4 w-4" /><span class="text-xs">锁屏</span></Button>
             </div>
           </div>
 
-          <!-- 群控状态提示条 -->
-          <div
-            v-if="isSyncActive"
-            class="flex items-center justify-between rounded-xl bg-purple-50/80 p-2.5 text-xs text-purple-700 dark:bg-purple-950/40 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40"
-          >
-            <div class="flex items-center gap-2">
-              <span class="h-2 w-2 rounded-full bg-purple-500 animate-pulse" />
-              <span>已开启群控：触控操作任意已选设备将实时同步至其余 {{ Math.max(0, selectedSerials.length - 1) }} 台设备</span>
-            </div>
+          <div class="flex items-center justify-between border-t pt-3">
+            <label for="group-control-mode" class="text-sm">群控</label>
+            <Switch id="group-control-mode" :model-value="isSyncActive" :disabled="selectedSerials.length === 0 || batchRunning" @update:model-value="emit('toggleSync')" />
           </div>
 
           <!-- 批量执行状态反馈 -->
@@ -578,6 +565,11 @@ function handleDeviceClick(serial: string) {
             </Button>
           </div>
 
+          <div class="flex items-center gap-2">
+            <Button variant="outline" size="sm" :disabled="!selectedSerials.length" @click="emit('showOnlySelected')">只显示已选</Button>
+            <Button variant="outline" size="sm" @click="emit('showAll')">显示全部</Button>
+            <Button v-if="hiddenCount" variant="ghost" size="sm" @click="emit('restoreHidden')">显示隐藏设备</Button>
+          </div>
           <!-- 01..N 设备编号方块矩阵（支持原生拖拽拉框多选） -->
           <div
             ref="gridContainerRef"
@@ -598,9 +590,8 @@ function handleDeviceClick(serial: string) {
               }"
             />
 
+            <DeviceContextMenu v-for="item in numberedDevices" :key="item.serial" :device="item.device" :mock-enabled="mockEnabled" @action="emit('deviceAction', $event, item.serial)">
             <button
-              v-for="item in numberedDevices"
-              :key="item.serial"
               type="button"
               :data-device-serial="item.serial"
               class="relative flex items-center justify-center border font-mono font-bold transition-all cursor-pointer select-none"
@@ -618,6 +609,7 @@ function handleDeviceClick(serial: string) {
                 :class="item.device.state === 'device' ? 'bg-emerald-400' : 'bg-amber-400'"
               />
             </button>
+            </DeviceContextMenu>
           </div>
         </div>
 

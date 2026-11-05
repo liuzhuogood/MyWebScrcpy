@@ -30,7 +30,7 @@ import {
   Pin,
   PinOff,
 } from 'lucide-vue-next'
-import { computed, nextTick, onMounted, onUnmounted, ref, useId, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, useId, watch } from 'vue'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { toast } from 'vue-sonner'
@@ -131,6 +131,7 @@ const isGui = computed(() => {
 const captureHostId = `capture-actions-${useId()}`
 
 const p = usePlayer(serial.value, {
+  embedded: props.embedded,
   onOp: (type, data) => {
     recordOp(serial.value, type, data)
   },
@@ -174,7 +175,7 @@ const isAudioOpen = ref(false)
 let nativeToolbarTimer: ReturnType<typeof setTimeout> | undefined
 
 const isNativeToolbarActive = computed(() => isNativeToolbarHovered.value || isWindowEffectsActive.value || isMoreMenuOpen.value || isAudioOpen.value)
-const toolbarVisible = computed(() => nativePlayerWindow ? isNativeToolbarActive.value : localToolbarVisible.value)
+const toolbarVisible = computed(() => nativePlayerWindow ? isNativeToolbarActive.value : props.embedded ? isNativeToolbarActive.value : localToolbarVisible.value)
 const isAlwaysOnTop = ref(false)
 
 function onToolbarEnter() {
@@ -229,15 +230,13 @@ async function toggleAlwaysOnTop() {
   }
 }
 
-watch(toolbarVisible, async visible => {
-  if (!visible && !nativePlayerWindow) {
+watch(toolbarVisible, visible => {
+  if (!visible && !props.embedded) {
     toast.info('顶栏已隐藏', {
       description: '点击窗口顶部把手可重新显示。',
       duration: 5000,
     })
   }
-  await nextTick()
-  window.dispatchEvent(new Event('resize'))
 })
 
 watch([p.videoSize, sidePanel], ([size, side]) => {
@@ -252,7 +251,7 @@ onMounted(() => {
   if (props.embedded && isGui.value) {
     void initAlwaysOnTop()
   }
-  if (nativePlayerWindow) {
+  if (props.embedded) {
     isNativeToolbarHovered.value = true
     nativeToolbarTimer = setTimeout(() => {
       isNativeToolbarHovered.value = false
@@ -519,12 +518,10 @@ defineExpose({ handleEscape })
           v-if="nativePlayerWindow"
           :opacity="windowEffects.player.value?.opacity ?? 100"
           :click-through="windowEffects.player.value?.clickThrough ?? false"
-          :borderless="windowEffects.player.value?.borderless ?? false"
           :shortcut="windowEffects.shortcut.value"
           :busy="windowEffects.busy.value"
           @opacity="windowEffects.setOpacity"
           @click-through="windowEffects.setClickThrough"
-          @borderless="windowEffects.setBorderless"
           @restore="windowEffects.restore"
           @active-change="isWindowEffectsActive = $event"
         />
@@ -803,8 +800,9 @@ defineExpose({ handleEscape })
     <SplitLayout :class="{ 'capture-layout': captureOpen }" :open="sidePanel !== null">
       <template #main><div class="flex h-full min-h-0 flex-col overflow-hidden p-0" :class="embedded ? 'bg-black' : 'bg-transparent gap-3 overflow-auto'">
       <main
+        data-player-viewport
         class="relative flex min-w-0 flex-1 items-center justify-center p-3 sm:p-5"
-        :class="embedded ? 'min-h-0 bg-black !p-0' : 'min-h-80'"
+        :class="embedded ? 'min-h-0 bg-black !p-0' : 'min-h-0 !py-8 sm:!py-10'"
         @dragenter="drop.onDragEnter"
         @dragover="drop.onDragOver"
         @dragleave="drop.onDragLeave"
@@ -924,13 +922,11 @@ defineExpose({ handleEscape })
         :touch-visible="touchVisible" :boxes-visible="tm.showBoxes.value"
         :auto-unlock-on-wake="p.autoUnlockOnWake.value"
         :clipboard-sync="p.clipboardSync.value"
-        :borderless="nativePlayerWindow ? windowEffects.player.value?.borderless : undefined"
         :window-busy="windowEffects.busy.value"
         @update:touch-visible="setTouchVisible"
         @update:boxes-visible="tm.setShow"
         @update:auto-unlock-on-wake="p.autoUnlockOnWake.value = $event"
         @update:clipboard-sync="p.clipboardSync.value = $event"
-        @update:borderless="windowEffects.setBorderless"
         @close="settingsOpen = false"
       />
       </div>

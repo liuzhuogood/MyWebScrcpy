@@ -30,6 +30,10 @@ export class ScrcpyDecoder {
   private decoder: VideoDecoder | null = null
   private codec: VideoCodec = 'h264'
   private configured = false
+  private generation = 0
+  private sessionId: string | undefined
+  private lastPresentedPTS: number | null = null
+  private needsKeyFrame = true
   private frameCount = 0
   private lastFrameTime = 0
   private decodeErrorCount = 0
@@ -55,18 +59,26 @@ export class ScrcpyDecoder {
     return 'avc1.42E01F'
   }
 
-  configure(codec: string, width: number, height: number) {
+  configure(codec: string, width: number, height: number, sessionId?: string) {
+    if (sessionId === undefined || sessionId !== this.sessionId)
+      this.lastPresentedPTS = null
+    this.sessionId = sessionId
     this.codec = (codec === 'h265' || codec === 'av1' ? codec : 'h264')
-    this.canvas.width = width
-    this.canvas.height = height
+    if (this.canvas.width !== width) this.canvas.width = width
+    if (this.canvas.height !== height) this.canvas.height = height
 
     if (typeof VideoDecoder === 'undefined')
       throw new Error('此浏览器不支持 WebCodecs，请用 Chrome 94+')
 
     this.close()
+    const generation = this.generation
     this.decoder = new VideoDecoder({
-      output: frame => this.onFrame(frame),
+      output: frame => {
+        if (generation !== this.generation) { frame.close(); return }
+        this.onFrame(frame)
+      },
       error: (e) => {
+        if (generation !== this.generation) return
         console.error('[decoder] error', e)
         this.notifyDecodeError(e, true)
       },
@@ -101,6 +113,9 @@ export class ScrcpyDecoder {
     if (!this.decoder)
       return
     // 每次 config 都重新 configure：旋转时服务端重建编码器，旧 decoder 解不了新输出
+    // A repeated in-stream config starts a new encoder/replay epoch. The
+    // first config after reconnect keeps the same-session presentation floor.
+    if (this.configured) this.lastPresentedPTS = null
     const description = this.toAVCC(payload)
     if (this.decoder.state === 'configured')
       this.decoder.reset()
@@ -110,6 +125,7 @@ export class ScrcpyDecoder {
       optimizeForLatency: true,
     })
     this.configured = true
+    this.needsKeyFrame = true
     console.log('[decoder] decoder 已 configure, description size=', description.length)
   }
 
@@ -199,6 +215,7 @@ export class ScrcpyDecoder {
   private decodeChunk(payload: Uint8Array, isKey: boolean, pts: number) {
     if (!this.configured || !this.decoder || this.decoder.state !== 'configured')
       return
+    if (this.needsKeyFrame && !isKey) return
     // media 包可能是 AVCC 或 Annex-B；Annex-B 转长度前缀后喂给 WebCodecs
     let chunkData: Uint8Array<ArrayBuffer> = payload as Uint8Array<ArrayBuffer>
     if (
@@ -215,6 +232,7 @@ export class ScrcpyDecoder {
     })
     try {
       this.decoder.decode(chunk)
+      this.needsKeyFrame = false
     }
     catch (e) {
       this.notifyDecodeError(e, false)
@@ -256,14 +274,24 @@ export class ScrcpyDecoder {
     const w = view.getUint32(0, false)
     const h = view.getUint32(4, false)
     console.log(`[decoder] 尺寸变化: ${w}x${h}`)
+    this.lastPresentedPTS = null
     this.canvas.width = w
     this.canvas.height = h
     this.onDeviceResize?.(w, h)
   }
 
   private onFrame(frame: VideoFrame) {
-    this.ctx.drawImage(frame, 0, 0, this.canvas.width, this.canvas.height)
-    frame.close()
+    // Bootstrap decoding may start at an IDR several seconds before the
+    // current image. Decode those dependencies without presenting them again.
+    if (this.lastPresentedPTS !== null && frame.timestamp < this.lastPresentedPTS) {
+      frame.close()
+      return
+    }
+    try {
+      this.ctx.drawImage(frame, 0, 0, this.canvas.width, this.canvas.height)
+      this.lastPresentedPTS = frame.timestamp
+    }
+    finally { frame.close() }
     this.frameCount++
     this.decodeErrorCount = 0
     this.decodeErrorNotified = false
@@ -278,6 +306,8 @@ export class ScrcpyDecoder {
   }
 
   close() {
+    this.generation++
+    this.needsKeyFrame = true
     if (this.decoder) {
       if (this.decoder.state !== 'closed')
         this.decoder.close()

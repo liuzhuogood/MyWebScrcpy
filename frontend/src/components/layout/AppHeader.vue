@@ -134,7 +134,7 @@ onMounted(() => {
 <template>
   <!-- 无边框模式下的顶部感应区：鼠标悬停自动呼出导航栏 -->
   <div
-    v-if="effects.state.value.borderless"
+    v-if="!embedded && effects.state.value.borderless"
     class="fixed top-0 inset-x-0 h-3 z-50 pointer-events-auto"
     @mouseenter="isHeaderHovered = true"
   />
@@ -145,7 +145,7 @@ onMounted(() => {
     class="z-40 border-b transition-all duration-200 select-none"
     :class="[
       glass ? 'liquid-glass' : 'border-slate-200/80 bg-white/80 dark:border-white/10 dark:bg-slate-950/60 backdrop-blur-2xl shadow-xs',
-      effects.state.value.borderless
+      embedded ? 'absolute inset-x-0 top-0 z-40 bg-white/60 dark:bg-slate-950/55' : effects.state.value.borderless
         ? [
             'fixed top-0 inset-x-0 shadow-md',
             isHeaderHovered ? 'translate-y-0 opacity-100 pointer-events-auto' : '-translate-y-full opacity-0 pointer-events-none',
