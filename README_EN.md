@@ -10,7 +10,7 @@ An optional desktop client adds independent mirroring windows with **always-on-t
 
 **Device List**
 
-![Device List](screenshots/device-list.jpg?v=20261106)
+![Device List](screenshots/device-list-20261106.jpg)
 
 **Desktop Client: Always-on-top, Opacity & Click-through (macOS close-ups)**
 
@@ -20,19 +20,19 @@ An optional desktop client adds independent mirroring windows with **always-on-t
 
 **Screen Mirroring & Control**
 
-![Screen Mirroring](screenshots/player.jpg?v=20261106)
+![Screen Mirroring](screenshots/player-20261106.jpg)
 
 **Player Inspector**
 
-![Player Inspector](screenshots/ui-inspector.jpg?v=20261106)
+![Player Inspector](screenshots/ui-inspector-20261106.jpg)
 
 **Multi-device Monitoring (detail)**
 
-![Multi-device Monitoring detail](screenshots/dashboard.jpg?v=20261106)
+![Multi-device Monitoring detail](screenshots/dashboard-20261106.jpg)
 
 **File Manager**
 
-![File Manager](screenshots/file-manager.jpg?v=20261106)
+![File Manager](screenshots/file-manager-20261106.jpg)
 
 ## Features
 
