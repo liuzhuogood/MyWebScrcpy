@@ -2,6 +2,8 @@
 
 An open-source Android device mirroring and control tool built with Go and WebCodecs. It provides live screen viewing, touch and keyboard input, and shared-storage management through a web browser. No dedicated app is required on the client side; connect the Android device to the host running MyWebScrcpy via ADB to get started.
 
+An optional desktop client adds independent mirroring windows with **always-on-top, adjustable opacity, and mouse click-through**, so you can keep device screens visible while working in other apps.
+
 [中文](README.md)
 
 ## Screenshots
@@ -9,6 +11,12 @@ An open-source Android device mirroring and control tool built with Go and WebCo
 **Device List**
 
 ![Device List](screenshots/device-list.jpg)
+
+**Desktop Client: Always-on-top, Opacity & Click-through (macOS close-ups)**
+
+| Main window effects | Mirroring window settings (pinned) |
+| --- | --- |
+| ![Main window opacity and mouse click-through](screenshots/desktop-window-effects.jpg) | ![Pinned mirroring window with opacity and click-through controls](screenshots/desktop-player-effects.jpg) |
 
 **Screen Mirroring & Control**
 
@@ -29,6 +37,7 @@ An open-source Android device mirroring and control tool built with Go and WebCo
 ## Features
 
 - Browser-based, no dedicated client app required
+- Optional desktop client with independent mirroring windows; both the main window and mirroring windows support always-on-top, 0–100% opacity, mouse click-through, and recovery shortcuts/menu actions
 - WebCodecs hardware decoding for low latency
 - H.264 / H.265 / AV1 codec support
 - Mouse control: tap, drag, scroll, right-click for back
@@ -90,6 +99,20 @@ For frontend development, run `pnpm --dir frontend dev` after installing depende
 The build script compiles the frontend into `web/dist/` before embedding it in the Go binary. Node.js is not required at runtime.
 
 Open the file manager from the player's “More” menu. It operates on the selected phone's shared `/storage/emulated/0` storage, so each player page remains bound to its own device in multi-device use.
+
+### Desktop Client
+
+Download desktop packages from [GitHub Releases](https://github.com/liuzhuogood/MyWebScrcpy/releases). See the [desktop guide](desktop/README.md) for build and launch instructions.
+
+| Feature | Main window | Independent mirroring window |
+| --- | --- | --- |
+| Always-on-top | Pin button in the header, or the native Window menu | Pin button in the window toolbar |
+| Opacity | Main window effects (主窗口效果) in the header | Window settings (窗口设置) in the toolbar |
+| Mouse click-through | Enable and confirm in Main window effects | Enable and confirm in Window settings |
+
+Opacity ranges from 0% (invisible) to 100% (opaque). Mouse click-through sends clicks to the application underneath the window. Combine these controls with always-on-top to view a device screen as a desktop overlay. Each window can be configured independently. Hover over the small bar at the top of a mirroring window to reveal its toolbar.
+
+Use the recovery shortcut shown in the panel—normally `Option + P` on macOS or `Alt + P` on Windows, with a `Control` / `Ctrl` variant if the first binding is occupied—to restore opacity and mouse input for the main window and all mirroring windows. The native Window menu and tray menu also provide Restore main window (恢复主窗口) and Restore all mirroring windows (恢复所有小窗). Mirroring-window opacity and click-through controls require an available recovery shortcut.
 
 ### Recording
 
