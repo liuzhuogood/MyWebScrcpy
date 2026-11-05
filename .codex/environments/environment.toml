@@ -9,3 +9,8 @@ script = "ls"
 name = "restart-service"
 icon = "run"
 command = "scripts/services.sh restart"
+
+[[actions]]
+name = "启动桌面开发版"
+icon = "run"
+command = "./scripts/start-desktop.sh"

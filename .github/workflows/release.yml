@@ -171,6 +171,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -181,27 +183,13 @@ jobs:
         with:
           path: artifacts
 
-      - name: Read version.md as release notes
+      - name: Prepare nonempty release notes for the tagged commit
         id: notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          NOTES_FILE=""
-          NOTES_SUFFIX=""
-          for suffix in feature fix; do
-            candidate="docs/versions/${TAG}-${suffix}/version.md"
-            if [ -f "$candidate" ]; then
-              NOTES_FILE="$candidate"
-              NOTES_SUFFIX="$suffix"
-              echo "Found release notes at $NOTES_FILE"
-              break
-            fi
-          done
-          if [ -z "$NOTES_FILE" ]; then
-            echo "::warning::No version.md found for ${TAG}-feature or ${TAG}-fix, falling back to auto-generated notes."
-          fi
-          echo "notes_file=${NOTES_FILE}" >> $GITHUB_OUTPUT
-          echo "notes_suffix=${NOTES_SUFFIX}" >> $GITHUB_OUTPUT
-          echo "use_version_md=$([ -n "$NOTES_FILE" ] && echo true || echo false)" >> $GITHUB_OUTPUT
+          node scripts/prepare-release-notes.mjs "$GITHUB_REF_NAME" --target HEAD --output release-notes.md
+          echo "notes_file=release-notes.md" >> "$GITHUB_OUTPUT"
 
       - name: Assemble desktop update manifest
         env:
@@ -211,25 +199,31 @@ jobs:
       - name: Select nine programs and the GUI update index
         run: node scripts/release-assets.mjs artifacts desktop-latest.json release-assets
 
-      - name: Create Release (with version.md)
-        if: steps.notes.outputs.use_version_md == 'true'
+      - name: Create or update Release with verified notes
         uses: softprops/action-gh-release@v3
         with:
-          body_path: docs/versions/${{ github.ref_name }}-${{ steps.notes.outputs.notes_suffix }}/version.md
+          body_path: release-notes.md
           files: |
             release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create Release (fallback, auto-generated)
-        if: steps.notes.outputs.use_version_md != 'true'
-        uses: softprops/action-gh-release@v3
-        with:
-          generate_release_notes: true
-          files: |
-            release-assets/*
+      - name: Verify published version and notes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --json tagName,body > release-metadata.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const release = JSON.parse(fs.readFileSync('release-metadata.json', 'utf8'));
+          const notes = fs.readFileSync('release-notes.md', 'utf8').trim();
+          const tag = process.env.GITHUB_REF_NAME;
+          const head = execFileSync('git', ['rev-parse', 'HEAD'], {encoding:'utf8'}).trim();
+          const target = execFileSync('git', ['rev-parse', `${tag}^{commit}`], {encoding:'utf8'}).trim();
+          if (!notes || release.tagName !== tag || release.body.trim() !== notes || head !== target) throw new Error('Release 版本、说明或目标提交不匹配');
+          console.log('Release tag, commit and body verified');
+          NODE
 
   docker:
     needs: [build, desktop, macos-dmg]

@@ -23,9 +23,7 @@ import {
   Usb,
   Wifi,
 } from 'lucide-vue-next'
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useElementSize } from '@vueuse/core'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DashTile from '@/components/dashboard/DashTile.vue'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -36,8 +34,6 @@ import {
   usePlayerSettings,
 } from '@/composables/usePlayerSettings'
 import { useDeviceStore } from '@/stores/devices'
-import { computeMonitorGrid } from '@/utils/monitorGrid'
-import { getPhoneTileDimensionClasses } from '@/utils/phoneGrid'
 import {
   type DashSize,
   isDeviceOnlineForStream,
@@ -59,47 +55,190 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: 'toggleSelect', serial: string): void
+  (e: 'update:selectedSerials', serials: string[]): void
+  (e: 'openFloating', serial: string): void
   (e: 'showAll'): void
 }>()
 
-const router = useRouter()
 const deviceStore = useDeviceStore()
 const { homePhoneScale } = usePlayerSettings()
 const cardWidth = computed(() => Math.round(HOME_PHONE_BASE_WIDTH * homePhoneScale.value / 100))
 const cardHeight = computed(() => Math.round(cardWidth.value * 1.88))
 const containerRef = ref<HTMLElement | null>(null)
-const { width: containerWidth, height: containerHeight } = useElementSize(containerRef)
 
-const dimensionConfig = computed(() => getPhoneTileDimensionClasses(props.dashSize))
+// 拉框选区可用高度：确保容器至少填满剩余视口高度，空旷区域同样可作为拖拽起点
+const surfaceMinHeight = ref(0)
+const BOTTOM_CLEARANCE = 120
 
-const gridStyle = computed(() => {
-  if (props.dashSize === 'fit') {
+function updateSurfaceMinHeight() {
+  const el = containerRef.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  const available = window.innerHeight - rect.top - BOTTOM_CLEARANCE
+  surfaceMinHeight.value = Math.max(0, Math.round(available))
+}
+
+onMounted(() => {
+  updateSurfaceMinHeight()
+  nextTick(updateSurfaceMinHeight)
+  window.addEventListener('resize', updateSurfaceMinHeight)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateSurfaceMinHeight)
+})
+
+watch(
+  () => [props.viewMode, props.visibleDevices.length, props.dashSize],
+  () => nextTick(updateSurfaceMinHeight),
+)
+
+// 卡片按序列号正序排列，与编号方块顺序保持一致
+const sortedDevices = computed(() => {
+  return [...props.visibleDevices].sort((a, b) => a.serial.localeCompare(b.serial))
+})
+
+// 容器布局样式：靠左排布，卡片之间小间距（8px），少数设备时靠左不拉伸
+const containerStyle = computed(() => {
+  if (props.viewMode === 'phone' && props.dashSize === 'fit') {
     return {
       display: 'grid',
       gridTemplateColumns: `repeat(auto-fill, minmax(${cardWidth.value}px, 1fr))`,
       gridAutoRows: `${cardHeight.value}px`,
-      gap: '2px',
+      gap: '8px',
       width: '100%',
     }
   }
 
-  if (props.visibleDevices.length === 0)
-    return {}
-
-  const N = props.visibleDevices.length
-  const W = containerWidth.value || window.innerWidth
-  const H = containerHeight.value || (window.innerHeight - 220)
-  const { rows, cols } = computeMonitorGrid(N, W, H)
-
+  // 默认 deck 卡片视图及常规模式：靠左紧凑排布
   return {
-    display: 'grid',
-    gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-    gridTemplateRows: `repeat(${rows}, minmax(0, 1fr))`,
-    gap: '2px',
-    height: '100%',
+    display: 'flex',
+    flexWrap: 'wrap' as const,
+    gap: '8px', // 紧凑小间距
+    justifyContent: 'flex-start', // 靠左对齐
+    alignItems: 'flex-start',
+    alignContent: 'flex-start',
     width: '100%',
+    minHeight: `${surfaceMinHeight.value}px`, // 填满剩余视口高度，空旷区域可拉框框选
   }
 })
+
+// 单卡片固定尺寸（与底部缩放滑块联动）
+const cardItemStyle = computed(() => {
+  if (props.viewMode === 'phone' && props.dashSize === 'fit') {
+    return {}
+  }
+  return {
+    width: `${cardWidth.value}px`,
+    height: `${cardHeight.value}px`,
+    flexShrink: 0,
+  }
+})
+
+// 鼠标拉框框选逻辑 (Marquee / Box Selection)：选区基于视口坐标，可覆盖整个屏幕
+const isDraggingMarquee = ref(false)
+const marqueeBox = ref<{ left: number; top: number; width: number; height: number } | null>(null)
+let dragStartX = 0
+let dragStartY = 0
+let initialSelectedAtDrag: string[] = []
+let isCtrlPressed = false
+let hasDraggedDistance = false
+
+function handleContainerMouseDown(e: MouseEvent) {
+  // 仅响应鼠标左键，且排除内部交互按钮（如 checkbox、按钮等）
+  // 手机视图为实时投屏画面，拖拽用于设备触控，不介入拉框框选
+  if (e.button !== 0 || !containerRef.value || props.viewMode !== 'deck') return
+  const target = e.target as HTMLElement
+  if (target.closest('button, a, input, select, textarea, [role="button"]')) {
+    return
+  }
+
+  // 视口坐标：选区可拖出容器边界，覆盖整个屏幕
+  dragStartX = e.clientX
+  dragStartY = e.clientY
+  isCtrlPressed = e.ctrlKey || e.metaKey
+  initialSelectedAtDrag = [...props.selectedSerials]
+  hasDraggedDistance = false
+
+  function onMouseMove(moveEvent: MouseEvent) {
+    const currentX = moveEvent.clientX
+    const currentY = moveEvent.clientY
+
+    const diffX = Math.abs(currentX - dragStartX)
+    const diffY = Math.abs(currentY - dragStartY)
+
+    if (!hasDraggedDistance && (diffX > 5 || diffY > 5)) {
+      hasDraggedDistance = true
+      isDraggingMarquee.value = true
+    }
+
+    if (hasDraggedDistance) {
+      const left = Math.min(currentX, dragStartX)
+      const top = Math.min(currentY, dragStartY)
+      const width = Math.abs(currentX - dragStartX)
+      const height = Math.abs(currentY - dragStartY)
+
+      marqueeBox.value = { left, top, width, height }
+
+      // 实时 AABB 碰撞检测（视口坐标，覆盖全屏范围内的卡片）
+      const cards = document.querySelectorAll<HTMLElement>('[data-device-serial]')
+      const selectedInBox = new Set<string>()
+
+      cards.forEach((card) => {
+        const cardRect = card.getBoundingClientRect()
+        const cardLeft = cardRect.left
+        const cardTop = cardRect.top
+        const cardRight = cardRect.right
+        const cardBottom = cardRect.bottom
+
+        const boxRight = left + width
+        const boxBottom = top + height
+
+        const intersects = !(left > cardRight || boxRight < cardLeft || top > cardBottom || boxBottom < cardTop)
+        if (intersects) {
+          const serial = card.dataset.deviceSerial
+          if (serial) selectedInBox.add(serial)
+        }
+      })
+
+      if (isCtrlPressed) {
+        const combined = new Set(initialSelectedAtDrag)
+        selectedInBox.forEach(s => combined.add(s))
+        emit('update:selectedSerials', Array.from(combined))
+      }
+      else {
+        emit('update:selectedSerials', Array.from(selectedInBox))
+      }
+    }
+  }
+
+  function onMouseUp() {
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+
+    if (hasDraggedDistance) {
+      setTimeout(() => {
+        hasDraggedDistance = false
+        isDraggingMarquee.value = false
+        marqueeBox.value = null
+      }, 80)
+    }
+    else {
+      isDraggingMarquee.value = false
+      marqueeBox.value = null
+    }
+  }
+
+  window.addEventListener('mousemove', onMouseMove)
+  window.addEventListener('mouseup', onMouseUp)
+}
+
+function handleCardClick(serial: string) {
+  if (isDraggingMarquee.value || hasDraggedDistance) {
+    return
+  }
+  emit('openFloating', serial)
+}
 
 // 判定设备是否黑屏休眠或处于锁屏状态
 function isLocked(d: Device): boolean {
@@ -174,10 +313,6 @@ function getAppVisual(iconType?: string) {
       return 'bg-sky-500/15 border-sky-500/30 text-sky-400'
   }
 }
-
-function openPlayer(serial: string) {
-  router.push({ name: 'player', query: { serial } })
-}
 </script>
 
 <template>
@@ -209,21 +344,37 @@ function openPlayer(serial: string) {
       </Empty>
     </div>
 
-    <!-- 手机视图卡片主体（顶端与右侧面板自然对齐） -->
+    <!-- 手机视图卡片主体（靠左紧凑排布，支持鼠标原生拉框框选） -->
     <div
       v-else
       ref="containerRef"
-      class="w-full flex-1 min-h-0"
-      :class="dimensionConfig.containerClass"
-      :style="gridStyle"
+      class="relative w-full flex-1 min-h-0 select-none"
+      :style="containerStyle"
+      @mousedown="handleContainerMouseDown"
     >
+      <!-- 鼠标拖拽框选半透明选区指示盒（视口级定位，可覆盖全屏） -->
+      <Teleport to="body">
+        <div
+          v-if="isDraggingMarquee && marqueeBox"
+          class="pointer-events-none fixed z-[9999] rounded-xl border-2 border-blue-500 bg-blue-500/20 backdrop-blur-[1px] transition-all duration-75 shadow-lg shadow-blue-500/15"
+          :style="{
+            left: `${marqueeBox.left}px`,
+            top: `${marqueeBox.top}px`,
+            width: `${marqueeBox.width}px`,
+            height: `${marqueeBox.height}px`,
+          }"
+        />
+      </Teleport>
+
       <div
-        v-for="d in visibleDevices"
+        v-for="d in sortedDevices"
         :key="d.serial"
-        class="group relative flex flex-col rounded-[2px] border border-neutral-800 bg-slate-900 overflow-hidden transition-all duration-150 select-none"
+        :data-device-serial="d.serial"
+        :style="cardItemStyle"
+        class="group relative flex flex-col rounded-2xl border border-neutral-800 bg-slate-900 overflow-hidden transition-all duration-150 select-none cursor-pointer"
         :class="[
-          props.dashSize === 'fit' ? 'min-h-0 min-w-0' : dimensionConfig.cardClass,
-          selectedSerials.includes(d.serial) ? 'ring-1 ring-violet-500 border-violet-500' : 'hover:border-neutral-600',
+          props.dashSize === 'fit' && props.viewMode === 'phone' ? 'min-h-0 min-w-0' : '',
+          selectedSerials.includes(d.serial) ? 'ring-2 ring-blue-500 border-blue-500 shadow-lg shadow-blue-500/15' : 'hover:border-neutral-600',
         ]"
       >
         <!-- 手机外框顶栏：编号标识、多选勾选、别名与状态（显隐统一由右侧面板编号方块控制） -->
@@ -233,7 +384,7 @@ function openPlayer(serial: string) {
               v-if="d.state === 'device' && !mockEnabled"
               type="button"
               class="flex h-5 w-5 shrink-0 items-center justify-center rounded text-white transition-colors cursor-pointer"
-              :class="selectedSerials.includes(d.serial) ? 'text-violet-400' : 'text-slate-400 hover:text-white'"
+              :class="selectedSerials.includes(d.serial) ? 'text-blue-400' : 'text-slate-400 hover:text-white'"
               :title="selectedSerials.includes(d.serial) ? '取消勾选' : '勾选此设备'"
               @click.stop="emit('toggleSelect', d.serial)"
             >
@@ -243,13 +394,20 @@ function openPlayer(serial: string) {
             <!-- 稳定编号标识徽章 -->
             <span
               v-if="serialToNumberMap.has(d.serial)"
-              class="px-1.5 py-0.2 rounded font-mono text-[10px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/30 shrink-0"
+              class="px-1.5 py-0.2 rounded font-mono text-[10px] font-bold shrink-0 transition-colors"
+              :class="selectedSerials.includes(d.serial)
+                ? 'bg-blue-600 text-white border border-blue-400'
+                : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'"
               :title="`设备编号: ${serialToNumberMap.get(d.serial)}`"
             >
               {{ serialToNumberMap.get(d.serial) }}
             </span>
 
-            <div class="min-w-0 truncate">
+            <div
+              class="min-w-0 truncate cursor-pointer hover:text-blue-400 transition-colors"
+              title="点击打开投屏小窗"
+              @click.stop="handleCardClick(d.serial)"
+            >
               <span class="truncate font-semibold text-[11px] text-slate-100">
                 {{ deviceStore.displayName(d) }}
               </span>
@@ -270,7 +428,7 @@ function openPlayer(serial: string) {
           v-if="viewMode === 'deck'"
           class="relative w-full flex-1 min-h-0 bg-black overflow-hidden flex flex-col justify-between p-3 select-none cursor-pointer group/card"
           title="点击进入设备投屏控制"
-          @click="openPlayer(d.serial)"
+          @click="handleCardClick(d.serial)"
         >
           <!-- 顶部状态遥测栏：左侧连接模式 (USB / Wi-Fi)，右侧温度 (电池+CPU) 与电量 -->
           <div class="flex items-center justify-between text-[11px] font-mono shrink-0 pt-1 px-1.5 z-10">
@@ -415,6 +573,7 @@ function openPlayer(serial: string) {
             :device="d"
             mode="contain"
             class="w-full h-full"
+            @open-floating="handleCardClick(d.serial)"
           />
           <div v-else class="flex flex-col items-center justify-center p-6 text-center space-y-2">
             <Smartphone class="h-8 w-8 text-amber-500/60" />

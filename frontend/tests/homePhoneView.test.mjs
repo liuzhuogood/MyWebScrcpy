@@ -173,7 +173,7 @@ test('production integration: showOnlySelected with useDeviceSelection preserves
   assert.deepEqual(phone.hiddenSerials.value, hiddenBefore)
 })
 
-test('production integration: offline / drop / mock changes strictly exclude devices from selection', async () => {
+test('selection excludes offline devices and mock previews never become real command targets', async () => {
   storageMap.clear()
   const rawDevices = ref([
     { serial: 'dev-online', state: 'device' },
@@ -205,7 +205,7 @@ test('production integration: offline / drop / mock changes strictly exclude dev
   assert.deepEqual(selection.selectedSerials.value, [])
   assert.deepEqual(selection.getValidatedTargets(), [])
 
-  // 开启 Mock 模式时强制清空且不可选中
+  // 切换 Mock 时清空原选择，随后允许预览选择，但实际命令目标保持为空。
   rawDevices.value = [{ serial: 'dev-mock', state: 'device' }]
   await nextTick()
   selection.toggleSelect('dev-mock')
@@ -214,5 +214,8 @@ test('production integration: offline / drop / mock changes strictly exclude dev
   isMock.value = true
   await nextTick()
   assert.deepEqual(selection.selectedSerials.value, [])
-  assert.deepEqual(selection.selectableDevices.value, [])
+  assert.deepEqual(selection.selectableDevices.value.map(d => d.serial), ['dev-mock'])
+  selection.toggleSelect('dev-mock')
+  assert.deepEqual(selection.selectedSerials.value, ['dev-mock'])
+  assert.deepEqual(selection.getValidatedTargets(), [])
 })

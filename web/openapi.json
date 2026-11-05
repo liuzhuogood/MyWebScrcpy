@@ -132,19 +132,52 @@
           "设备与控制"
         ],
         "summary": "读取屏幕电源状态",
-        "description": "通过 ADB 执行 dumpsys power 检测设备屏幕真实开关状态（ON 或 OFF）。",
+        "description": "读取真实屏幕电源状态；无法识别时返回screenOn=null及error，不假设屏幕已亮。lock=1同时返回screenLocked，未知时为null。",
         "parameters": [
           {
             "$ref": "#/components/parameters/serial"
+          },
+          {
+            "name": "lock",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "1"
+              ]
+            },
+            "description": "传1时同时查询锁屏状态"
           }
         ],
         "responses": {
           "200": {
-            "description": "读取屏幕状态成功",
+            "description": "真实电源与可选锁屏状态",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ScreenStateResponse"
+                  "type": "object",
+                  "required": [
+                    "screenOn",
+                    "screenLocked"
+                  ],
+                  "properties": {
+                    "screenOn": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "screenLocked": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -3896,17 +3929,45 @@
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "serial": { "type": "string" },
-                    "width": { "type": "integer" },
-                    "height": { "type": "integer" },
-                    "x": { "type": "integer" },
-                    "y": { "type": "integer" },
-                    "norm_x": { "type": "number" },
-                    "norm_y": { "type": "number" },
-                    "rgb": { "type": "array", "items": { "type": "integer" } },
-                    "rgba": { "type": "array", "items": { "type": "integer" } },
-                    "hex": { "type": "string" },
-                    "color": { "type": "string" }
+                    "serial": {
+                      "type": "string"
+                    },
+                    "width": {
+                      "type": "integer"
+                    },
+                    "height": {
+                      "type": "integer"
+                    },
+                    "x": {
+                      "type": "integer"
+                    },
+                    "y": {
+                      "type": "integer"
+                    },
+                    "norm_x": {
+                      "type": "number"
+                    },
+                    "norm_y": {
+                      "type": "number"
+                    },
+                    "rgb": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      }
+                    },
+                    "rgba": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      }
+                    },
+                    "hex": {
+                      "type": "string"
+                    },
+                    "color": {
+                      "type": "string"
+                    }
                   }
                 }
               }
@@ -3926,22 +3987,45 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": ["serial"],
+                "required": [
+                  "serial"
+                ],
                 "properties": {
-                  "serial": { "type": "string", "description": "设备序列号" },
-                  "x": { "type": "number", "description": "单点 X 坐标" },
-                  "y": { "type": "number", "description": "单点 Y 坐标" },
-                  "normalized": { "type": "boolean", "description": "是否为归一化坐标" },
+                  "serial": {
+                    "type": "string",
+                    "description": "设备序列号"
+                  },
+                  "x": {
+                    "type": "number",
+                    "description": "单点 X 坐标"
+                  },
+                  "y": {
+                    "type": "number",
+                    "description": "单点 Y 坐标"
+                  },
+                  "normalized": {
+                    "type": "boolean",
+                    "description": "是否为归一化坐标"
+                  },
                   "points": {
                     "type": "array",
                     "description": "批量检测点列表",
                     "items": {
                       "type": "object",
-                      "required": ["x", "y"],
+                      "required": [
+                        "x",
+                        "y"
+                      ],
                       "properties": {
-                        "x": { "type": "number" },
-                        "y": { "type": "number" },
-                        "normalized": { "type": "boolean" }
+                        "x": {
+                          "type": "number"
+                        },
+                        "y": {
+                          "type": "number"
+                        },
+                        "normalized": {
+                          "type": "boolean"
+                        }
                       }
                     }
                   }
@@ -5163,6 +5247,167 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/device-discovery/scan": {
+      "post": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "按局域网 IP 范围与端口扫描并连接 ADB 设备",
+        "description": "最多256个IPv4地址、8个端口，8路并发。仅局域网或回环地址。常态扫描每轮后等待间隔；需持续轮询任务状态，15秒未轮询自动取消，单任务最多30分钟。TCP开放且ADB在线确认后才保存设备。",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "range",
+                  "ports"
+                ],
+                "properties": {
+                  "range": {
+                    "type": "string",
+                    "example": "192.168.1.100到200"
+                  },
+                  "ports": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 65535
+                    }
+                  },
+                  "continuous": {
+                    "type": "boolean"
+                  },
+                  "interval_seconds": {
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 3600,
+                    "description": "continuous为true时必填，单位秒"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "发现任务状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDiscoveryJob"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "已有同类任务运行"
+          },
+          "400": {
+            "description": "扫描参数无效"
+          }
+        }
+      }
+    },
+    "/api/device-discovery/pair": {
+      "post": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "创建 Android 无线调试扫码配对任务",
+        "description": "电脑显示返回的二维码，Android 11及以上手机在无线调试中扫码；ADB mDNS发现精确会话后进行TLS配对，再确认连接并保存。有效期2分钟，15秒未轮询取消；支持主动停止。",
+        "responses": {
+          "200": {
+            "description": "发现任务状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDiscoveryJob"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "已有同类任务运行"
+          }
+        }
+      }
+    },
+    "/api/device-discovery/jobs/{id}": {
+      "get": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "查询发现任务并续期",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "发现任务状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDiscoveryJob"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "已有同类任务运行"
+          },
+          "404": {
+            "description": "任务不存在"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "停止扫描或配对任务",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "发现任务状态",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceDiscoveryJob"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "已有同类任务运行"
+          },
+          "404": {
+            "description": "任务不存在"
           }
         }
       }
@@ -8959,6 +9204,58 @@
           "engines_used",
           "text_art"
         ]
+      },
+      "DeviceDiscoveryJob": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "state",
+          "tried",
+          "total",
+          "found"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "scan",
+              "pair"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "running",
+              "waiting",
+              "completed",
+              "cancelled",
+              "failed"
+            ]
+          },
+          "tried": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "found": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "error": {
+            "type": "string"
+          },
+          "qr": {
+            "type": "string",
+            "description": "仅创建扫码任务时返回的配对二维码内容；不写入日志"
+          }
+        }
       }
     }
   },

@@ -1,6 +1,6 @@
 # v1.34.0-feature 任务清单
 
-状态：需求与原型验证已就绪，已完成版本设计三件套归档，待正式实施合入主干。
+状态：全栈实施与门禁验证已通过，纳入 v2026.11.5-1 收口，实际 Git/发布状态以日历版本记录与远端为准。
 
 ---
 
@@ -24,14 +24,25 @@
   - [x] 完成 `docs/versions/v1.34.0-feature/design.md`（包含架构图、时序图与 AABB 碰撞检测模型）；
   - [x] 完成 `docs/versions/v1.34.0-feature/tasks.md`。
 
-- [ ] **T4 [正式业务代码实施]**：
-  - [ ] 在 `frontend/src/components/home/` 创建正式版 `HomeIosDockBar.vue` 组件；
-  - [ ] 改造 `frontend/src/views/HomeView.vue`，彻底移除右侧 `ActionPanel` 布局与标签，引入 `HomeIosDockBar`；
-  - [ ] 废弃并清理 `frontend/src/components/home/ActionPanel.vue`；
-  - [ ] 同步更新 `docs/glossary.md` 术语字典（登记「iOS 悬浮底栏」并更新「操作」指向）。
+- [x] **T4 [正式业务代码实施]**：
+  - [x] 在 `frontend/src/components/home/` 创建正式版 `HomeIosDockBar.vue` 组件；
+  - [x] 改造 `frontend/src/views/HomeView.vue`，彻底移除右侧 `ActionPanel` 布局与标签，引入 `HomeIosDockBar`；
+  - [x] 改造 `frontend/src/components/home/HomePhoneView.vue`，实现设备卡片靠左紧凑排布（8px 紧凑间距，少数设备靠左不拉伸撑行）；
+  - [x] 首页设备卡片展示主区接入原生鼠标拉框（Marquee Box Selection）批量框选，联动已选状态并防点击冲突；
+  - [x] 废弃并清理 `frontend/src/components/home/ActionPanel.vue`；
+  - [x] 同步更新 `docs/glossary.md` 术语字典（登记「iOS 悬浮底栏」并更新「操作」指向）。
 
-- [ ] **T5 [全栈门禁验证与交付发布]**：
-  - [ ] 执行 `pnpm --dir frontend check`（Vue/TypeScript 类型检查）；
-  - [ ] 执行 `pnpm --dir frontend build`（正式产物打包验证）；
-  - [ ] 执行 `go test ./...`（后端接口与单测回归）；
-  - [ ] 提交代码并记录正式版本提交。
+- [x] **T5 [全栈门禁验证与交付发布]**：
+  - [x] 执行 `pnpm --dir frontend check`（Vue/TypeScript 类型检查，通过 `vue-tsc -b`）；
+  - [x] 执行 `pnpm --dir frontend build`（正式产物打包验证）；
+  - [x] 执行 `go test ./...`（后端接口与单测回归，435 个测试全数通过）；
+  - [x] 版本实施收口，正式发布说明关联 `docs/versions/v2026.11.5-1-fix/version.md`，由发布流程记录实际提交。
+
+- [x] **T6 [卡片交互与选区体验优化]**：
+  - [x] 设备卡片按序列号正序排列，与底栏编号方块顺序保持一致；
+  - [x] 拉框选区改为视口级坐标（`Teleport` 至 `body` + `fixed`），可拖出卡片区域覆盖整个屏幕；
+  - [x] 卡片容器补齐 `min-height`（填满剩余视口高度），空旷区域同样可作为拉框起点，不再因高度不足无法起拖；
+  - [x] 点击设备卡片不再直接跳转详情页，改为打开投屏小窗（桌面端原生小窗，Web 端内嵌浮动小窗）；
+  - [x] 小窗“更多”菜单新增「设备详情」入口，可直接进入完整投屏详情页；
+  - [x] 手机卡片尺寸滑块范围扩到 10%~200%；
+  - [x] 验证：`pnpm --dir frontend build`、`proto:check`、`go test ./...` 全数通过（投屏小窗按需加载，首页首屏包体积未增加）。

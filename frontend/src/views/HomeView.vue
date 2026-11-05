@@ -1,26 +1,17 @@
 <script setup lang="ts">
 import {
-  CheckCircle2,
-  Globe,
-  Loader2,
   Smartphone,
 } from 'lucide-vue-next'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useFullscreen } from '@vueuse/core'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { invoke, isTauri } from '@tauri-apps/api/core'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import HomeAuroraBackground from '@/components/home/HomeAuroraBackground.vue'
 import HomePhoneView from '@/components/home/HomePhoneView.vue'
-import ActionPanel from '@/components/home/ActionPanel.vue'
+import HomeIosDockBar from '@/components/home/HomeIosDockBar.vue'
+import SystemConfigDialog from '@/components/system/SystemConfigDialog.vue'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
+import AddDeviceDialog from '@/components/home/AddDeviceDialog.vue'
 import { useDeviceStore } from '@/stores/devices'
 import { useHomePhoneView } from '@/composables/useHomePhoneView'
 import { useDeviceSelection } from '@/composables/useDeviceSelection'
@@ -28,15 +19,20 @@ import { useDeviceBatch } from '@/composables/useDeviceBatch'
 import {
   type HomeViewMode,
   normalizeHomeViewMode,
+  usePlayerSettings,
 } from '@/composables/usePlayerSettings'
+import { useGroupControl } from '@/composables/useGroupControl'
 import { toast } from 'vue-sonner'
 
 type ViewMode = HomeViewMode
 
+const router = useRouter()
 const store = useDeviceStore()
+const playerSettings = usePlayerSettings()
+const isConfigOpen = ref(false)
 
-// 页面全屏控制
-const { isFullscreen: isPageFs, toggle: togglePageFs } = useFullscreen()
+// 投屏小窗按需加载，避免首页首屏加载完整投屏器代码
+const FloatingPlayer = defineAsyncComponent(() => import('@/components/player/FloatingPlayer.vue'))
 
 const VIEW_MODE_KEY = 'mywebscrcpy.view_mode'
 const viewMode = ref<ViewMode>(normalizeHomeViewMode(localStorage.getItem(VIEW_MODE_KEY)))
@@ -54,19 +50,13 @@ const homeFilteredDevices = computed(() => {
   return store.filtered.filter(d => d.state === 'device')
 })
 
-// 手机视图及三视图显隐状态管理
+// 手机视图及三视图状态管理
 const {
   dashSize,
-  hiddenSerials,
   serialToNumberMap,
   visibleDevices,
-  toggleDeviceVisibility,
   showAllDevices,
-  showOnlySelected,
 } = useHomePhoneView(() => homeFilteredDevices.value)
-
-// 批量面板折叠状态
-const isPanelOpen = ref(true)
 
 // 当前选择范围（三视图严格统一仅允许操作可见设备，隐藏设备不接受新动作）
 const currentScopeDevices = computed(() => {
@@ -92,6 +82,62 @@ watch(
     clearSelection()
   },
 )
+
+function handleUpdateSelectedSerials(serials: string[]) {
+  const selectableSet = new Set(selectableDevices.value.map(d => d.serial))
+  selectedSerials.value = serials.filter(s => selectableSet.has(s))
+}
+
+// 点击设备卡片：优先打开原生小窗（桌面端），Web 端使用内嵌浮动小窗
+const floatingSerials = ref<string[]>([])
+
+async function handleOpenFloating(serial: string) {
+  const device = store.devices.find(d => d.serial === serial)
+  if (!device || device.state !== 'device') {
+    toast.error('设备当前不在线，无法打开投屏小窗')
+    return
+  }
+
+  if (isTauri()) {
+    try {
+      const HEADER_HEIGHT = 56
+      const size = playerSettings.floatingSize.value
+      const targetW = size === 'compact' ? 320 : size === 'large' ? 440 : 380
+      const baseH = size === 'compact' ? 680 : size === 'large' ? 880 : 780
+      await invoke('open_device_window', {
+        serial,
+        title: store.displayName(device),
+        width: targetW,
+        height: baseH + HEADER_HEIGHT,
+        borderless: playerSettings.borderless.value,
+      })
+      toast.info(`已在桌面独立小窗中打开【${store.displayName(device)}】作为参考`)
+      return
+    }
+    catch (e) {
+      console.warn('[Desktop] 打开桌面小窗失败，降级为网页小窗', e)
+    }
+  }
+
+  if (!floatingSerials.value.includes(serial))
+    floatingSerials.value = [...floatingSerials.value, serial]
+}
+
+function closeFloatingWindow(serial: string) {
+  floatingSerials.value = floatingSerials.value.filter(item => item !== serial)
+}
+
+function handleOpenAi() {
+  router.push('/ai-integration')
+}
+
+function handleOpenShortcuts() {
+  toast.info('快捷键指南：双击投屏全屏，Esc 退出；Option/Alt + P 恢复小窗')
+}
+
+function handleOpenDocs() {
+  window.open('/api-docs.html', '_blank')
+}
 
 // 批量调度管理：传入派发前实时在线复查回调
 function checkTargetOperable(serial: string): boolean {
@@ -131,78 +177,40 @@ async function handleBatchAction(action: 'back' | 'home' | 'app_switch') {
   await runBatch(validTargets, action, deviceMap)
 }
 
-// 同步操作状态
-const isSyncActive = ref(false)
+// 群控同步操作状态
+const groupControl = useGroupControl()
+const isSyncActive = groupControl.isActive
 
 function handleToggleSync() {
   if (store.mockEnabled) {
-    toast.error('当前处于 Mock 模拟状态，无法启用同步操作')
+    toast.error('当前处于 Mock 模拟状态，无法启用群控')
     return
   }
   if (selectedSerials.value.length === 0) {
-    toast.error('请先勾选需要参与同步操作的设备')
+    toast.error('请先勾选需要参与群控的设备')
     return
   }
-  isSyncActive.value = !isSyncActive.value
-  if (isSyncActive.value) {
-    toast.success(`已开启同步操作：对主控设备的操作将实时同步至已选的 ${selectedSerials.value.length} 台设备`)
+  const next = !groupControl.isActive.value
+  groupControl.setActive(next)
+  groupControl.setTargets(selectedSerials.value)
+  if (next) {
+    toast.success(`已开启群控：触控操作任意已选设备将实时同步至其余 ${Math.max(0, selectedSerials.value.length - 1)} 台设备`)
   }
   else {
-    toast.info('已关闭同步操作')
+    toast.info('已关闭群控')
   }
 }
 
 watch(selectedSerials, (serials) => {
-  if (serials.length === 0 && isSyncActive.value) {
-    isSyncActive.value = false
-    toast.info('已选择设备已清空，同步操作已自动关闭')
+  groupControl.setTargets(serials)
+  if (serials.length === 0 && groupControl.isActive.value) {
+    groupControl.setActive(false)
+    toast.info('已选择设备已清空，群控已自动关闭')
   }
 })
 
-// 添加设备对话框状态
 const isAddDialogOpen = ref(false)
-const addHost = ref('')
-const addPort = ref('5555')
-const addAlias = ref('')
-const addError = ref('')
-const isAdding = ref(false)
-
-function openAddDialog() {
-  addHost.value = ''
-  addPort.value = '5555'
-  addAlias.value = ''
-  addError.value = ''
-  isAdding.value = false
-  isAddDialogOpen.value = true
-}
-
-async function handleAddSubmit() {
-  const host = addHost.value.trim()
-  const port = addPort.value.trim() || '5555'
-
-  if (!host) {
-    addError.value = '请输入设备 IP 或主机名'
-    return
-  }
-
-  const serial = `${host}:${port}`
-  addError.value = ''
-  isAdding.value = true
-
-  try {
-    await store.addDevice(serial, addAlias.value.trim())
-    isAddDialogOpen.value = false
-    toast.success('已添加网络设备')
-  }
-  catch (e) {
-    const msg = e instanceof Error ? e.message : '添加设备失败'
-    addError.value = msg
-    toast.error(msg)
-  }
-  finally {
-    isAdding.value = false
-  }
-}
+function openAddDialog() { isAddDialogOpen.value = true }
 
 onMounted(() => store.startPolling())
 onUnmounted(() => {
@@ -219,214 +227,145 @@ onUnmounted(() => {
     <!-- 顶部应用导航栏 -->
     <AppHeader />
 
-    <!-- 主工作区：单列铺满主视口，批量面板为独立浮动图层不占用宽度 -->
+    <!-- 主工作区：单列铺满主视口，底部预留悬浮底栏安全边距 -->
     <div class="relative z-10 flex-1 w-full min-w-0">
-      <main class="w-full min-w-0 px-4 sm:px-6 py-5 space-y-5">
-        <!-- 主内容区域：左侧设备卡片区域 + 右侧全局操作面板 -->
-        <div class="flex flex-col items-start gap-4 lg:flex-row lg:items-stretch">
-          <ActionPanel
-            v-model:isOpen="isPanelOpen"
-            :keyword="store.keyword"
-            :view-mode="viewMode"
-            :devices="homeFilteredDevices"
-            :hidden-serials="hiddenSerials"
-            :selected-serials="selectedSerials"
-            :display-name="store.displayName"
-            :online-count="onlineCount"
-            :is-all-selected="isAllSelected"
-            :has-selectable="selectableDevices.length > 0"
-            :batch-running="batchRunning"
-            :current-action="currentAction"
-            :batch-results="batchResults"
-            :batch-summary="batchSummary"
-            :dash-size="dashSize"
-            :is-page-fullscreen="isPageFs"
-            :is-sync-active="isSyncActive"
-            @update:keyword="store.keyword = $event"
-            @update:view-mode="setViewMode"
-            @toggle-hide="toggleDeviceVisibility"
-            @show-all="showAllDevices"
-            @show-only-selected="showOnlySelected(selectedSerials)"
-            @select-all="selectAll"
-            @clear-selection="clearSelection"
-            @trigger-action="handleBatchAction"
-            @toggle-sync="handleToggleSync"
-            @cancel-batch="cancelBatch"
-            @clear-results="clearResults"
-            @refresh="store.load(true)"
-            @open-add="openAddDialog"
-            @toggle-page-fullscreen="togglePageFs"
-          />
-
-          <!-- 设备卡片展示主区 -->
-          <div class="flex-1 min-w-0 w-full space-y-5">
-            <!-- 初次加载骨架屏 -->
+      <main class="w-full min-w-0 px-4 sm:px-6 py-5 pb-28 space-y-5">
+        <!-- 设备卡片展示主区：100% 视口铺展 -->
+        <div class="w-full space-y-5">
+          <!-- 初次加载骨架屏 -->
+          <div
+            v-if="store.loading && store.devices.length === 0"
+            class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+          >
             <div
-              v-if="store.loading && store.devices.length === 0"
-              class="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
+              v-for="i in 8"
+              :key="i"
+              class="h-[230px] rounded-3xl border border-slate-200/80 bg-white/60 p-6 backdrop-blur-xl animate-pulse space-y-4 dark:border-white/10 dark:bg-white/[0.02]"
             >
-              <div
-                v-for="i in 8"
-                :key="i"
-                class="h-[230px] rounded-3xl border border-slate-200/80 bg-white/60 p-6 backdrop-blur-xl animate-pulse space-y-4 dark:border-white/10 dark:bg-white/[0.02]"
-              >
-                <div class="flex items-center justify-between">
-                  <div class="h-6 w-24 rounded-full bg-slate-200 dark:bg-white/10" />
-                  <div class="h-5 w-16 rounded-full bg-slate-200 dark:bg-white/10" />
-                </div>
-                <div class="h-6 w-36 rounded-lg bg-slate-200 dark:bg-white/10" />
-                <div class="h-4 w-48 rounded bg-slate-100 dark:bg-white/5" />
-                <div class="h-16 rounded-2xl bg-slate-100 dark:bg-white/5" />
+              <div class="flex items-center justify-between">
+                <div class="h-6 w-24 rounded-full bg-slate-200 dark:bg-white/10" />
+                <div class="h-5 w-16 rounded-full bg-slate-200 dark:bg-white/10" />
               </div>
+              <div class="h-6 w-36 rounded-lg bg-slate-200 dark:bg-white/10" />
+              <div class="h-4 w-48 rounded bg-slate-100 dark:bg-white/5" />
+              <div class="h-16 rounded-2xl bg-slate-100 dark:bg-white/5" />
             </div>
+          </div>
 
-            <!-- 加载失败错误状态 -->
-            <div
-              v-else-if="store.error && store.devices.length === 0"
-              class="flex flex-col items-center justify-center rounded-3xl border border-red-500/20 bg-red-50/80 p-12 text-center backdrop-blur-2xl dark:bg-red-950/20"
+          <!-- 加载失败错误状态 -->
+          <div
+            v-else-if="store.error && store.devices.length === 0"
+            class="flex flex-col items-center justify-center rounded-3xl border border-red-500/20 bg-red-50/80 p-12 text-center backdrop-blur-2xl dark:bg-red-950/20"
+          >
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 mb-4">
+              <Smartphone class="h-7 w-7" />
+            </div>
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">设备列表加载失败</h3>
+            <p class="mt-1 text-xs text-red-600 dark:text-red-300 max-w-sm">{{ store.error }}</p>
+            <Button
+              variant="outline"
+              class="mt-5 rounded-2xl border-slate-300 bg-white text-slate-900 hover:bg-slate-100 dark:border-white/20 dark:bg-white/10 dark:text-white"
+              @click="store.load()"
             >
-              <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 mb-4">
-                <Smartphone class="h-7 w-7" />
-              </div>
-              <h3 class="text-lg font-bold text-slate-900 dark:text-white">设备列表加载失败</h3>
-              <p class="mt-1 text-xs text-red-600 dark:text-red-300 max-w-sm">{{ store.error }}</p>
+              重新尝试连接
+            </Button>
+          </div>
+
+          <!-- 空设备检测状态 -->
+          <div
+            v-else-if="homeFilteredDevices.length === 0"
+            class="flex flex-col items-center justify-center rounded-3xl border border-slate-200/80 bg-white/70 p-16 text-center backdrop-blur-2xl shadow-sm dark:border-white/10 dark:bg-white/[0.03]"
+          >
+            <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 text-white border border-white/20 mb-4 shadow-lg shadow-blue-500/20">
+              <Smartphone class="h-8 w-8 text-white" />
+            </div>
+            <h3 class="text-lg font-bold text-slate-900 dark:text-white">
+              {{ store.keyword ? '没有找到匹配的设备' : '未检测到在线设备' }}
+            </h3>
+            <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400 max-w-md">
+              {{ store.keyword ? '请尝试更换搜索关键字' : '请通过 USB 数据线连接 Android 设备，或点击「连接设备」输入 IP 端口' }}
+            </p>
+            <div class="mt-6 flex items-center gap-3">
               <Button
-                variant="outline"
-                class="mt-5 rounded-2xl border-slate-300 bg-white text-slate-900 hover:bg-slate-100 dark:border-white/20 dark:bg-white/10 dark:text-white"
-                @click="store.load()"
+                size="sm"
+                class="rounded-2xl bg-blue-600 text-white font-medium hover:bg-blue-700 px-4 text-xs shadow-md"
+                @click="openAddDialog"
               >
-                重新尝试连接
+                连接网络设备
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="rounded-2xl border border-slate-200/80 bg-white/80 text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white px-4 text-xs"
+                @click="store.load(true)"
+              >
+                重新扫描
               </Button>
             </div>
-
-            <!-- 空设备检测状态 -->
-            <div
-              v-else-if="homeFilteredDevices.length === 0"
-              class="flex flex-col items-center justify-center rounded-3xl border border-slate-200/80 bg-white/70 p-16 text-center backdrop-blur-2xl shadow-sm dark:border-white/10 dark:bg-white/[0.03]"
-            >
-              <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 to-cyan-500 text-white border border-white/20 mb-4 shadow-lg shadow-violet-500/20">
-                <Smartphone class="h-8 w-8 text-white" />
-              </div>
-              <h3 class="text-lg font-bold text-slate-900 dark:text-white">
-                {{ store.keyword ? '没有找到匹配的设备' : '未检测到在线设备' }}
-              </h3>
-              <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400 max-w-md">
-                {{ store.keyword ? '请尝试更换搜索关键字' : '请通过 USB 数据线连接 Android 设备，或点击「连接设备」输入 IP 端口' }}
-              </p>
-              <div class="mt-6 flex items-center gap-3">
-                <Button
-                  size="sm"
-                  class="rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white font-medium hover:opacity-95 px-4 text-xs shadow-md"
-                  @click="openAddDialog"
-                >
-                  连接网络设备
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="rounded-2xl border border-slate-200/80 bg-white/80 text-slate-700 hover:bg-slate-100 hover:text-slate-900 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white px-4 text-xs"
-                  @click="store.load(true)"
-                >
-                  重新扫描
-                </Button>
-              </div>
-            </div>
-
-            <HomePhoneView
-              v-else-if="viewMode === 'deck' || viewMode === 'phone'"
-              :view-mode="viewMode"
-              :visible-devices="visibleDevices"
-              :dash-size="dashSize"
-              :serial-to-number-map="serialToNumberMap"
-              :selected-serials="selectedSerials"
-              :mock-enabled="store.mockEnabled"
-              @toggle-select="toggleSelect"
-              @show-all="showAllDevices"
-            />
-
           </div>
+
+          <HomePhoneView
+            v-else-if="viewMode === 'deck' || viewMode === 'phone'"
+            :view-mode="viewMode"
+            :visible-devices="visibleDevices"
+            :dash-size="dashSize"
+            :serial-to-number-map="serialToNumberMap"
+            :selected-serials="selectedSerials"
+            :mock-enabled="store.mockEnabled"
+            @toggle-select="toggleSelect"
+            @update:selected-serials="handleUpdateSelectedSerials"
+            @open-floating="handleOpenFloating"
+            @show-all="showAllDevices"
+          />
         </div>
       </main>
     </div>
 
-    <!-- 手动添加网络设备对话框 -->
-    <Dialog v-model:open="isAddDialogOpen">
-      <DialogContent class="sm:max-w-md border-slate-200 bg-white/95 text-slate-900 dark:border-white/15 dark:bg-[#0e121d]/95 dark:text-white backdrop-blur-3xl shadow-2xl rounded-3xl">
-        <DialogHeader>
-          <DialogTitle class="flex items-center gap-2 text-slate-900 dark:text-white font-bold">
-            <Globe class="h-5 w-5 text-cyan-600 dark:text-cyan-400" />
-            连接网络 Android 设备
-          </DialogTitle>
-          <DialogDescription class="text-slate-500 dark:text-slate-400 text-xs">
-            输入局域网 Android 设备的 IP 地址与端口，后台将持久化保存并自动建立 ADB 调试握手。
-          </DialogDescription>
-        </DialogHeader>
+    <!-- Web 端内嵌投屏小窗 -->
+    <FloatingPlayer
+      v-for="(floatingSerial, index) in floatingSerials"
+      :key="floatingSerial"
+      :serial="floatingSerial"
+      :offset-index="index"
+      :z-index="60 + index"
+      @close="closeFloatingWindow(floatingSerial)"
+    />
 
-        <div class="space-y-4 py-2">
-          <div class="grid grid-cols-3 gap-2">
-            <div class="col-span-2 space-y-1.5">
-              <label class="text-xs font-medium text-slate-700 dark:text-slate-300">设备 IP 地址</label>
-              <Input
-                v-model="addHost"
-                placeholder="例如 192.168.1.100"
-                class="rounded-xl border-slate-200 bg-slate-100/80 text-xs text-slate-900 placeholder:text-slate-400 focus:border-cyan-500 dark:border-white/15 dark:bg-black/40 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-cyan-400"
-                :disabled="isAdding"
-                @keydown.enter="handleAddSubmit"
-              />
-            </div>
-            <div class="space-y-1.5">
-              <label class="text-xs font-medium text-slate-700 dark:text-slate-300">端口</label>
-              <Input
-                v-model="addPort"
-                placeholder="5555"
-                class="rounded-xl border-slate-200 bg-slate-100/80 text-xs text-slate-900 placeholder:text-slate-400 focus:border-cyan-500 dark:border-white/15 dark:bg-black/40 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-cyan-400 font-mono"
-                :disabled="isAdding"
-                @keydown.enter="handleAddSubmit"
-              />
-            </div>
-          </div>
+    <!-- iOS 风格贴底居中悬浮控制栏 -->
+    <HomeIosDockBar
+      :keyword="store.keyword"
+      :view-mode="viewMode"
+      :devices="store.filtered"
+      :selected-serials="selectedSerials"
+      :online-count="onlineCount"
+      :is-all-selected="isAllSelected"
+      :batch-running="batchRunning"
+      :current-action="currentAction"
+      :batch-results="batchResults"
+      :batch-summary="batchSummary"
+      :is-sync-active="isSyncActive"
+      :display-name="store.displayName"
+      @update:keyword="store.keyword = $event"
+      @update:view-mode="setViewMode"
+      @update:selected-serials="handleUpdateSelectedSerials"
+      @toggle-select="toggleSelect"
+      @select-all="selectAll"
+      @clear-selection="clearSelection"
+      @trigger-action="handleBatchAction"
+      @toggle-sync="handleToggleSync"
+      @cancel-batch="cancelBatch"
+      @clear-results="clearResults"
+      @open-add="openAddDialog"
+      @open-config="isConfigOpen = true"
+      @open-ai="handleOpenAi"
+      @open-shortcuts="handleOpenShortcuts"
+      @open-docs="handleOpenDocs"
+    />
 
-          <div class="space-y-1.5">
-            <label class="text-xs font-medium text-slate-700 dark:text-slate-300">设备别名 / 备注 (可选)</label>
-            <Input
-              v-model="addAlias"
-              placeholder="例如 客厅大屏 / 测试平板"
-              class="rounded-xl border-slate-200 bg-slate-100/80 text-xs text-slate-900 placeholder:text-slate-400 focus:border-cyan-500 dark:border-white/15 dark:bg-black/40 dark:text-white dark:placeholder:text-slate-500 dark:focus:border-cyan-400"
-              :disabled="isAdding"
-              @keydown.enter="handleAddSubmit"
-            />
-          </div>
+    <!-- 系统配置弹窗 -->
+    <SystemConfigDialog v-model:open="isConfigOpen" />
 
-          <div v-if="addError" class="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl border border-red-200 dark:text-red-400 dark:bg-red-950/30 dark:border-red-500/20">
-            {{ addError }}
-          </div>
-
-          <div class="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-3 text-xs text-slate-500 leading-relaxed dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400">
-            提示：请确保目标 Android 设备已开启「开发者选项」中的「无线调试」或在 5555 端口开启 TCP/IP 调试网络。
-          </div>
-        </div>
-
-        <DialogFooter class="gap-2 sm:gap-0">
-          <Button
-            variant="ghost"
-            class="rounded-xl border border-slate-200/80 bg-white text-slate-700 hover:bg-slate-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
-            :disabled="isAdding"
-            @click="isAddDialogOpen = false"
-          >
-            取消
-          </Button>
-          <Button
-            :disabled="isAdding"
-            class="rounded-xl bg-gradient-to-r from-violet-600 to-cyan-600 text-white font-medium hover:opacity-95 shadow-md"
-            @click="handleAddSubmit"
-          >
-            <Loader2 v-if="isAdding" class="mr-1.5 h-4 w-4 animate-spin" />
-            <CheckCircle2 v-else class="mr-1.5 h-4 w-4" />
-            {{ isAdding ? '正在连接...' : '保存并握手' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <AddDeviceDialog v-model:open="isAddDialogOpen" />
 
   </div>
 </template>

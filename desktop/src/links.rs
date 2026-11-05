@@ -1,5 +1,5 @@
 use crate::State;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_opener::OpenerExt;
 
 #[tauri::command]
@@ -91,6 +91,27 @@ pub fn set_window_always_on_top(window: tauri::WebviewWindow, always_on_top: boo
 #[tauri::command]
 pub fn is_window_always_on_top(window: tauri::WebviewWindow) -> Result<bool, String> {
     window.is_always_on_top().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn open_main_device_detail(app: AppHandle, serial: String) -> Result<(), String> {
+    if let Some(main_window) = app.get_webview_window("main") {
+        let state = app.state::<State>();
+        let target_url = format!("{}/player?serial={}", state.url, serial);
+        let _ = main_window.show();
+        let _ = main_window.unminimize();
+        let _ = main_window.set_focus();
+        let _ = main_window.emit("navigate-to-player", &serial);
+        let script = format!(
+            "if (window.__NAVIGATE_TO_PLAYER__) {{ window.__NAVIGATE_TO_PLAYER__({}); }} else {{ window.location.href = {}; }}",
+            serde_json::to_string(&serial).unwrap_or_default(),
+            serde_json::to_string(&target_url).unwrap_or_default()
+        );
+        let _ = main_window.eval(&script);
+        Ok(())
+    } else {
+        Err("主窗口不存在".into())
+    }
 }
 
 pub const CLICK_SCRIPT: &str = include_str!("links.js");

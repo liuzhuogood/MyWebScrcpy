@@ -102,6 +102,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             links::open_browser_link,
             links::open_device_window,
+            links::open_main_device_detail,
             links::set_window_always_on_top,
             links::is_window_always_on_top,
             player_windows::list_player_windows,
@@ -134,6 +135,7 @@ fn main() {
                     .remote(format!("{url}/*"))
                     .permission("allow-open-browser-link")
                     .permission("allow-open-device-window")
+                    .permission("allow-open-main-device-detail")
                     .permission("allow-set-window-always-on-top")
                     .permission("allow-is-window-always-on-top")
                     .permission("allow-list-player-windows")

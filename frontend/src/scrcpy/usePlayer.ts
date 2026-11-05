@@ -8,6 +8,7 @@ import { useClipboardSync } from './useClipboardSync'
 import { useFrameUploader } from './useFrameUploader'
 import { useScreenPower } from './useScreenPower'
 import { usePlayerSettings } from '@/composables/usePlayerSettings'
+import { useGroupControl } from '@/composables/useGroupControl'
 import {
   ACTION_DOWN,
   ACTION_MOVE,
@@ -87,12 +88,13 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
 
   const audioReady = ref(false)
   const audioMuted = ref(true)
+  const audioVolume = ref(1)
   const audioTitle = ref('设备声音不可用')
   const pipSupported = ref(false)
   const pipActive = ref(false)
   const fullscreen = ref(false)
   const rebooting = ref(false)
-  const { autoUnlockOnWake, powerBusy, pressPower, observeScreenState } = useScreenPower(serial, {
+  const { autoUnlockOnWake, powerBusy, pressPower, observeScreenState, prepareOnOpen } = useScreenPower(serial, {
     sendPowerKey: () => {
       keyPress(AKEYCODE.POWER)
       op('key', { label: '电源键', keycode: 'KEYCODE_POWER' })
@@ -374,9 +376,27 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
   }
 
   // ---------- 发送 ----------
-  function send(bytes: Uint8Array) {
+  const groupControl = useGroupControl()
+  const unregisterGroupChannel = groupControl.registerChannel({
+    serial,
+    send: (bytes) => {
+      send(bytes, true)
+    },
+    getDeviceSize: () => ({
+      width: packer.deviceWidth,
+      height: packer.deviceHeight,
+    }),
+  })
+
+  function send(bytes: Uint8Array, fromGroupSync = false) {
     if (ws && ws.readyState === WebSocket.OPEN)
       ws.send(bytes as Uint8Array<ArrayBuffer>)
+    if (!fromGroupSync) {
+      groupControl.broadcastControl(serial, bytes, {
+        width: packer.deviceWidth,
+        height: packer.deviceHeight,
+      })
+    }
   }
 
   /**
@@ -807,6 +827,10 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     await audio?.toggle()
   }
 
+  async function setAudioVolume(value: number) {
+    await audio?.setVolume(value)
+  }
+
   async function togglePip() {
     try {
       await pip?.toggle()
@@ -990,6 +1014,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     }
 
     audio = new DeviceAudio()
+    let autoAudioAttempted = false
     audio.onStatus = (status, reason) => {
       audioReady.value = status === 'ready'
       audioTitle.value
@@ -997,8 +1022,11 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
           ? (audio?.muted ? '点击播放设备声音' : '点击静音设备声音')
           : (reason || '设备声音不可用')
       audioMuted.value = audio?.muted ?? true
-      if (status === 'ready' && playerSettings.autoAudio.value && audioMuted.value) {
-        audio?.toggle().catch(() => {})
+      audioVolume.value = audio?.volume ?? 1
+      if (status === 'ready' && !autoAudioAttempted) {
+        autoAudioAttempted = true
+        if (playerSettings.autoAudio.value && audioMuted.value)
+          void audio?.toggle()
       }
     }
 
@@ -1024,13 +1052,17 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
       resizeObserver.observe(stageRef.value)
     window.addEventListener('resize', fitCanvas)
 
-    screenTimer = window.setInterval(checkScreenState, SCREEN_STATE_POLL_MS)
-    void checkScreenState()
-    connect()
+    void prepareOnOpen().finally(() => {
+      if (disposed) return
+      screenTimer = window.setInterval(checkScreenState, SCREEN_STATE_POLL_MS)
+      void checkScreenState()
+      connect()
+    })
   })
 
   onUnmounted(() => {
     disposed = true
+    unregisterGroupChannel()
     screenAbort?.abort()
     if (reconnectTimer !== undefined)
       window.clearTimeout(reconnectTimer)
@@ -1075,6 +1107,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     displayLabel,
     audioReady,
     audioMuted,
+    audioVolume,
     audioTitle,
     pipSupported,
     pipActive,
@@ -1092,6 +1125,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     rotate,
     reboot,
     toggleAudio,
+    setAudioVolume,
     togglePip,
     toggleFullscreen,
     setDisplayScale,

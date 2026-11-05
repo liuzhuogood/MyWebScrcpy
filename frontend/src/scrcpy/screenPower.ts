@@ -1,5 +1,6 @@
 interface ScreenState {
   screenOn: boolean | null
+  screenLocked?: boolean | null
   error?: string
 }
 
@@ -47,6 +48,31 @@ export async function requestScreenUnlock(serial: string, signal: AbortSignal): 
   await adbCommand(serial, ['shell', 'wm', 'dismiss-keyguard'], signal)
   // 命令完成只代表已请求解除锁屏，不代表密码锁已通过验证。
   console.info('[wake-unlock] Keyguard dismissal requested', { serial })
+}
+
+/** Opening a player is an explicit wake request, independent of the power-button preference. */
+export async function wakeAndUnlockOnOpen(serial: string, signal: AbortSignal): Promise<void> {
+  await adbCommand(serial, ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'], signal)
+  let awake = false
+  for (let attempt = 0; attempt < 12; attempt++) {
+    if (await screenIsOn(serial, signal)) { awake = true; break }
+    await waitForNextCheck(signal)
+  }
+  if (!awake)
+    throw new Error('屏幕尚未点亮，请检查设备连接')
+  await requestScreenUnlock(serial, signal)
+  ensureActive(signal)
+  const response = await fetch(`/api/screen-state?serial=${encodeURIComponent(serial)}&lock=1`, { signal })
+  if (!response.ok)
+    throw new Error(`读取锁屏状态失败（${response.status}）`)
+  const state: ScreenState = await response.json()
+  ensureActive(signal)
+  if (state.error)
+    throw new Error(state.error)
+  if (state.screenLocked === true)
+    throw new Error('设备仍处于锁屏状态，请在设备上完成解锁')
+  if (state.screenLocked !== false)
+    throw new Error('已请求解锁，无法确认设备锁屏状态')
 }
 
 /** 每次亮屏只尝试一次；重新启用开关时可再尝试，避免定时检测反复打断密码输入。 */

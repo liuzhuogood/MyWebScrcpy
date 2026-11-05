@@ -9,11 +9,8 @@ export function useDeviceSelection(
   const selectedSerials = ref<string[]>([])
 
   // 当前作用域下允许被选中的设备：
-  // 必须是当前页/当前列表的设备，排除掉离线/未授权设备；当处于 Mock 模式时不可做真机批操作
+  // 必须是当前页/当前列表的设备，排除掉离线/未授权设备；Mock 允许预览选择，派发时单独拦截真实命令
   const selectableDevices = computed(() => {
-    if (isMockEnabled.value) {
-      return []
-    }
     return filterSelectableDevices(currentScopeDevices.value)
   })
 
@@ -26,6 +23,9 @@ export function useDeviceSelection(
     },
     { immediate: true },
   )
+
+  // Mock permits selection previews while the command target gate stays closed.
+  watch(isMockEnabled, () => { selectedSerials.value = [] })
 
   const isAllSelected = computed(() => {
     if (selectableDevices.value.length === 0)
@@ -42,9 +42,6 @@ export function useDeviceSelection(
   }
 
   function toggleSelect(serial: string) {
-    if (isMockEnabled.value)
-      return
-
     if (selectedSerials.value.includes(serial)) {
       selectedSerials.value = selectedSerials.value.filter(s => s !== serial)
     }
@@ -57,11 +54,6 @@ export function useDeviceSelection(
   }
 
   function selectAll() {
-    if (isMockEnabled.value) {
-      selectedSerials.value = []
-      return
-    }
-
     if (isAllSelected.value) {
       selectedSerials.value = []
     }
@@ -76,6 +68,7 @@ export function useDeviceSelection(
 
   // 发起前再重校验一次，确保不携带任何已掉线或隐藏设备
   function getValidatedTargets(): string[] {
+    if (isMockEnabled.value) return []
     const allowed = new Set(selectableDevices.value.map(d => d.serial))
     const valid = selectedSerials.value.filter(s => allowed.has(s))
     selectedSerials.value = valid

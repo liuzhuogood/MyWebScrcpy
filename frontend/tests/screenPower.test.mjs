@@ -169,3 +169,25 @@ test('changing the setting resets the attempt for the next confirmed screen stat
   await trigger.observe(true, true)
   assert.equal(attempts, 2)
 })
+
+test('opening a player always wakes, requests unlock, and verifies keyguard state', async t => {
+  const { wakeAndUnlockOnOpen } = await import('../src/scrcpy/screenPower.ts')
+  const calls = mockRequests(t, [completed, screen(true), completed, { data: { screenOn: true, screenLocked: false } }])
+  await wakeAndUnlockOnOpen('phone', new AbortController().signal)
+  assert.deepEqual(calls.filter(call => call.method === 'POST').map(call => call.body.args), [
+    ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'], ['shell', 'wm', 'dismiss-keyguard'],
+  ])
+  assert.ok(calls.at(-1).url.endsWith('&lock=1'))
+})
+
+test('opening a player reports a remaining secure lock instead of claiming unlock success', async t => {
+  const { wakeAndUnlockOnOpen } = await import('../src/scrcpy/screenPower.ts')
+  mockRequests(t, [completed, screen(true), completed, { data: { screenOn: true, screenLocked: true } }])
+  await assert.rejects(wakeAndUnlockOnOpen('phone', new AbortController().signal), /请在设备上完成解锁/)
+})
+
+test('opening a player never guesses an unknown keyguard result', async t => {
+  const { wakeAndUnlockOnOpen } = await import('../src/scrcpy/screenPower.ts')
+  mockRequests(t, [completed, screen(true), completed, { data: { screenOn: true, screenLocked: null } }])
+  await assert.rejects(wakeAndUnlockOnOpen('phone', new AbortController().signal), /无法确认设备锁屏状态/)
+})

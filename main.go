@@ -125,6 +125,9 @@ func main() {
 	uiPage := uipage.New(adbPath)
 
 	mux := http.NewServeMux()
+	discovery := device.NewDiscovery(dm)
+	defer discovery.Close()
+	discovery.RegisterRoutes(mux)
 	idleScreen := configureIdleScreen(database, dm, adbPath)
 	defer idleScreen.Close()
 	dependencies.SetDeviceActivityObserver(idleScreen.Begin)
@@ -416,28 +419,8 @@ func main() {
 			http.Error(w, "missing serial", http.StatusBadRequest)
 			return
 		}
-		// 执行 adb shell dumpsys power 获取电源状态
-		out, err := dependencies.CommandContext(dependencies.BackgroundADB(r.Context()), adbPath, "-s", serial, "shell", "dumpsys", "power").Output()
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"screenOn": nil,
-				"error":    err.Error(),
-			})
-			return
-		}
-		// 解析输出，查找 "Display Power: state=ON" 或 "Display Power: state=OFF"
-		output := string(out)
-		screenOn := true // 默认认为屏幕是亮的
-		if strings.Contains(output, "Display Power: state=OFF") {
-			screenOn = false
-		} else if strings.Contains(output, "Display Power: state=ON") {
-			screenOn = true
-		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"screenOn": screenOn,
-		})
+		json.NewEncoder(w).Encode(dm.ReadScreenState(r.Context(), serial, r.URL.Query().Get("lock") == "1"))
 	})
 
 	// API: 重启设备 (POST /api/reboot?serial=xxx)

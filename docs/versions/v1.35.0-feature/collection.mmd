@@ -1,0 +1,12 @@
+flowchart TD
+    A[统一设备采集调度器]:::cBlue --> B[在线设备与到期工作]:::cPurple
+    B --> C[温度和电量采集]:::cCyan
+    B --> D[当前前台应用识别]:::cCyan
+    D --> E{全局包名缓存未过期}:::cPurple
+    E -->|是| F[复用图标缓存]:::cGreen
+    E -->|否| G[有界图标提取与复核]:::cAmber
+    G --> H[原子更新缓存及到期时间]:::cGreen
+    C --> I[校验代次并更新设备快照]:::cIndigo
+    F --> I
+    H --> I
+    I --> J[设备卡片显示当前应用]:::cGreen

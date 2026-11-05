@@ -9,8 +9,8 @@ export const HOME_VIEW_MODE_KEY = 'mywebscrcpy.view_mode'
 export const HOME_PHONE_SCALE_KEY = 'home.phone_scale'
 export const HOME_QUALITY_KEY = 'home.quality'
 
-export const HOME_PHONE_SCALE_MIN = 70
-export const HOME_PHONE_SCALE_MAX = 140
+export const HOME_PHONE_SCALE_MIN = 10
+export const HOME_PHONE_SCALE_MAX = 200
 export const HOME_PHONE_SCALE_DEFAULT = 100
 export const HOME_PHONE_BASE_WIDTH = 270
 export const HOME_QUALITY_MIN = 50
