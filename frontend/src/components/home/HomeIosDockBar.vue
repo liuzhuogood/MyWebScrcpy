@@ -702,7 +702,7 @@ function handleDeviceClick(serial: string) {
     <!-- iOS 底部悬浮玻璃操作栏 (Floating Island / Dock Bar) -->
     <div
       v-if="!isDockMinimized"
-      class="pointer-events-auto flex items-center gap-1 rounded-full border border-white/60 bg-white/75 p-1.5 shadow-[0_12px_40px_rgba(0,0,0,0.12)] backdrop-blur-2xl backdrop-saturate-150 transition-all dark:border-white/15 dark:bg-slate-900/75 dark:shadow-[0_16px_50px_rgba(0,0,0,0.5)] ring-1 ring-black/5 dark:ring-white/10"
+      class="liquid-glass pointer-events-auto flex items-center gap-1 rounded-full border p-1.5 transition-all"
     >
       <!-- 按钮 1：操作（收纳多机批量导航与同步） -->
       <button
@@ -803,7 +803,7 @@ function handleDeviceClick(serial: string) {
     <button
       v-else
       type="button"
-      class="pointer-events-auto flex items-center gap-2 rounded-full border border-white/60 bg-white/80 px-4 py-2 shadow-xl backdrop-blur-2xl transition-all hover:scale-105 hover:bg-white dark:border-white/15 dark:bg-slate-900/80 dark:hover:bg-slate-900 cursor-pointer text-slate-800 dark:text-white ring-1 ring-black/5"
+      class="liquid-glass pointer-events-auto flex cursor-pointer items-center gap-2 rounded-full border px-4 py-2 text-slate-800 transition-all hover:scale-105 dark:text-white"
       title="展开操作栏"
       @click="isDockMinimized = false"
     >

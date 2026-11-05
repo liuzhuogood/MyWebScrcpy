@@ -24,9 +24,11 @@ const props = withDefaults(
   defineProps<{
     device: Device
     mode?: 'card' | 'fit' | 'contain'
+    interactive?: boolean
   }>(),
   {
     mode: 'card',
+    interactive: true,
   },
 )
 const emit = defineEmits<{
@@ -471,6 +473,7 @@ onUnmounted(() => {
   <div
     :ref="setPhoneRef"
     class="dash-phone group relative flex flex-col overflow-hidden bg-black"
+    :style="{ pointerEvents: interactive ? undefined : 'none' }"
     :class="[
       mode === 'fit'
         ? 'h-full w-full min-h-0 min-w-0 rounded-none border border-neutral-800/80'
@@ -503,13 +506,14 @@ onUnmounted(() => {
         <Loader2 v-if="state !== 'error'" class="h-6 w-6 animate-spin text-white" />
         <TriangleAlert v-else class="h-6 w-6 text-destructive" />
         <p class="text-xs text-foreground/80">{{ state === 'error' ? errorMsg : statusText }}</p>
-        <Button v-if="state === 'error'" variant="secondary" size="sm" as-child>
+        <Button v-if="interactive && state === 'error'" variant="secondary" size="sm" as-child>
           <RouterLink :to="{ name: 'player', query: { serial } }">在播放器中打开<ExternalLink class="h-3.5 w-3.5" /></RouterLink>
         </Button>
       </div>
 
       <!-- 悬停时显示的纯透明纯图标工具栏（移至顶部右侧，完全透明不阻挡屏幕） -->
       <div
+        v-if="interactive"
         class="absolute top-1.5 right-1.5 z-20 flex items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
       >
         <Button

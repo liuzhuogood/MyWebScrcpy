@@ -23,7 +23,7 @@ import {
   Usb,
   Wifi,
 } from 'lucide-vue-next'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import DashTile from '@/components/dashboard/DashTile.vue'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -66,33 +66,6 @@ const cardWidth = computed(() => Math.round(HOME_PHONE_BASE_WIDTH * homePhoneSca
 const cardHeight = computed(() => Math.round(cardWidth.value * 1.88))
 const containerRef = ref<HTMLElement | null>(null)
 
-// 拉框选区可用高度：确保容器至少填满剩余视口高度，空旷区域同样可作为拖拽起点
-const surfaceMinHeight = ref(0)
-const BOTTOM_CLEARANCE = 120
-
-function updateSurfaceMinHeight() {
-  const el = containerRef.value
-  if (!el) return
-  const rect = el.getBoundingClientRect()
-  const available = window.innerHeight - rect.top - BOTTOM_CLEARANCE
-  surfaceMinHeight.value = Math.max(0, Math.round(available))
-}
-
-onMounted(() => {
-  updateSurfaceMinHeight()
-  nextTick(updateSurfaceMinHeight)
-  window.addEventListener('resize', updateSurfaceMinHeight)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', updateSurfaceMinHeight)
-})
-
-watch(
-  () => [props.viewMode, props.visibleDevices.length, props.dashSize],
-  () => nextTick(updateSurfaceMinHeight),
-)
-
 // 卡片按序列号正序排列，与编号方块顺序保持一致
 const sortedDevices = computed(() => {
   return [...props.visibleDevices].sort((a, b) => a.serial.localeCompare(b.serial))
@@ -119,7 +92,6 @@ const containerStyle = computed(() => {
     alignItems: 'flex-start',
     alignContent: 'flex-start',
     width: '100%',
-    minHeight: `${surfaceMinHeight.value}px`, // 填满剩余视口高度，空旷区域可拉框框选
   }
 })
 
@@ -143,17 +115,22 @@ let dragStartY = 0
 let initialSelectedAtDrag: string[] = []
 let isCtrlPressed = false
 let hasDraggedDistance = false
+let cleanupMarquee: (() => void) | undefined
+let resetTimer: ReturnType<typeof setTimeout> | undefined
+onBeforeUnmount(() => { cleanupMarquee?.(); clearTimeout(resetTimer) })
 
 function handleContainerMouseDown(e: MouseEvent) {
   // 仅响应鼠标左键，且排除内部交互按钮（如 checkbox、按钮等）
-  // 手机视图为实时投屏画面，拖拽用于设备触控，不介入拉框框选
-  if (e.button !== 0 || !containerRef.value || props.viewMode !== 'deck') return
+  if (e.button !== 0 || !containerRef.value) return
   const target = e.target as HTMLElement
   if (target.closest('button, a, input, select, textarea, [role="button"]')) {
     return
   }
 
-  // 视口坐标：选区可拖出容器边界，覆盖整个屏幕
+  cleanupMarquee?.()
+  clearTimeout(resetTimer)
+  e.preventDefault()
+  // 视口坐标同时适用于主内容滚动后的卡片。
   dragStartX = e.clientX
   dragStartY = e.clientY
   isCtrlPressed = e.ctrlKey || e.metaKey
@@ -181,7 +158,7 @@ function handleContainerMouseDown(e: MouseEvent) {
       marqueeBox.value = { left, top, width, height }
 
       // 实时 AABB 碰撞检测（视口坐标，覆盖全屏范围内的卡片）
-      const cards = document.querySelectorAll<HTMLElement>('[data-device-serial]')
+      const cards = containerRef.value?.querySelectorAll<HTMLElement>('[data-home-device-card]') ?? []
       const selectedInBox = new Set<string>()
 
       cards.forEach((card) => {
@@ -213,11 +190,11 @@ function handleContainerMouseDown(e: MouseEvent) {
   }
 
   function onMouseUp() {
-    window.removeEventListener('mousemove', onMouseMove)
-    window.removeEventListener('mouseup', onMouseUp)
+    cleanupMarquee?.()
+    cleanupMarquee = undefined
 
     if (hasDraggedDistance) {
-      setTimeout(() => {
+      resetTimer = setTimeout(() => {
         hasDraggedDistance = false
         isDraggingMarquee.value = false
         marqueeBox.value = null
@@ -231,6 +208,10 @@ function handleContainerMouseDown(e: MouseEvent) {
 
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
+  cleanupMarquee = () => {
+    window.removeEventListener('mousemove', onMouseMove)
+    window.removeEventListener('mouseup', onMouseUp)
+  }
 }
 
 function handleCardClick(serial: string) {
@@ -316,10 +297,7 @@ function getAppVisual(iconType?: string) {
 </script>
 
 <template>
-  <div
-    class="flex flex-col"
-    :class="{ 'h-[calc(100vh-140px)] min-h-[500px] overflow-hidden': dashSize === 'fit' }"
-  >
+  <div class="flex min-h-0 flex-1 flex-col">
     <!-- 全隐藏空状态展示与恢复入口 -->
     <div
       v-if="visibleDevices.length === 0"
@@ -370,7 +348,14 @@ function getAppVisual(iconType?: string) {
         v-for="d in sortedDevices"
         :key="d.serial"
         :data-device-serial="d.serial"
+        data-home-device-card
+        role="group"
+        tabindex="0"
+        :aria-label="`${deviceStore.displayName(d)} 设备卡片`"
         :style="cardItemStyle"
+        @click="handleCardClick(d.serial)"
+        @keydown.enter.self="handleCardClick(d.serial)"
+        @keydown.space.self.prevent="handleCardClick(d.serial)"
         class="group relative flex flex-col rounded-2xl border border-neutral-800 bg-slate-900 overflow-hidden transition-all duration-150 select-none cursor-pointer"
         :class="[
           props.dashSize === 'fit' && props.viewMode === 'phone' ? 'min-h-0 min-w-0' : '',
@@ -428,7 +413,6 @@ function getAppVisual(iconType?: string) {
           v-if="viewMode === 'deck'"
           class="relative w-full flex-1 min-h-0 bg-black overflow-hidden flex flex-col justify-between p-3 select-none cursor-pointer group/card"
           title="点击进入设备投屏控制"
-          @click="handleCardClick(d.serial)"
         >
           <!-- 顶部状态遥测栏：左侧连接模式 (USB / Wi-Fi)，右侧温度 (电池+CPU) 与电量 -->
           <div class="flex items-center justify-between text-[11px] font-mono shrink-0 pt-1 px-1.5 z-10">
@@ -572,6 +556,7 @@ function getAppVisual(iconType?: string) {
             v-if="isDeviceOnlineForStream(d, mockEnabled)"
             :device="d"
             mode="contain"
+            :interactive="false"
             class="w-full h-full"
             @open-floating="handleCardClick(d.serial)"
           />

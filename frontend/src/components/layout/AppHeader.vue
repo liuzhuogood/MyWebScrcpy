@@ -14,6 +14,7 @@ import MainWindowEffectsControl from '@/components/layout/MainWindowEffectsContr
 import { useMainWindowEffects } from '@/composables/useMainWindowEffects'
 
 interface Props {
+  glass?: boolean
   deviceCountText?: string
   title?: string
   subtitle?: string
@@ -31,6 +32,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  glass: false,
   deviceCountText: '',
   title: undefined,
   subtitle: undefined,
@@ -140,14 +142,15 @@ onMounted(() => {
   <header
     v-bind="$attrs"
     data-tauri-drag-region
-    class="z-40 border-b border-slate-200/80 bg-white/80 dark:border-white/10 dark:bg-slate-950/60 backdrop-blur-2xl shadow-xs transition-all duration-200 select-none"
+    class="z-40 border-b transition-all duration-200 select-none"
     :class="[
+      glass ? 'liquid-glass' : 'border-slate-200/80 bg-white/80 dark:border-white/10 dark:bg-slate-950/60 backdrop-blur-2xl shadow-xs',
       effects.state.value.borderless
         ? [
             'fixed top-0 inset-x-0 shadow-md',
             isHeaderHovered ? 'translate-y-0 opacity-100 pointer-events-auto' : '-translate-y-full opacity-0 pointer-events-none',
           ]
-        : 'sticky top-0 z-10',
+        : glass ? 'relative z-40' : 'sticky top-0 z-10',
       compactToolbar ? 'toolbar-compact' : '',
     ]"
     @mouseleave="isHeaderHovered = false"

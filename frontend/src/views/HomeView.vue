@@ -92,6 +92,10 @@ function handleUpdateSelectedSerials(serials: string[]) {
 const floatingSerials = ref<string[]>([])
 
 async function handleOpenFloating(serial: string) {
+  if (store.mockEnabled) {
+    toast.info('模拟设备仅用于预览')
+    return
+  }
   const device = store.devices.find(d => d.serial === serial)
   if (!device || device.state !== 'device') {
     toast.error('设备当前不在线，无法打开投屏小窗')
@@ -111,11 +115,12 @@ async function handleOpenFloating(serial: string) {
         height: baseH + HEADER_HEIGHT,
         borderless: playerSettings.borderless.value,
       })
-      toast.info(`已在桌面独立小窗中打开【${store.displayName(device)}】作为参考`)
       return
     }
     catch (e) {
-      console.warn('[Desktop] 打开桌面小窗失败，降级为网页小窗', e)
+      console.error('[Desktop] 打开原生投屏小窗失败', { serial, error: e })
+      toast.error('打开投屏小窗失败，请稍后重试')
+      return
     }
   }
 
@@ -220,18 +225,18 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="relative min-h-screen text-slate-900 dark:text-slate-100 select-none pb-20 overflow-x-hidden flex flex-col">
+  <div class="home-shell relative flex h-dvh min-h-0 flex-col overflow-hidden text-slate-900 dark:text-slate-100 select-none">
     <!-- 极光背景 -->
     <HomeAuroraBackground />
 
     <!-- 顶部应用导航栏 -->
-    <AppHeader />
+    <AppHeader glass class="shrink-0" />
 
     <!-- 主工作区：单列铺满主视口，底部预留悬浮底栏安全边距 -->
-    <div class="relative z-10 flex-1 w-full min-w-0">
-      <main class="w-full min-w-0 px-4 sm:px-6 py-5 pb-28 space-y-5">
+    <div class="home-content relative z-10 min-h-0 w-full min-w-0 flex-1 overflow-y-auto overscroll-contain">
+      <main class="flex min-h-full w-full min-w-0 flex-col px-4 pt-4 pb-24 sm:px-6">
         <!-- 设备卡片展示主区：100% 视口铺展 -->
-        <div class="w-full space-y-5">
+        <div class="flex min-h-0 w-full flex-1 flex-col">
           <!-- 初次加载骨架屏 -->
           <div
             v-if="store.loading && store.devices.length === 0"
