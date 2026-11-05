@@ -8,7 +8,7 @@ from .errors import (ActionError, ActionTimeout, CommandError, ConnectionError, 
                      HTTPError, MatchTimeout, MissingDependency, ProtocolError, SDKError,
                      TemplateDisabled, UnsupportedTemplateMethod)
 
-__version__ = "2026.11.5-2"
+__version__ = "2026.11.6"
 __all__ = ["Client", "Device", "Matcher", "ActionResult", "CommandResult", "DeviceInfo", "Frame",
            "ImportResult", "Match", "PageInfo", "Template", "OCRBox", "OCRResult",
            "ActionError", "ActionTimeout",
