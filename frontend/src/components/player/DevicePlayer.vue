@@ -6,6 +6,7 @@ import {
   Circle,
   Crop,
   Ellipsis,
+  ExternalLink,
   FolderOpen,
   Home,
   LayoutTemplate,
@@ -24,8 +25,6 @@ import {
   TriangleAlert,
   Terminal,
   Undo2,
-  Volume2,
-  VolumeX,
   X,
   ChevronDown,
   Pin,
@@ -36,7 +35,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { toast } from 'vue-sonner'
 import { useElementSize } from '@vueuse/core'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,6 +79,7 @@ import AppHeader from '@/components/layout/AppHeader.vue'
 import FilesView from '@/views/FilesView.vue'
 import PlayerSettingsPanel from '@/components/player/PlayerSettingsPanel.vue'
 import WindowEffectsControl from '@/components/player/WindowEffectsControl.vue'
+import AudioControl from '@/components/player/AudioControl.vue'
 import { usePlayerWindows } from '@/composables/usePlayerWindows'
 import TemplatePanel from '@/template/TemplatePanel.vue'
 import { useTemplateMatches } from '@/template/useTemplateMatches'
@@ -96,6 +96,7 @@ const emit = defineEmits<{
   layout: [layout: { width: number, height: number, side: 'capture' | 'tools' | null }]
 }>()
 const serial = computed(() => props.serial)
+const router = useRouter()
 const drop = useDeviceFileDrop()
 const windowEffects = usePlayerWindows(serial)
 const nativePlayerWindow = isTauri() && getCurrentWindow().label.startsWith('player-')
@@ -169,9 +170,10 @@ const localToolbarVisible = ref(true)
 const isNativeToolbarHovered = ref(false)
 const isWindowEffectsActive = ref(false)
 const isMoreMenuOpen = ref(false)
+const isAudioOpen = ref(false)
 let nativeToolbarTimer: ReturnType<typeof setTimeout> | undefined
 
-const isNativeToolbarActive = computed(() => isNativeToolbarHovered.value || isWindowEffectsActive.value || isMoreMenuOpen.value)
+const isNativeToolbarActive = computed(() => isNativeToolbarHovered.value || isWindowEffectsActive.value || isMoreMenuOpen.value || isAudioOpen.value)
 const toolbarVisible = computed(() => nativePlayerWindow ? isNativeToolbarActive.value : localToolbarVisible.value)
 const isAlwaysOnTop = ref(false)
 
@@ -374,6 +376,24 @@ function openSettings() {
   settingsOpen.value = true
 }
 
+// 从小窗进入设备详情（完整投屏详情页）
+async function openDeviceDetail() {
+  if (nativePlayerWindow) {
+    try {
+      await invoke('open_main_device_detail', { serial: props.serial })
+      toast.success('已在 GUI 主程序中打开设备详情，请前往主窗口操作', {
+        description: '当前独立小窗已保留作为实时参考',
+      })
+    }
+    catch (e) {
+      console.warn('[Desktop] 唤起主窗口详情失败，在当前窗口打开', e)
+      router.push({ name: 'player', query: { serial: props.serial } })
+    }
+    return
+  }
+  router.push({ name: 'player', query: { serial: props.serial } })
+}
+
 const scaleModel = computed({
   get: () => [p.displayScale.value ?? 100],
   set: (v: number[]) => p.setDisplayScale(v[0]),
@@ -493,7 +513,7 @@ defineExpose({ handleEscape })
       </template>
 
       <template #actions>
-        <!-- 小窗模式专属精简工具栏：默认只显示 置顶(GUI)、返回、主页、切换 + 更多；过窄时全部收入更多 -->
+        <!-- 小窗保留音量入口；过窄时导航操作收入更多。 -->
         <div v-if="embedded" class="flex shrink-0 items-center gap-0.5">
         <WindowEffectsControl
           v-if="nativePlayerWindow"
@@ -530,7 +550,16 @@ defineExpose({ handleEscape })
           <Button variant="ghost" size="icon" title="切换任务" aria-label="切换任务" @click="p.pressRecents()">
             <GalleryHorizontal class="h-4 w-4" />
           </Button>
+          <Button variant="ghost" size="icon" title="设备详情" aria-label="设备详情" @click="openDeviceDetail()">
+            <ExternalLink class="h-4 w-4" />
+          </Button>
         </template>
+        <AudioControl
+          :ready="p.audioReady.value" :muted="p.audioMuted.value"
+          :volume="p.audioVolume.value" :title="p.audioTitle.value"
+          @toggle="p.toggleAudio()" @volume="p.setAudioVolume($event)"
+          @update:open="isAudioOpen = $event"
+        />
         <DropdownMenu :modal="false" v-model:open="isMoreMenuOpen">
           <DropdownMenuTrigger as-child>
             <Button variant="ghost" size="icon" title="更多" aria-label="更多">
@@ -562,6 +591,8 @@ defineExpose({ handleEscape })
             <DropdownMenuItem v-if="showPip" :disabled="!p.pipSupported.value" @select="p.togglePip()">
               <PictureInPicture2 class="h-4 w-4" />{{ p.pipActive.value ? '退出画中画' : '画中画' }}
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem @select="openDeviceDetail()"><ExternalLink class="h-4 w-4" />设备详情</DropdownMenuItem>
             <DropdownMenuItem @select="openSettings()"><Settings class="h-4 w-4" />设置</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -584,15 +615,12 @@ defineExpose({ handleEscape })
         <Button class="toolbar-secondary" variant="ghost" size="icon" title="横竖屏" aria-label="横竖屏" @click="p.rotate()">
           <RotateCw class="h-5 w-5" />
         </Button>
-        <Button
-          class="toolbar-secondary"
-          variant="ghost" size="icon"
-          :title="p.audioTitle.value" :aria-label="p.audioTitle.value"
-          :disabled="!p.audioReady.value" @click="p.toggleAudio()"
-        >
-          <VolumeX v-if="p.audioMuted.value" class="h-5 w-5" />
-          <Volume2 v-else class="h-5 w-5" />
-        </Button>
+        <AudioControl
+          :ready="p.audioReady.value" :muted="p.audioMuted.value"
+          :volume="p.audioVolume.value" :title="p.audioTitle.value"
+          @toggle="p.toggleAudio()" @volume="p.setAudioVolume($event)"
+          @update:open="isAudioOpen = $event"
+        />
         <Button class="toolbar-optional" variant="ghost" size="icon" title="文件管理" aria-label="文件管理" @click="openFiles()">
           <FolderOpen class="h-5 w-5" />
         </Button>
@@ -692,9 +720,6 @@ defineExpose({ handleEscape })
             <DropdownMenuItem v-if="compactToolbar" @select="p.pressRecents()"><GalleryHorizontal class="h-4 w-4" />切换任务</DropdownMenuItem>
             <DropdownMenuItem v-if="compactToolbar" :disabled="p.powerBusy.value" @select="p.pressPower()"><Power class="h-4 w-4" />电源键</DropdownMenuItem>
             <DropdownMenuItem v-if="compactToolbar" @select="p.rotate()"><RotateCw class="h-4 w-4" />横竖屏</DropdownMenuItem>
-            <DropdownMenuItem v-if="compactToolbar" :disabled="!p.audioReady.value" @select="p.toggleAudio()">
-              <VolumeX v-if="p.audioMuted.value" class="h-4 w-4" /><Volume2 v-else class="h-4 w-4" />{{ p.audioTitle.value }}
-            </DropdownMenuItem>
             <DropdownMenuSeparator v-if="compactToolbar" />
             <DropdownMenuItem v-if="compactToolbar && rec.running.value" :disabled="rec.busy.value" @select="rec.stop()"><Square class="h-4 w-4" />停止录制</DropdownMenuItem>
             <DropdownMenuItem v-else-if="compactToolbar" @select="mobileTool = 'recording'"><Circle class="h-4 w-4" />录制</DropdownMenuItem>

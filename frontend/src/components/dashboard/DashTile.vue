@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { AppWindow, ExternalLink, Home, Loader2, Maximize, Minimize, Power, TriangleAlert } from 'lucide-vue-next'
+import { AppWindow, ExternalLink, Home, Loader2, Maximize, Minimize, PictureInPicture2, Power, TriangleAlert } from 'lucide-vue-next'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import type { Device } from '@/api/devices'
+import { useGroupControl } from '@/composables/useGroupControl'
 import { ScrcpyDecoder } from '@/scrcpy/decoder'
 import {
   ACTION_DOWN,
@@ -28,7 +29,11 @@ const props = withDefaults(
     mode: 'card',
   },
 )
+const emit = defineEmits<{
+  openFloating: [serial: string]
+}>()
 const deviceStore = useDeviceStore()
+const groupControl = useGroupControl()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
 const wrapRef = ref<HTMLElement | null>(null)
@@ -182,9 +187,15 @@ function closeWs() {
     old.close()
 }
 
-function send(bytes: Uint8Array) {
+function send(bytes: Uint8Array, fromGroupSync = false) {
   if (ws && ws.readyState === WebSocket.OPEN)
     ws.send(bytes as Uint8Array<ArrayBuffer>)
+  if (!fromGroupSync) {
+    groupControl.broadcastControl(props.device.serial, bytes, {
+      width: packer.deviceWidth,
+      height: packer.deviceHeight,
+    })
+  }
 }
 
 function toDevice(clientX: number, clientY: number) {
@@ -419,7 +430,23 @@ onMounted(() => {
   connect()
 })
 
+let unregisterGroupChannel: (() => void) | null = null
+
+onMounted(() => {
+  unregisterGroupChannel = groupControl.registerChannel({
+    serial: props.device.serial,
+    send: (bytes) => {
+      send(bytes, true)
+    },
+    getDeviceSize: () => ({
+      width: packer.deviceWidth,
+      height: packer.deviceHeight,
+    }),
+  })
+})
+
 onUnmounted(() => {
+  unregisterGroupChannel?.()
   destroyed = true
   if (reconnectTimer !== undefined)
     window.clearTimeout(reconnectTimer)
@@ -485,6 +512,16 @@ onUnmounted(() => {
       <div
         class="absolute top-1.5 right-1.5 z-20 flex items-center gap-0.5 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
       >
+        <Button
+          variant="ghost"
+          size="icon"
+          class="h-7 w-7 rounded-md bg-transparent p-0 text-white/85 shadow-none drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)] hover:bg-white/20 hover:text-white active:bg-white/30"
+          title="打开投屏小窗"
+          :aria-label="`${displayName} 打开投屏小窗`"
+          @click.stop="emit('openFloating', serial)"
+        >
+          <PictureInPicture2 class="h-4 w-4" />
+        </Button>
         <Button
           variant="ghost"
           size="icon"

@@ -15,7 +15,7 @@
 |---|---|---|
 | 设备列表页 | 首页、主页、设备页 | 路由 `/` · `frontend/src/views/HomeView.vue` |
 | 投屏详情页 | 投屏页、投屏操控页、播放器页、控制页 | 路由 `/player?serial=<序列号>` · `frontend/src/views/PlayerView.vue` |
-| 投屏小窗 | 小窗、画中画小窗、画中画、画中画微窗 | 从设备列表页（首页）设备卡片“画中画”打开的独立投屏窗口。桌面端为系统级独立原生小窗（路由 `/player?serial=<序列号>&embedded=1`，由 `desktop/src/links.rs` 的 `open_device_window` 创建）；Web 端为内嵌可拖拽画中画浮动窗口（`frontend/src/components/player/FloatingPlayer.vue`） |
+| 投屏小窗 | 小窗、画中画小窗、画中画、画中画微窗 | 点击设备列表页（首页）设备卡片打开的投屏小窗；小窗“更多”菜单提供「设备详情」入口。桌面端为系统级独立原生小窗（路由 `/player?serial=<序列号>&embedded=1`，由 `desktop/src/links.rs` 的 `open_device_window` 创建），Web 端为内嵌可拖拽浮动小窗（`frontend/src/components/player/FloatingPlayer.vue`） |
 | 大屏监控页 | 大屏、监控墙、dashboard | 路由 `/dashboard` · `frontend/src/views/DashboardView.vue` |
 | 文件管理页 | 文件页、文件管理器 | 路由 `/files?serial=<序列号>` · `frontend/src/views/FilesView.vue`;亦内嵌于投屏详情页抽屉(`DevicePlayer.vue`,embedded) |
 | 依赖管理页 | 依赖页 | 路由 `/dependencies` · `frontend/src/views/DependenciesView.vue` |
@@ -43,12 +43,14 @@
 | 空闲自动熄屏 | 熄屏设置、空闲熄屏、自动熄屏 | 系统设置 → 通用设置中的开关，默认关闭；开启后按设备计算，无投屏、ADB 终端、命令及设备操作满 10 分钟后由后端自动熄屏，后台遥测与屏幕状态轮询不刷新空闲计时；`internal/idlescreen`，`GET/PUT /api/system/idle-screen` |
 | 系统配置 | 设置、系统设置、系统配置弹窗 | 首页入口弹窗 `frontend/src/components/system/SystemConfigDialog.vue`,页签:主题 / ADB / Python / 模板匹配 / OCR 服务 |
 | 大屏磁贴 | 磁贴、tile | `frontend/src/components/dashboard/DashTile.vue` |
-| 手机卡片视图 | 手机卡片、卡片视图、甲板、3D全息 | `frontend/src/components/device/DeviceCard.vue` (`viewMode === 'deck'`)；首页三种视图之一，采用真实手机拟物卡片展示设备遥测（温度、电量）与当前运行应用，在熄屏或黑屏锁屏时展示已锁定状态，不挂载实时投屏流，点击整机可直达投屏，与 `compact`、`phone` 并列 |
-| 首页手机视图 | 手机视图、第三视图、手机样式视图、手机墙、首页多设备投屏、紧密设备墙 | `frontend/src/components/home/HomePhoneView.vue`；首页三种视图之一，以紧密设备墙规格挂载实时画面（小/中/大/铺满同档位同宽同高，相邻横纵间距统一 2px，画面黑底 contain 等比居中黑边填充、不拉伸不裁图，黑边不发触控），由右侧批量操作面板内真实设备编号小方块选择器统一控制显隐，支持页面全屏，与 `deck`、`compact` 并列 |
+| 手机卡片视图 | 手机卡片、卡片视图、甲板、3D全息 | `frontend/src/components/home/HomePhoneView.vue` (`viewMode === 'deck'`)；首页卡片与手机两种视图之一，采用手机拟物卡片展示设备遥测（温度、电量）与当前运行应用，熄屏或锁屏时展示已锁定状态，不挂载实时投屏流；卡片按序列号正序靠左紧凑排列（8px 间隙），点击卡片打开投屏小窗，支持鼠标拉框批量框选 |
+| 首页手机视图 | 手机视图、第三视图、手机样式视图、手机墙、首页多设备投屏、紧密设备墙 | `frontend/src/components/home/HomePhoneView.vue`；首页卡片与手机两种视图之一，以紧密设备墙规格挂载实时画面（同档位同宽同高，相邻横纵间距统一 8px，画面黑底 contain 等比居中黑边填充、不拉伸不裁图，黑边不发触控），设备显隐由 iOS 悬浮底栏的编号小方块控制，支持页面全屏 |
 | 手机视图统一格 | 统一格、同宽同高手机格子、紧密设备格 | `frontend/src/utils/phoneGrid.ts` 与 `frontend/src/components/home/HomePhoneView.vue`；首页手机视图在小/中/大/铺满各档位所使用的等宽等高规格与 2px 间隙体系，横屏、长屏与旋转均保持卡片尺寸恒定，视口内黑底等比 contain 居中显示 |
-| 操作面板 | 批量操作面板、批量面板、右侧面板、右侧操作面板 | `frontend/src/components/home/ActionPanel.vue`；位于设备卡片主展示区右侧，支持展开与极窄收起态，收纳搜索、视图切换、投屏参数调节、编号设备显隐、批量目标与图标动作，作为首页统一控制入口 |
+| iOS 悬浮底栏 | 悬浮底栏、底栏、操作栏、Dock栏、浮动药丸栏、控制中心、操作面板、批量操作面板、批量面板、右侧面板 | `frontend/src/components/home/HomeIosDockBar.vue`；首页底部居中悬浮毛玻璃胶囊操作栏，整合操作、视图、设备（支持鼠标原生框选）与更多服务四组 iOS 浮动卡片 Sheet，支持最小化、设备编号区域紧凑展开、滚动框选；无遮罩且外部点击收起并透传，取代原右侧固定操作侧栏（ActionPanel） |
 | 显示离线设备 | 显示离线、离线过滤开关 | `frontend/src/composables/useHomeFilter.ts`；首页控制胶囊开关，默认关闭（仅展示 `state === 'device'` 设备），开启时在搜索与编号生成前纳入离线与未授权设备，本地持久化布尔配置 |
-| 设备编号小方块选择器 | 编号小方块、编号显隐、数字网格 | `frontend/src/components/home/batch/BatchDeviceGrid.vue`；批量面板内替代旧分页与显隐弹窗的数字网格选择区，按 serial 字典序稳定编号（01..N），不伪造 60 台，点选编号切换设备显隐，提供“全显”与“只显已选” |
+| 设备编号小方块选择器 | 编号小方块、编号显隐、数字网格、设备矩阵 | `frontend/src/components/home/HomeIosDockBar.vue`（【设备】浮动卡片）；按 serial 字典序稳定编号（01..N），纳管离线设备，点选可切换已选状态，支持鼠标拉框批量框选与 Ctrl/Cmd 增量选择 |
+| 设备添加与发现 | 扫码配对、范围扫描、常态扫描 | `frontend/src/components/home/AddDeviceDialog.vue` 与 `internal/device/discovery.go`；二维码按 Android 无线调试机制由电脑生成、手机扫码，IP 范围支持末段缩写和多端口，持续扫描可停止、关闭对话框或租约断开后停止；`/api/device-discovery/*` |
+| 投屏音量 | 小窗声音、音量调节 | `frontend/src/components/player/AudioControl.vue` 与 `frontend/src/scrcpy/audio.ts`；调节本地播放增益并保留静音，不改变设备系统音量 |
 | 技能市场 | 技能列表、APP 自动化技能 | `frontend/src/components/ai-integration/SkillMarket.vue` |
 
 ## 核心概念
@@ -71,6 +73,7 @@
 | 像素点取色接口 | 获取像素点、像素颜色接口、坐标取色 | 接口 `GET/POST /api/v1/vision/pixel`；支持归一化坐标(0~1)与绝对像素坐标，基于最新帧画面快速提取像素并返回详细颜色信息(RGB/RGBA/HEX) |
 | 投屏拖拽安装 | 拖拽安装、APK 拖拽安装、投屏文件投放 | 投屏详情页与小窗投屏画面支持直接拖入文件；APK 文件弹出安装确认弹窗（支持保留数据覆盖、自动授权、允许降级），其他文件弹出保存到设备 Downloads 目录（`/storage/emulated/0/Download/`）确认弹窗 |
 | 快手短视频技能 | 快手技能、快手极速版任务、观看视频模式 | `skills/kuaishou-short-video/SKILL.md`；红包守护、连续打卡白拿手机、连续签到的视频观看流程 |
+| 群控 | 群控同步、同步操作、多机同步、同屏同步 | 操作任意一台已选主控手机时，将其触控轨迹、按键与手势按分辨率比例实时广播同步至所有已勾选的受控手机；`frontend/src/composables/useGroupControl.ts` |
 
 ## 后端模块速查(`internal/`)
 
@@ -108,3 +111,9 @@
 | AI 集成原型 | AI 集成历史原型、接入指南原型 | `prototypes/cases/ai-integration-v2/Prototype.vue`；独立预览 `#ai-integration-v2`，v1 保留用于对照 |
 | 技能市场原型 | 技能列表原型、APP 自动化技能原型 | v2 首页中的 `components/SkillMarket.vue`；搜索、分类、已安装过滤和技能入口 |
 | 技能详情原型页 | 技能详情原型、技能二级原型页面 | `prototypes/cases/ai-integration-v2/components/SkillDetailPage.vue`；预览查询参数 `?skill=<SkillId>#ai-integration-v2`，支持返回市场 |
+
+## v1.35 规划术语（尚未实现）
+
+| 术语 | 指向 |
+| --- | --- |
+| 统一设备采集与图标缓存 | [v1.35.0-feature](versions/v1.35.0-feature/design.md)；温度、电量、当前应用与图标更新共用调度，图标按全局包名共享并有 TTL，当前仅设计 |

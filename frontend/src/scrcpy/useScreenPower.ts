@@ -1,7 +1,7 @@
 import { onUnmounted, ref, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { toast } from 'vue-sonner'
-import { createWakeUnlockTrigger, pressPowerWithUnlock, requestScreenUnlock } from './screenPower'
+import { createWakeUnlockTrigger, pressPowerWithUnlock, requestScreenUnlock, wakeAndUnlockOnOpen } from './screenPower'
 
 export function useScreenPower(serial: string, callbacks: {
   sendPowerKey: () => void
@@ -57,6 +57,14 @@ export function useScreenPower(serial: string, callbacks: {
     })
   }
 
+  function prepareOnOpen(): Promise<void> {
+    return runAction(async signal => {
+      await wakeAndUnlockOnOpen(serial, signal)
+      await trigger.observe(true, autoUnlockOnWake.value)
+      callbacks.onWake()
+    })
+  }
+
   watch(autoUnlockOnWake, enabled => {
     trigger.reset()
     if (enabled)
@@ -70,5 +78,5 @@ export function useScreenPower(serial: string, callbacks: {
     activeController?.abort()
   })
 
-  return { autoUnlockOnWake, powerBusy, pressPower, observeScreenState }
+  return { autoUnlockOnWake, powerBusy, pressPower, observeScreenState, prepareOnOpen }
 }

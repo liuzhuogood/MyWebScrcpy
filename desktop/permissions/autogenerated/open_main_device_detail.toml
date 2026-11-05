@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-main-device-detail"
+description = "Enables the open_main_device_detail command without any pre-configured scope."
+commands.allow = ["open_main_device_detail"]
+
+[[permission]]
+identifier = "deny-open-main-device-detail"
+description = "Denies the open_main_device_detail command without any pre-configured scope."
+commands.deny = ["open_main_device_detail"]

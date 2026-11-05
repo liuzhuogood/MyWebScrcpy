@@ -12,6 +12,7 @@ export class DeviceAudio {
   status: AudioStatus = 'unavailable'
   reason = '设备声音不可用'
   muted = true
+  volume = 1
 
   private decoder: AudioDecoder | null = null
   private context: AudioContext | null = null
@@ -43,6 +44,22 @@ export class DeviceAudio {
     if (this.status !== 'ready')
       return
     this.muted = !this.muted
+    if (!this.muted && this.volume === 0)
+      this.volume = 1
+    try {
+      await this.ensureContext()
+      this.setStatus('ready')
+    }
+    catch {
+      this.setStatus('decoder_error', '浏览器未允许播放设备声音')
+    }
+  }
+
+  async setVolume(value: number): Promise<void> {
+    if (!Number.isFinite(value) || this.status !== 'ready')
+      return
+    this.volume = Math.max(0, Math.min(1, value))
+    this.muted = this.volume === 0
     try {
       await this.ensureContext()
       this.setStatus('ready')
@@ -124,7 +141,7 @@ export class DeviceAudio {
     if (this.context.state !== 'running')
       await this.context.resume()
     if (this.gain)
-      this.gain.gain.value = this.muted ? 0 : 1
+      this.gain.gain.value = this.muted ? 0 : this.volume
   }
 
   private outputAudio(audio: AudioData) {
