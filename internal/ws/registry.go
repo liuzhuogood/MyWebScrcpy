@@ -504,7 +504,7 @@ func encodeFrame(f *scrcpy.Frame) []byte {
 }
 
 func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan struct{}) {
-	ch, cancel := h.subscribeShared(ms)
+	ch, cancel := h.subscribeBrowserVideo(ms)
 	defer cancel()
 	clipboardCh, cancelClipboard := h.subscribeClipboard(ms)
 	defer cancelClipboard()

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -14,6 +14,28 @@ watch(embedded, value => {
 }, { immediate: true })
 onUnmounted(() => document.documentElement.classList.remove('desktop-player'))
 
+let layout: { width: number, height: number } | undefined
+let fitTimer: ReturnType<typeof setTimeout> | undefined
+let fitting = false
+let disposed = false
+function queueFit() {
+  clearTimeout(fitTimer)
+  fitTimer = setTimeout(() => { void fitNative() }, 80)
+}
+async function fitNative() {
+  if (disposed || fitting || !layout || !embedded.value || !isTauri() || !getCurrentWindow().label.startsWith('player-')) return
+  fitting = true
+  try { await invoke('fit_player_window', { videoWidth: layout.width, videoHeight: layout.height }) }
+  catch (cause) { console.warn('[Desktop] 适配视频小窗失败', cause) }
+  finally { fitting = false }
+}
+function handleLayout(next: {width: number, height: number}) {
+  if (next.width <= 0 || next.height <= 0) return
+  layout = next
+  queueFit()
+}
+onMounted(() => window.addEventListener('resize', queueFit))
+onUnmounted(() => { disposed = true; clearTimeout(fitTimer); window.removeEventListener('resize', queueFit) })
 async function handleClose() {
   if (isTauri()) {
     try {
@@ -40,6 +62,7 @@ async function handleClose() {
       :serial="serial"
       :embedded="embedded"
       @close="handleClose"
+      @layout="handleLayout"
     />
   </div>
 </template>

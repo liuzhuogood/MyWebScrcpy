@@ -553,6 +553,7 @@ func broadcastReplayFrame(ms *managedSession, f *scrcpy.Frame, buf []byte) {
 		ms.lastConfig = nil
 		ms.lastKey = nil
 	}
+	cacheVisionSnapshot(ms, f, buf)
 	if f.Kind == scrcpy.FrameConfig {
 		ms.lastConfig = append([]byte(nil), buf...)
 	}

@@ -1,6 +1,7 @@
 if (!window.__playerVerifyStarted && document.querySelector('canvas') && document.documentElement.classList.contains('desktop-player')) {
   window.__playerVerifyStarted = true;
   const channel = new BroadcastChannel('player-window-verification');
+  const instance = crypto.randomUUID();
   const serial = new URL(location.href).searchParams.get('serial');
   const invoke = async (command, args) => {
     if (['set_player_opacity', 'set_player_click_through', 'set_player_borderless', 'set_player_toolbar_visible'].includes(command)) {
@@ -20,39 +21,35 @@ if (!window.__playerVerifyStarted && document.querySelector('canvas') && documen
     }
     throw new Error(message);
   }
+  window.addEventListener('pagehide', () => channel.close(), { once: true });
   channel.onmessage = async ({ data }) => {
-    if (data.serial !== serial) return;
+    if (data.serial !== serial || data.instance !== instance) return;
     try {
       if (data.action === 'frame_controls') {
+        const reveal = () => document.querySelector('[aria-label="展开工具条"]')?.parentElement.dispatchEvent(new MouseEvent('mouseenter'));
+        reveal();
+        await waitFor(() => document.querySelector('[aria-label="窗口设置"]'), 'window toolbar did not open');
+        const canvas = document.querySelector('canvas');
+        canvas.width = 1080; canvas.height = 2400;
+        await invoke('fit_player_window', {videoWidth:1080, videoHeight:2400});
+        window.dispatchEvent(new Event('resize'));
+        await frames();
+        const viewport = document.querySelector('[data-player-viewport]').getBoundingClientRect();
+        const before = canvas.getBoundingClientRect();
+        assert(Math.abs(viewport.width/viewport.height - 1080/2400) < .003, 'native viewport does not fit video aspect');
+        assert(Math.abs(before.width - viewport.width) < 2 && Math.abs(before.height - viewport.height) < 2, 'canvas leaves black edges');
+        document.querySelector('header').dispatchEvent(new MouseEvent('mouseleave'));
+        await waitFor(() => !document.querySelector('header'), 'toolbar did not auto-hide');
+        const hidden = canvas.getBoundingClientRect();
+        reveal();
+        await waitFor(() => document.querySelector('[aria-label="窗口设置"]'), 'toolbar did not reveal');
+        const after = canvas.getBoundingClientRect();
+        assert(before.width === hidden.width && before.height === hidden.height && hidden.width === after.width && hidden.height === after.height, 'toolbar resized canvas');
+        assert(getComputedStyle(document.querySelector('header')).position === 'absolute', 'toolbar occupies layout');
         document.querySelector('[aria-label="窗口设置"]').click();
-        await waitFor(() => document.querySelector('[role="switch"][aria-label="无边框"]'), 'window settings did not open');
-        let toggle = document.querySelector('[role="switch"][aria-label="无边框"]');
-        assert(toggle.getAttribute('aria-checked') === 'true', 'initial borderless default missing');
-        toggle.click();
-        await waitFor(async () => !(await playerState()).borderless, 'popover switch did not restore frame');
-        await frames();
-        toggle.click();
-        await waitFor(async () => (await playerState()).borderless, 'popover switch did not remove frame');
+        await waitFor(() => document.querySelector('[aria-label="小窗透明度"]'), 'window settings did not open');
+        assert(!document.querySelector('[aria-label="无边框"]'), 'frame toggle remains');
         document.querySelector('[aria-label="窗口设置"]').click();
-        await frames();
-        document.querySelector('[aria-label="更多"]').click();
-        await waitFor(() => [...document.querySelectorAll('[role="menuitem"]')].some(item => item.textContent.trim() === '设置'), 'settings menu item missing');
-        [...document.querySelectorAll('[role="menuitem"]')].find(item => item.textContent.trim() === '设置').click();
-        await waitFor(() => document.querySelector('aside[aria-label="投屏设置"]'), 'player settings did not open');
-        toggle = document.querySelector('aside[aria-label="投屏设置"] [aria-label="无边框"]');
-        assert(toggle.getAttribute('aria-checked') === 'true', 'settings sidebar did not share window state');
-        toggle.click();
-        await waitFor(async () => !(await playerState()).borderless, 'sidebar switch did not restore frame');
-        await frames();
-        toggle.click();
-        await waitFor(async () => (await playerState()).borderless, 'sidebar switch did not remove frame');
-        document.querySelector('[aria-label="关闭设置"]').click();
-        document.querySelector('[aria-label="隐藏工具条"]').click();
-        await waitFor(() => !document.querySelector('[aria-label="隐藏工具条"]'), 'toolbar did not hide');
-        await waitFor(() => document.querySelector('[data-sonner-toast]'), 'hide toolbar toast missing');
-        const text = document.querySelector('[data-sonner-toast]').textContent;
-        const snapshot = await invoke('list_player_windows');
-        assert(text.includes(snapshot.recoveryShortcut) && text.includes('视图 → 恢复所有小窗'), 'toast recovery instructions incorrect');
       }
       if (data.action === 'enable') {
         await invoke('set_player_borderless', { enabled: true });
@@ -75,8 +72,8 @@ if (!window.__playerVerifyStarted && document.querySelector('canvas') && documen
         assert(getComputedStyle(document.querySelector('#app')).opacity === '1', 'restore did not render');
         const snapshot = await invoke('list_player_windows');
         const player = snapshot.windows.find(item => item.serial === serial);
-        assert(player.opacity === 100 && !player.clickThrough && !player.borderless && player.toolbarVisible, 'restore state mismatch');
-        await waitFor(() => document.querySelector('[aria-label="隐藏工具条"]'), 'recovery did not render the toolbar');
+        assert(player.opacity === 100 && !player.clickThrough && player.borderless && player.toolbarVisible, 'restore state mismatch');
+        assert(!document.querySelector('[aria-label="无边框"]'), 'frame toggle returned after recovery');
         for (const [command, args] of [
           ['set_player_opacity', { opacity: 0 }],
           ['set_player_borderless', { enabled: true }],
@@ -94,5 +91,5 @@ if (!window.__playerVerifyStarted && document.querySelector('canvas') && documen
       channel.postMessage({ serial, action: data.action, error: String(error) });
     }
   };
-  channel.postMessage({ serial, action: 'ready', ok: true });
+  channel.postMessage({ serial, instance, action: 'ready', ok: true });
 }

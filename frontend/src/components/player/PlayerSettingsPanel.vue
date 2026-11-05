@@ -8,7 +8,6 @@ defineProps<{
   boxesVisible: boolean
   autoUnlockOnWake: boolean
   clipboardSync: boolean
-  borderless?: boolean
   windowBusy?: boolean
 }>()
 const emit = defineEmits<{
@@ -16,7 +15,6 @@ const emit = defineEmits<{
   'update:boxesVisible': [value: boolean]
   'update:autoUnlockOnWake': [value: boolean]
   'update:clipboardSync': [value: boolean]
-  'update:borderless': [value: boolean]
   close: []
 }>()
 </script>
@@ -32,10 +30,6 @@ const emit = defineEmits<{
       </template>
     </SidePanelHeader>
     <div class="space-y-4 overflow-auto p-4">
-      <div v-if="borderless !== undefined" class="flex items-center justify-between gap-4">
-        <p class="text-sm font-medium">无边框</p>
-        <Switch :model-value="borderless" :disabled="windowBusy" aria-label="无边框" @update:model-value="emit('update:borderless', !!$event)" />
-      </div>
       <div class="flex items-center justify-between gap-4">
         <div><p class="text-sm font-medium">剪贴板共享</p><p class="text-xs text-muted-foreground">在电脑与设备间同步剪贴板文本</p></div>
         <Switch :model-value="clipboardSync" aria-label="剪贴板共享" @update:model-value="emit('update:clipboardSync', !!$event)" />

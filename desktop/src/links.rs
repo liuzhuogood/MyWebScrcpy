@@ -23,7 +23,6 @@ pub fn open_device_window(
     title: Option<String>,
     width: Option<f64>,
     height: Option<f64>,
-    borderless: Option<bool>,
 ) -> Result<(), String> {
     let state = app.state::<State>();
     let safe_serial = serial.replace(|c: char| !c.is_alphanumeric(), "_");
@@ -46,7 +45,7 @@ pub fn open_device_window(
     let win_title = title.unwrap_or_else(|| format!("投屏 - {}", serial));
     let w = width.unwrap_or(380.0);
     let h = height.unwrap_or(836.0);
-    let borderless = borderless.unwrap_or(false);
+    let borderless = true;
 
     let token_script = if let Ok(guard) = state.backend.lock() {
         if let Some(b) = guard.as_ref() {
@@ -115,3 +114,23 @@ pub fn open_main_device_detail(app: AppHandle, serial: String) -> Result<(), Str
 }
 
 pub const CLICK_SCRIPT: &str = include_str!("links.js");
+
+#[tauri::command]
+pub fn fit_player_window(window: tauri::WebviewWindow, video_width: f64, video_height: f64) -> Result<(), String> {
+    if !window.label().starts_with("player-") { return Err("仅设备小窗支持画面适配".into()); }
+    if !video_width.is_finite() || !video_height.is_finite() || video_width < 1.0 || video_height < 1.0 { return Err("视频尺寸无效".into()); }
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let current = window.inner_size().map_err(|e| e.to_string())?.to_logical::<f64>(scale);
+    let ratio = video_width / video_height;
+    let mut width = current.width;
+    if let Some(monitor) = window.current_monitor().map_err(|e| e.to_string())? {
+        let screen = monitor.size().to_logical::<f64>(monitor.scale_factor());
+        width = width.min(screen.width - 40.0).min((screen.height - 100.0) * ratio);
+    }
+    let height = (width / ratio).round();
+    if (current.width - width).abs() >= 1.0 || (current.height - height).abs() >= 1.0 {
+        window.set_size(tauri::LogicalSize::new(width, height)).map_err(|e| e.to_string())?;
+        eprintln!("[Desktop] 小窗 {} 适配视频 {}x{} -> {:.0}x{:.0}", window.label(), video_width, video_height, width, height);
+    }
+    Ok(())
+}

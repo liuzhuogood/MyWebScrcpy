@@ -68,7 +68,7 @@ interface WsMeta {
 export interface TouchVisualEvent { kind: 'down' | 'move' | 'up' | 'tap' | 'swipe', x: number, y: number, x2?: number, y2?: number }
 
 /** 投屏连接：WS 生命周期 + 解码 + 输入 + 工具栏动作，视图只做渲染 */
-export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: OpPayload) => void, onTouch?: (event: TouchVisualEvent) => void, onDisconnect?: () => void, onFrame?: () => void } = {}) {
+export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (type: OpType, data: OpPayload) => void, onTouch?: (event: TouchVisualEvent) => void, onDisconnect?: () => void, onFrame?: () => void } = {}) {
   const playerSettings = usePlayerSettings()
   const op = (type: OpType, data: OpPayload) => opts.onOp?.(type, data)
   const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -293,6 +293,12 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     try {
       if (typeof ev.data === 'string') {
         const msg = JSON.parse(ev.data) as WsMeta
+        // Static Android screens legitimately emit no media frames. Liveness
+        // comes from the current socket's server heartbeat, not picture changes.
+        if (msg.type === 'stream.heartbeat') {
+          lastActivityAt = Date.now()
+          return
+        }
         if (msg.type === 'audio.status' && msg.status) {
           audio?.serverStatus({ status: msg.status as AudioStatus, reason: msg.reason })
           return
@@ -345,7 +351,7 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     packer.setDeviceSize(w, h)
     videoSize.value = { w, h }
     try {
-      decoder?.configure(msg.codec || 'h264', w, h)
+      decoder?.configure(msg.codec || 'h264', w, h, msg.session_id)
     }
     catch (e) {
       console.error('[decoder] 初始化失败:', e)
@@ -918,17 +924,17 @@ export function usePlayer(serial: string, opts: { onOp?: (type: OpType, data: Op
     // 右侧面板打开时，画布应按 SplitLayout 左栏的实际空间适配，
     // 不能继续使用包含右栏的整页宽度，否则会产生空白或被右栏挤压。
     const layoutMain = canvas.closest<HTMLElement>('.split-layout-main')
-    const viewport = layoutMain || stage
-    const padding = layoutMain ? 0 : 48
-    const availW = viewport.clientWidth - padding
-    const availH = viewport.clientHeight - padding
+    const viewport = canvas.closest<HTMLElement>('[data-player-viewport]') ?? layoutMain ?? stage
+    const style = getComputedStyle(viewport)
+    const availW = viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+    const availH = viewport.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom)
     if (availW <= 0 || availH <= 0)
       return
     const cw = canvas.width
     const ch = canvas.height
     let dw: number
     let dh: number
-    if (displayScale.value !== null) {
+    if (!opts.embedded && displayScale.value !== null) {
       dw = (cw * displayScale.value) / 100
       dh = (ch * displayScale.value) / 100
     }

@@ -1,0 +1,807 @@
+{
+  "scope": "Local uncommitted fix on codex/v2026.11.5-3-fix; VERSION unchanged v2026.11.5-2",
+  "unit": {
+    "go": 461,
+    "go_packages": 35,
+    "device_race": 20,
+    "rust": 5,
+    "node": 61,
+    "cjs_suites": [
+      "player_windows",
+      "main_window_effects",
+      "group_control",
+      "device_discovery",
+      "roi",
+      "decoder"
+    ],
+    "ws_race": 16
+  },
+  "native": {
+    "settingsSamples": [
+      {
+        "tab": "投屏设置",
+        "ms": 32
+      },
+      {
+        "tab": "通用设置",
+        "ms": 33
+      },
+      {
+        "tab": "投屏设置",
+        "ms": 34
+      },
+      {
+        "tab": "服务",
+        "ms": 33
+      },
+      {
+        "tab": "投屏设置",
+        "ms": 32
+      },
+      {
+        "tab": "依赖",
+        "ms": 35
+      },
+      {
+        "tab": "服务",
+        "ms": 32
+      },
+      {
+        "tab": "投屏设置",
+        "ms": 34
+      }
+    ],
+    "settingsRetained": true,
+    "mainProtected": true,
+    "borderlessDefault": true,
+    "controlsRemoved": true,
+    "overlayStable": true,
+    "aspectFit": true,
+    "zeroAndHalfOpacity": true,
+    "transparentBody": true,
+    "clickThroughIPC": true,
+    "rangeGuard": true,
+    "independentRecovery": true,
+    "reopenRecovery": true,
+    "closeReopen": true,
+    "menuRecovery": true,
+    "toolbarRecovery": true,
+    "nativeDecorations": true,
+    "ok": true
+  },
+  "home_settings": {
+    "ok": true,
+    "initial": {
+      "card": "03\nC\n已锁定",
+      "number": "03"
+    },
+    "reordered": [
+      {
+        "serial": "test-c",
+        "text": "01\nC\n已锁定",
+        "selected": true
+      },
+      {
+        "serial": "test-a",
+        "text": "03\nA\ntest-a",
+        "selected": false
+      }
+    ],
+    "afterInsert": {
+      "dom": [
+        "test-c",
+        "test-a"
+      ],
+      "data": [
+        "test-c",
+        "test-a"
+      ]
+    },
+    "lockCalls": [
+      {
+        "url": "/api/adb/commands?serial=test-c",
+        "method": "POST",
+        "body": "{\"args\":[\"shell\",\"input\",\"keyevent\",\"KEYCODE_SLEEP\"],\"timeout_ms\":5000,\"async\":false}"
+      }
+    ],
+    "shared": true,
+    "settings": {
+      "samples": [
+        {
+          "tab": "投屏设置",
+          "ms": 62.5
+        },
+        {
+          "tab": "通用设置",
+          "ms": 35.69999980926514
+        },
+        {
+          "tab": "投屏设置",
+          "ms": 29.700000047683716
+        },
+        {
+          "tab": "服务",
+          "ms": 37.09999990463257
+        },
+        {
+          "tab": "投屏设置",
+          "ms": 41.90000009536743
+        },
+        {
+          "tab": "依赖",
+          "ms": 93.90000009536743
+        },
+        {
+          "tab": "服务",
+          "ms": 38
+        },
+        {
+          "tab": "投屏设置",
+          "ms": 38.5
+        }
+      ],
+      "retained": true,
+      "noFrameToggle": true
+    }
+  },
+  "discovery": {
+    "ok": true,
+    "initial": {
+      "width": 480,
+      "height": 620,
+      "preloaded": true
+    },
+    "dimensions": [
+      {
+        "width": 480,
+        "height": 620,
+        "y": 231
+      },
+      {
+        "width": 480,
+        "height": 620,
+        "y": 231
+      },
+      {
+        "width": 480,
+        "height": 620,
+        "y": 231
+      },
+      {
+        "width": 480,
+        "height": 620,
+        "y": 231
+      },
+      {
+        "width": 480,
+        "height": 620,
+        "y": 231
+      }
+    ],
+    "defaults": {
+      "start": "10.0.0.1",
+      "end": "10.0.0.254"
+    },
+    "networks": [
+      {
+        "name": "en0",
+        "address": "10.0.0.10",
+        "prefix_length": 24,
+        "start": "10.0.0.1",
+        "end": "10.0.0.254"
+      }
+    ],
+    "scan": [
+      {
+        "ranges": [
+          "127.0.0.2-127.0.0.2",
+          "127.0.0.1-127.0.0.1"
+        ],
+        "ports": [
+          1
+        ],
+        "continuous": false,
+        "interval_seconds": 30
+      }
+    ],
+    "jobs": [
+      {
+        "id": "da76e4549220e118babc71149f073129",
+        "kind": "pair",
+        "state": "running",
+        "method": "POST"
+      },
+      {
+        "id": "da76e4549220e118babc71149f073129",
+        "kind": "pair",
+        "state": "running",
+        "method": "GET"
+      },
+      {
+        "id": "90295f107590c5c4d2cba888e5a7839b",
+        "kind": "scan",
+        "state": "running",
+        "method": "POST"
+      },
+      {
+        "id": "da76e4549220e118babc71149f073129",
+        "kind": "pair",
+        "state": "running",
+        "method": "GET"
+      },
+      {
+        "id": "90295f107590c5c4d2cba888e5a7839b",
+        "kind": "scan",
+        "state": "completed",
+        "method": "GET"
+      },
+      {
+        "id": "da76e4549220e118babc71149f073129",
+        "kind": "pair",
+        "state": "cancelled",
+        "method": "DELETE"
+      },
+      {
+        "id": "c442521c28501ecb9b5149d761103a87",
+        "kind": "pair",
+        "state": "running",
+        "method": "POST"
+      },
+      {
+        "id": "c442521c28501ecb9b5149d761103a87",
+        "kind": "pair",
+        "state": "cancelled",
+        "method": "DELETE"
+      }
+    ]
+  },
+  "player_layout": {
+    "ok": true,
+    "syntheticVideo": true,
+    "overlay": {
+      "canvas": {
+        "x": 581,
+        "y": 88,
+        "width": 360,
+        "height": 800,
+        "top": 88,
+        "right": 941,
+        "bottom": 888,
+        "left": 581
+      },
+      "stage": {
+        "x": 581,
+        "y": 88,
+        "width": 360,
+        "height": 800,
+        "top": 88,
+        "right": 941,
+        "bottom": 888,
+        "left": 581
+      },
+      "position": "absolute",
+      "background": "oklab(0.999994 0.0000455677 0.0000200868 / 0.8)"
+    },
+    "detail": {
+      "canvas": {
+        "x": 577,
+        "y": 97,
+        "width": 369,
+        "height": 820,
+        "top": 97,
+        "right": 946,
+        "bottom": 917,
+        "left": 577
+      },
+      "stage": {
+        "x": 0,
+        "y": 57,
+        "width": 1523,
+        "height": 900,
+        "top": 57,
+        "right": 1523,
+        "bottom": 957,
+        "left": 0
+      },
+      "top": 40,
+      "bottom": 40,
+      "ratio": 0.45
+    }
+  },
+  "toolbar": {
+    "devices": 500,
+    "cards": 441,
+    "before": 0,
+    "after": 0,
+    "scroll": 3000
+  },
+  "limits": [
+    "Device UI actions used test-* fixtures; no user device commands or video sessions were changed.",
+    "Native window/IPC and browser layout tests use synthetic canvas/metadata, not phone video decoding.",
+    "QR payload generation, polling, stop/restart and loopback scan were exercised against the isolated Go service; physical phone scanning was not performed.",
+    "No installed-app replacement, commit, push, release, notarization or Windows/Linux device verification."
+  ],
+  "normal_build": {
+    "portable_cli_exists": true,
+    "gui_exists": true,
+    "served_frontend_matches_final_dist": true,
+    "verification_build": false
+  },
+  "static_video": {
+    "baseline": {
+      "frames": [
+        {
+          "at": 898.9000000953674,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 965.6000001430511,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 1167.6000001430511,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 1368.6000001430511,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 1569.1000001430511,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 1769.7000000476837,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        },
+        {
+          "at": 1970.6000001430511,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        },
+        {
+          "at": 2171.600000143051,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        },
+        {
+          "at": 2373.100000143051,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        },
+        {
+          "at": 2573.100000143051,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        },
+        {
+          "at": 8686.600000143051,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 15715.600000143051,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 22740.299999952316,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        }
+      ],
+      "status": {
+        "connections": 4,
+        "finished": true
+      }
+    },
+    "fixed": {
+      "ok": true,
+      "steady": {
+        "frames": [
+          {
+            "at": 594.5,
+            "pixel": [
+              254,
+              0,
+              0,
+              255
+            ]
+          },
+          {
+            "at": 770.2000000476837,
+            "pixel": [
+              254,
+              0,
+              0,
+              255
+            ]
+          },
+          {
+            "at": 970.7000000476837,
+            "pixel": [
+              254,
+              0,
+              0,
+              255
+            ]
+          },
+          {
+            "at": 1171.9000000953674,
+            "pixel": [
+              254,
+              0,
+              0,
+              255
+            ]
+          },
+          {
+            "at": 1372.4000000953674,
+            "pixel": [
+              254,
+              0,
+              0,
+              255
+            ]
+          },
+          {
+            "at": 1574.7000000476837,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          },
+          {
+            "at": 1775.2000000476837,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          },
+          {
+            "at": 1974.9000000953674,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          },
+          {
+            "at": 2175.300000190735,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          },
+          {
+            "at": 2377.100000143051,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          }
+        ],
+        "status": {
+          "connections": 1,
+          "finished": true
+        }
+      },
+      "recovered": [
+        {
+          "at": 594.5,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 770.2000000476837,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 970.7000000476837,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 1171.9000000953674,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 1372.4000000953674,
+          "pixel": [
+            254,
+            0,
+            0,
+            255
+          ]
+        },
+        {
+          "at": 1574.7000000476837,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        },
+        {
+          "at": 1775.2000000476837,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        },
+        {
+          "at": 1974.9000000953674,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        },
+        {
+          "at": 2175.300000190735,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        },
+        {
+          "at": 2377.100000143051,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        },
+        {
+          "at": 34876.700000047684,
+          "pixel": [
+            0,
+            0,
+            255,
+            255
+          ]
+        }
+      ],
+      "final": {
+        "frames": [
+          {
+            "at": 594.5,
+            "pixel": [
+              254,
+              0,
+              0,
+              255
+            ]
+          },
+          {
+            "at": 770.2000000476837,
+            "pixel": [
+              254,
+              0,
+              0,
+              255
+            ]
+          },
+          {
+            "at": 970.7000000476837,
+            "pixel": [
+              254,
+              0,
+              0,
+              255
+            ]
+          },
+          {
+            "at": 1171.9000000953674,
+            "pixel": [
+              254,
+              0,
+              0,
+              255
+            ]
+          },
+          {
+            "at": 1372.4000000953674,
+            "pixel": [
+              254,
+              0,
+              0,
+              255
+            ]
+          },
+          {
+            "at": 1574.7000000476837,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          },
+          {
+            "at": 1775.2000000476837,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          },
+          {
+            "at": 1974.9000000953674,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          },
+          {
+            "at": 2175.300000190735,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          },
+          {
+            "at": 2377.100000143051,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          },
+          {
+            "at": 34876.700000047684,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          },
+          {
+            "at": 41871.300000190735,
+            "pixel": [
+              0,
+              0,
+              255,
+              255
+            ]
+          }
+        ],
+        "status": {
+          "connections": 3,
+          "finished": true
+        },
+        "player": "160x96"
+      }
+    },
+    "runtime": {
+      "port": 1989,
+      "version": "v2026.11.5-2",
+      "unchanged": true,
+      "player_asset_checked": false
+    },
+    "validation": {
+      "go_all_passed": 461,
+      "go_packages": 35,
+      "ws_race_passed": 16,
+      "node_passed": 61,
+      "cjs_suites": 6,
+      "decoder_regression_passed": true,
+      "frontend_build_passed": true,
+      "normal_desktop_build_passed": true,
+      "physical_device_exercised": false,
+      "native_webview_real_video_exercised": false
+    }
+  },
+  "delivery": {
+    "runtime_replaced": true,
+    "target": "workspace desktop development App",
+    "gui_pid": 48943,
+    "backend_pid": 48967,
+    "url": "http://127.0.0.1:1989",
+    "frontend_matches_final_build": true,
+    "native_window_observed": true,
+    "branch": "codex/v2026.11.5-3-fix",
+    "preserved_concurrent_commit": "4c0a6f7",
+    "tag_or_release_created": false,
+    "include_concurrent_commit_authorized": true
+  }
+}

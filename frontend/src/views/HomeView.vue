@@ -56,12 +56,14 @@ const {
   serialToNumberMap,
   visibleDevices,
   showAllDevices,
-} = useHomePhoneView(() => homeFilteredDevices.value)
+  showOnlySelected,
+  hideDevice,
+  hiddenSerials,
+  restoreHiddenDevices,
+} = useHomePhoneView(() => homeFilteredDevices.value, () => store.numberMap)
 
 // 当前选择范围（三视图严格统一仅允许操作可见设备，隐藏设备不接受新动作）
-const currentScopeDevices = computed(() => {
-  return visibleDevices.value
-})
+const currentScopeDevices = computed(() => visibleDevices.value)
 
 // 多选管理：传入 mockEnabled 响应式引用，Mock 打开时禁止选中
 const isMockEnabledRef = computed(() => !!store.mockEnabled)
@@ -104,7 +106,6 @@ async function handleOpenFloating(serial: string) {
 
   if (isTauri()) {
     try {
-      const HEADER_HEIGHT = 56
       const size = playerSettings.floatingSize.value
       const targetW = size === 'compact' ? 320 : size === 'large' ? 440 : 380
       const baseH = size === 'compact' ? 680 : size === 'large' ? 880 : 780
@@ -112,8 +113,7 @@ async function handleOpenFloating(serial: string) {
         serial,
         title: store.displayName(device),
         width: targetW,
-        height: baseH + HEADER_HEIGHT,
-        borderless: playerSettings.borderless.value,
+        height: baseH,
       })
       return
     }
@@ -163,7 +163,7 @@ const {
   destroy: destroyBatch,
 } = useDeviceBatch(checkTargetOperable)
 
-async function handleBatchAction(action: 'back' | 'home' | 'app_switch') {
+async function handleBatchAction(action: 'back' | 'home' | 'app_switch' | 'lock') {
   if (store.mockEnabled) {
     toast.error('当前处于 Mock 模拟状态，无法执行真机批量操作')
     return
@@ -180,6 +180,7 @@ async function handleBatchAction(action: 'back' | 'home' | 'app_switch') {
   }
 
   await runBatch(validTargets, action, deviceMap)
+  if (action === 'lock') void store.load(true)
 }
 
 // 群控同步操作状态
@@ -214,6 +215,20 @@ watch(selectedSerials, (serials) => {
   }
 })
 
+function handleReorder(serials: string[]) {
+  try { store.reorder(serials) } catch (cause) { toast.error(cause instanceof Error ? cause.message : '排序失败') }
+}
+async function handleDeviceAction(action: string, serial: string) {
+  const device = store.devices.find(d => d.serial === serial)
+  if (!device) return
+  if (action === 'hide') { hideDevice(serial); return }
+  if (action === 'open') { await handleOpenFloating(serial); return }
+  if (action === 'detail') { if (!store.mockEnabled) router.push({path:'/player',query:{serial}}); return }
+  if (action === 'delete' && device.source === 'manual' && !store.mockEnabled) {
+    try { await store.removeDevice(serial) }
+    catch (cause) { console.error('[devices] Remove failed', {serial,cause}); toast.error(cause instanceof Error ? cause.message : '删除失败') }
+  }
+}
 const isAddDialogOpen = ref(false)
 function openAddDialog() { isAddDialogOpen.value = true }
 
@@ -320,7 +335,9 @@ onUnmounted(() => {
             @toggle-select="toggleSelect"
             @update:selected-serials="handleUpdateSelectedSerials"
             @open-floating="handleOpenFloating"
-            @show-all="showAllDevices"
+            @show-all="restoreHiddenDevices(); showAllDevices()"
+            @reorder="handleReorder"
+            @device-action="handleDeviceAction"
           />
         </div>
       </main>
@@ -341,6 +358,9 @@ onUnmounted(() => {
       :keyword="store.keyword"
       :view-mode="viewMode"
       :devices="store.filtered"
+      :number-map="store.numberMap"
+      :hidden-count="hiddenSerials.length"
+      :mock-enabled="store.mockEnabled"
       :selected-serials="selectedSerials"
       :online-count="onlineCount"
       :is-all-selected="isAllSelected"
@@ -361,6 +381,10 @@ onUnmounted(() => {
       @cancel-batch="cancelBatch"
       @clear-results="clearResults"
       @open-add="openAddDialog"
+      @show-only-selected="showOnlySelected(selectedSerials)"
+      @restore-hidden="restoreHiddenDevices"
+      @show-all="showAllDevices"
+      @device-action="handleDeviceAction"
       @open-config="isConfigOpen = true"
       @open-ai="handleOpenAi"
       @open-shortcuts="handleOpenShortcuts"

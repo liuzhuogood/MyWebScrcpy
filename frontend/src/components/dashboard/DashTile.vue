@@ -130,7 +130,7 @@ function handleMessage(ev: MessageEvent) {
       const msg = JSON.parse(ev.data) as { type: string, session_id?: string, codec?: string, width?: number, height?: number, message?: string }
       if (msg.type === 'meta') {
         packer.setDeviceSize(msg.width ?? 0, msg.height ?? 0)
-        decoder?.configure(msg.codec || 'h264', msg.width ?? 0, msg.height ?? 0)
+        decoder?.configure(msg.codec || 'h264', msg.width ?? 0, msg.height ?? 0, msg.session_id)
         serverErrorAttempts = 0
         lastServerError = ''
         errorShown = false

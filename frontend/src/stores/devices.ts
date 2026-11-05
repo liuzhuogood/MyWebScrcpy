@@ -8,6 +8,7 @@ import {
   removeManualDevice,
   updateDeviceAlias,
 } from '@/api/devices'
+import { DEVICE_ORDER_KEY, readDeviceOrder, orderDevices, reorderVisibleDevices, buildNumberMap } from '@/utils/deviceOrder'
 import { MOCK_DEVICES } from '@/mocks/devices'
 
 const ALIAS_KEY = 'device_aliases'
@@ -25,6 +26,16 @@ function readAliases(): Record<string, string> {
 
 export const useDeviceStore = defineStore('devices', () => {
   const devices = ref<Device[]>([])
+  const order = ref<string[]>(readDeviceOrder())
+  const orderedDevices = computed(() => orderDevices(devices.value, order.value))
+  const numberMap = computed(() => buildNumberMap(orderedDevices.value))
+  function reorder(serials: string[]) {
+    const all = orderedDevices.value.map(d => d.serial)
+    if (new Set(serials).size !== serials.length || serials.some(s => !all.includes(s))) return
+    const next = reorderVisibleDevices(all, serials)
+    try { localStorage.setItem(DEVICE_ORDER_KEY, JSON.stringify(next)); order.value = next }
+    catch (cause) { console.error('[device-order] Save failed', cause); throw new Error('保存设备顺序失败') }
+  }
   const loading = ref(false)
   const error = ref('')
   const keyword = ref('')
@@ -39,7 +50,7 @@ export const useDeviceStore = defineStore('devices', () => {
     d.alias?.trim() || aliases.value[d.serial]?.trim() || d.brand?.trim() || d.model || 'Android'
 
   const filtered = computed(() => {
-    let list = devices.value
+    let list = orderedDevices.value
     if (sourceFilter.value !== 'all') {
       list = list.filter(d => (d.source || 'auto') === sourceFilter.value)
     }
@@ -163,7 +174,7 @@ export const useDeviceStore = defineStore('devices', () => {
 
   return {
     devices, loading, error, keyword, sourceFilter, editingSerial, aliases, mockEnabled,
-    filtered, displayName, load, startPolling, stopPolling, saveAlias, setMock,
+    filtered, orderedDevices, numberMap, reorder, displayName, load, startPolling, stopPolling, saveAlias, setMock,
     addDevice, removeDevice, reconnect,
   }
 })

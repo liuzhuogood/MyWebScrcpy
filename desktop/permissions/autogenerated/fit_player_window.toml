@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fit-player-window"
+description = "Enables the fit_player_window command without any pre-configured scope."
+commands.allow = ["fit_player_window"]
+
+[[permission]]
+identifier = "deny-fit-player-window"
+description = "Denies the fit_player_window command without any pre-configured scope."
+commands.deny = ["fit_player_window"]

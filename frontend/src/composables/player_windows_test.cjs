@@ -70,7 +70,7 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 
   await first.setBorderless(true);
   assert.equal(second.player.value.borderless, true);
-  assert.equal(first.needsRecovery.value, true, 'borderless window must offer recovery');
+  assert.equal(first.needsRecovery.value, false, 'default frame appearance is not a recovery condition');
   await first.restore();
   await first.setToolbarVisible(false);
   assert.equal(second.player.value.toolbarVisible, false);

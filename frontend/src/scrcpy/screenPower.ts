@@ -143,3 +143,15 @@ export async function pressPowerWithUnlock(
   }
   throw new Error('屏幕尚未点亮，未尝试解锁，请稍后重试')
 }
+
+/** KEYCODE_SLEEP is idempotent: an already sleeping device is never woken. */
+export async function requestScreenLock(serial: string, signal: AbortSignal): Promise<void> {
+  console.info('[screen-lock] Requesting sleep', { serial })
+  await adbCommand(serial, ['shell', 'input', 'keyevent', 'KEYCODE_SLEEP'], signal)
+  for (let attempt = 0; attempt < 12; attempt++) {
+    if (!await screenIsOn(serial, signal)) { console.info('[screen-lock] Screen off confirmed', { serial }); return }
+    await waitForNextCheck(signal)
+  }
+  console.warn('[screen-lock] Screen remains on', { serial })
+  throw new Error('屏幕尚未关闭，请检查设备状态')
+}

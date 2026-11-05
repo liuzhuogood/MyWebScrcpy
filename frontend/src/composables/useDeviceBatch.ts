@@ -1,5 +1,6 @@
 import { computed, ref, type Ref } from 'vue'
 import type { Device } from '../api/devices.ts'
+import { requestScreenLock } from '../scrcpy/screenPower.ts'
 import { sendDeviceEvent } from '../api/deviceActions.ts'
 
 export type BatchItemStatus =
@@ -35,7 +36,7 @@ export interface BatchExecutionOptions {
   batchId: string
   generation: number
   serials: string[]
-  action: 'back' | 'home' | 'app_switch'
+  action: 'back' | 'home' | 'app_switch' | 'lock'
   concurrency?: number
   perDeviceTimeoutMs?: number
   overallTimeoutMs?: number
@@ -167,7 +168,7 @@ export async function executeBatchAction(options: BatchExecutionOptions): Promis
         dispatched = true
         const runPromise = runner
           ? runner(item.serial, itemController.signal)
-          : sendDeviceEvent(item.serial, action, itemController.signal, perDeviceTimeoutMs)
+          : action === 'lock' ? requestScreenLock(item.serial, itemController.signal) : sendDeviceEvent(item.serial, action, itemController.signal, perDeviceTimeoutMs)
 
         const guardPromise = new Promise((_, reject) => {
           guardTimer = setTimeout(() => {
@@ -297,7 +298,7 @@ export function useDeviceBatch(isOperableCheck?: (serial: string) => boolean) {
 
   async function runBatch(
     serials: string[],
-    action: 'back' | 'home' | 'app_switch',
+    action: 'back' | 'home' | 'app_switch' | 'lock',
     deviceMap?: Record<string, string>,
     customRunner?: (serial: string, signal: AbortSignal) => Promise<unknown>,
   ) {

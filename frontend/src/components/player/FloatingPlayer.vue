@@ -39,21 +39,19 @@ const initialWidth = computed(() => {
 
 const userWidth = ref<number | null>(null)
 const currentWidth = computed({
-  get: () => userWidth.value ?? initialWidth.value,
+  get: () => Math.min(userWidth.value ?? initialWidth.value, winW.value - 32, (winH.value - 40) * videoAspect.value),
   set: (val: number) => {
     userWidth.value = Math.max(220, Math.min(val, winW.value - 32))
   },
 })
 
-// 顶栏高度为 56px (h-14)
-const HEADER_HEIGHT = 56
 
 // 窗口尺寸以投屏的宽度与视频比例严格对齐，彻底消除黑边与白边
 const floatingHeight = computed(() => {
   const aspect = videoAspect.value > 0 ? videoAspect.value : (9 / 19.5)
   const contentH = Math.round(currentWidth.value / aspect)
   const maxAvailableH = Math.max(240, winH.value - 40)
-  return Math.min(HEADER_HEIGHT + contentH, maxAvailableH)
+  return Math.min(contentH, maxAvailableH)
 })
 
 // 多小窗错开级联初始位置，并在屏幕中间居中
@@ -150,7 +148,7 @@ function onResizePointerDown(e: PointerEvent) {
   const onPointerMove = (ev: PointerEvent) => {
     const dx = ev.clientX - startX
     const aspect = videoAspect.value > 0 ? videoAspect.value : (9 / 19.5)
-    const maxW = Math.min(winW.value - 32, (winH.value - 72) * aspect)
+    const maxW = Math.min(winW.value - 32, (winH.value - 40) * aspect)
     const newW = Math.max(220, Math.min(maxW, Math.round(startW + dx)))
     currentWidth.value = newW
   }
@@ -182,7 +180,7 @@ onUnmounted(() => {
 
 <template>
   <div
-    class="fixed flex flex-col rounded-xl border bg-black shadow-2xl overflow-hidden ring-1 ring-border/50 transition-shadow select-none"
+    class="fixed flex flex-col bg-black shadow-2xl overflow-hidden ring-1 ring-border/50 transition-shadow select-none"
     :class="{ 'ring-primary/60 shadow-primary/10': isDragging || isResizing }"
     :style="{
       left: `${clampedX}px`,

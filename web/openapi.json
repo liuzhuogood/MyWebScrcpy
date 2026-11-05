@@ -5257,7 +5257,7 @@
           "设备管理"
         ],
         "summary": "按局域网 IP 范围与端口扫描并连接 ADB 设备",
-        "description": "最多256个IPv4地址、8个端口，8路并发。仅局域网或回环地址。常态扫描每轮后等待间隔；需持续轮询任务状态，15秒未轮询自动取消，单任务最多30分钟。TCP开放且ADB在线确认后才保存设备。",
+        "description": "最多8个范围，每个最多256个IPv4地址，合计最多1024个不重复地址、8个端口，8路并发。仅局域网或回环地址。range与ranges二选一；保留原单范围契约。持续扫描需轮询租约，15秒未轮询取消，最长30分钟。TCP开放且ADB在线确认后才保存设备。",
         "requestBody": {
           "required": true,
           "content": {
@@ -5265,7 +5265,6 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "range",
                   "ports"
                 ],
                 "properties": {
@@ -5292,8 +5291,42 @@
                     "minimum": 10,
                     "maximum": 3600,
                     "description": "continuous为true时必填，单位秒"
+                  },
+                  "ranges": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                      "type": "string"
+                    },
+                    "example": [
+                      "10.0.0.1-10.0.0.10",
+                      "10.0.1.1-10.0.1.10"
+                    ]
                   }
-                }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "range"
+                    ],
+                    "not": {
+                      "required": [
+                        "ranges"
+                      ]
+                    }
+                  },
+                  {
+                    "required": [
+                      "ranges"
+                    ],
+                    "not": {
+                      "required": [
+                        "range"
+                      ]
+                    }
+                  }
+                ]
               }
             }
           }
@@ -5408,6 +5441,57 @@
           },
           "404": {
             "description": "任务不存在"
+          }
+        }
+      }
+    },
+    "/api/device-discovery/networks": {
+      "get": {
+        "tags": [
+          "设备管理"
+        ],
+        "summary": "读取当前启用网卡的内网IPv4扫描建议范围",
+        "description": "返回真实网卡地址与掩码；建议范围限当前地址所在最多256个地址块，并与真实子网交集，排除网络/广播地址。不存在可用网卡时返回空数组。",
+        "responses": {
+          "200": {
+            "description": "内网网卡",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "name",
+                      "address",
+                      "prefix_length",
+                      "start",
+                      "end"
+                    ],
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "address": {
+                        "type": "string"
+                      },
+                      "prefix_length": {
+                        "type": "integer"
+                      },
+                      "start": {
+                        "type": "string"
+                      },
+                      "end": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "读取网卡失败"
           }
         }
       }

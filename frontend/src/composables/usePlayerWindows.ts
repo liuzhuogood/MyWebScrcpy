@@ -48,7 +48,7 @@ export function usePlayerWindows(serial: Ref<string>) {
   const native = isTauri()
   const busy = ref(false)
   const player = computed(() => snapshot.value.windows.find(item => item.serial === serial.value))
-  const needsRecovery = computed(() => Boolean(player.value && (player.value.opacity < 100 || player.value.clickThrough || player.value.borderless || !player.value.toolbarVisible)))
+  const needsRecovery = computed(() => Boolean(player.value && (player.value.opacity < 100 || player.value.clickThrough || !player.value.toolbarVisible)))
   const shortcut = computed(() => snapshot.value.recoveryShortcut)
   let pendingOpacity: { opacity: number, expectedRevision: number } | undefined
 

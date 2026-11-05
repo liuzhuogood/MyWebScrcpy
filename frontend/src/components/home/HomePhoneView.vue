@@ -7,6 +7,7 @@ import {
   EyeOff,
   Film,
   Globe,
+  GripVertical,
   Image,
   Layers,
   LayoutGrid,
@@ -20,10 +21,10 @@ import {
   Square,
   Thermometer,
   Tv,
-  Usb,
-  Wifi,
 } from 'lucide-vue-next'
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch, nextTick } from 'vue'
+import Sortable from 'sortablejs'
+import DeviceContextMenu from './DeviceContextMenu.vue'
 import DashTile from '@/components/dashboard/DashTile.vue'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
@@ -58,6 +59,8 @@ const emit = defineEmits<{
   (e: 'update:selectedSerials', serials: string[]): void
   (e: 'openFloating', serial: string): void
   (e: 'showAll'): void
+  (e: 'reorder', serials: string[]): void
+  (e: 'deviceAction', action: string, serial: string): void
 }>()
 
 const deviceStore = useDeviceStore()
@@ -65,10 +68,43 @@ const { homePhoneScale } = usePlayerSettings()
 const cardWidth = computed(() => Math.round(HOME_PHONE_BASE_WIDTH * homePhoneScale.value / 100))
 const cardHeight = computed(() => Math.round(cardWidth.value * 1.88))
 const containerRef = ref<HTMLElement | null>(null)
+let sortable: Sortable | undefined
+const sorting = ref(false)
+let dragSerials: string[] = []
+let dragBoundary: ChildNode | null = null
+watch(containerRef, element => {
+  sortable?.destroy()
+  if (!element) return
+  sortable = new Sortable(element, {
+    draggable: '[data-sort-item]', handle: '[data-sort-handle]', animation: 120,
+    onStart() {
+      sorting.value = true
+      dragSerials = props.visibleDevices.map(device => device.serial)
+      const cards = element.querySelectorAll('[data-sort-item]')
+      dragBoundary = cards.item(cards.length - 1)?.nextSibling ?? null
+    },
+    onEnd(event) {
+      const cards = [...element.querySelectorAll<HTMLElement>('[data-sort-item]')]
+      const serials = cards.map(card => card.dataset.sortSerial!)
+      // Vue owns DOM ordering: restore pre-drag nodes before updating data.
+      const original = new Map(cards.map(card => [card.dataset.sortSerial, card]))
+      for (const device of props.visibleDevices) {
+        const card = original.get(device.serial)
+        // Keep Vue's v-for end anchor after all cards. Appending after the
+        // anchor would make later inserts appear before the persisted order.
+        if (card) element.insertBefore(card, dragBoundary?.parentNode === element ? dragBoundary : null)
+      }
+      const current = props.visibleDevices.map(device => device.serial)
+      if (current.length === dragSerials.length && current.every((serial, index) => serial === dragSerials[index]) && event.oldDraggableIndex !== event.newDraggableIndex) emit('reorder', serials)
+      void nextTick(() => { sorting.value = false })
+    },
+  })
+})
+onBeforeUnmount(() => sortable?.destroy())
 
-// 卡片按序列号正序排列，与编号方块顺序保持一致
+// Store supplies the shared persisted order used by cards and number buttons.
 const sortedDevices = computed(() => {
-  return [...props.visibleDevices].sort((a, b) => a.serial.localeCompare(b.serial))
+  return props.visibleDevices
 })
 
 // 容器布局样式：靠左排布，卡片之间小间距（8px），少数设备时靠左不拉伸
@@ -215,7 +251,7 @@ function handleContainerMouseDown(e: MouseEvent) {
 }
 
 function handleCardClick(serial: string) {
-  if (isDraggingMarquee.value || hasDraggedDistance) {
+  if (sorting.value || isDraggingMarquee.value || hasDraggedDistance) {
     return
   }
   emit('openFloating', serial)
@@ -344,19 +380,18 @@ function getAppVisual(iconType?: string) {
         />
       </Teleport>
 
+      <div v-for="d in sortedDevices" :key="d.serial" data-sort-item :data-sort-serial="d.serial" :style="cardItemStyle" class="relative min-h-0 min-w-0">
+      <DeviceContextMenu :device="d" :mock-enabled="mockEnabled" @action="emit('deviceAction', $event, d.serial)">
       <div
-        v-for="d in sortedDevices"
-        :key="d.serial"
         :data-device-serial="d.serial"
         data-home-device-card
         role="group"
         tabindex="0"
         :aria-label="`${deviceStore.displayName(d)} 设备卡片`"
-        :style="cardItemStyle"
         @click="handleCardClick(d.serial)"
         @keydown.enter.self="handleCardClick(d.serial)"
         @keydown.space.self.prevent="handleCardClick(d.serial)"
-        class="group relative flex flex-col rounded-2xl border border-neutral-800 bg-slate-900 overflow-hidden transition-all duration-150 select-none cursor-pointer"
+        class="group relative flex h-full w-full flex-col rounded-2xl border border-neutral-800 bg-slate-900 overflow-hidden transition-all duration-150 select-none cursor-pointer"
         :class="[
           props.dashSize === 'fit' && props.viewMode === 'phone' ? 'min-h-0 min-w-0' : '',
           selectedSerials.includes(d.serial) ? 'ring-2 ring-blue-500 border-blue-500 shadow-lg shadow-blue-500/15' : 'hover:border-neutral-600',
@@ -365,6 +400,7 @@ function getAppVisual(iconType?: string) {
         <!-- 手机外框顶栏：编号标识、多选勾选、别名与状态（显隐统一由右侧面板编号方块控制） -->
         <div class="flex h-7 items-center justify-between border-b border-white/10 bg-slate-950/80 px-2.5 py-1 text-xs text-white shrink-0 select-none z-10">
           <div class="flex min-w-0 items-center gap-1.5">
+            <button type="button" data-sort-handle class="shrink-0 cursor-grab touch-none" aria-label="拖动排序" @click.stop><GripVertical class="h-3.5 w-3.5" /></button>
             <button
               v-if="d.state === 'device' && !mockEnabled"
               type="button"
@@ -415,19 +451,7 @@ function getAppVisual(iconType?: string) {
           title="点击进入设备投屏控制"
         >
           <!-- 顶部状态遥测栏：左侧连接模式 (USB / Wi-Fi)，右侧温度 (电池+CPU) 与电量 -->
-          <div class="flex items-center justify-between text-[11px] font-mono shrink-0 pt-1 px-1.5 z-10">
-            <!-- 左侧：连接模式 (USB / Wi-Fi) -->
-            <div class="flex items-center gap-1 shrink-0">
-              <span
-                class="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium whitespace-nowrap"
-                :class="d.source === 'manual' ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-cyan-500/15 text-cyan-400 border border-cyan-500/30'"
-              >
-                <Wifi v-if="d.source === 'manual'" class="h-2.5 w-2.5 shrink-0" />
-                <Usb v-else class="h-2.5 w-2.5 shrink-0" />
-                <span>{{ d.source === 'manual' ? 'Wi-Fi' : 'USB' }}</span>
-              </span>
-            </div>
-
+          <div class="flex items-center justify-end text-[11px] font-mono shrink-0 pt-1 px-1.5 z-10">
             <!-- 右侧：温度 (电池+CPU) 与电量 -->
             <div class="flex items-center gap-2 shrink-0 whitespace-nowrap">
               <!-- 电池温度 -->
@@ -541,7 +565,7 @@ function getAppVisual(iconType?: string) {
           <!-- 底部微型型号/序列号与手势条 -->
           <div class="shrink-0 pt-2 pb-0.5 flex flex-col gap-1 border-t border-neutral-800/60">
             <p class="truncate font-mono text-[9px] text-neutral-500 text-center">
-              {{ d.model || 'Android' }} · {{ d.serial }}
+              {{ d.serial }}
             </p>
             <div class="mx-auto rounded-full bg-neutral-800 transition-colors group-hover/card:bg-neutral-600 h-0.5 w-10 mt-0.5" />
           </div>
@@ -552,8 +576,9 @@ function getAppVisual(iconType?: string) {
           v-else
           class="relative w-full flex-1 min-h-0 bg-black overflow-hidden flex items-center justify-center"
         >
+          <div v-if="isLocked(d)" class="flex flex-col items-center justify-center gap-3 text-neutral-400"><Lock class="h-7 w-7" /><span class="text-sm">已锁定</span></div>
           <DashTile
-            v-if="isDeviceOnlineForStream(d, mockEnabled)"
+            v-else-if="isDeviceOnlineForStream(d, mockEnabled)"
             :device="d"
             mode="contain"
             :interactive="false"
@@ -570,6 +595,8 @@ function getAppVisual(iconType?: string) {
             </p>
           </div>
         </div>
+      </div>
+      </DeviceContextMenu>
       </div>
     </div>
   </div>

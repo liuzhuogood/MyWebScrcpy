@@ -65,10 +65,11 @@ export function buildStableNumberedDevices(devices: Device[]): NumberedDevice[] 
   })
 }
 
-export function useHomePhoneView(allDevices: () => Device[]) {
+export function useHomePhoneView(allDevices: () => Device[], numberMap?: () => Map<string, string>) {
   const initialDashSize = normalizeDashSize(localStorage.getItem(PHONE_DASH_SIZE_KEY))
   const dashSize = ref<DashSize>(initialDashSize)
 
+  const onlySelectedSerials = ref<string[] | null>(null)
   const hiddenSerials = ref<string[]>(parseHiddenSerials(localStorage.getItem(PHONE_HIDDEN_KEY)))
 
   watch(dashSize, (newVal) => {
@@ -83,6 +84,12 @@ export function useHomePhoneView(allDevices: () => Device[]) {
     return !hiddenSerials.value.includes(serial)
   }
 
+  function hideDevice(serial: string) {
+    if (!hiddenSerials.value.includes(serial)) {
+      hiddenSerials.value = [...hiddenSerials.value, serial]
+      saveHidden()
+    }
+  }
   function toggleDeviceVisibility(serial: string) {
     if (hiddenSerials.value.includes(serial)) {
       hiddenSerials.value = hiddenSerials.value.filter(s => s !== serial)
@@ -93,19 +100,14 @@ export function useHomePhoneView(allDevices: () => Device[]) {
     saveHidden()
   }
 
-  function showAllDevices() {
-    hiddenSerials.value = []
-    saveHidden()
-  }
+  function showAllDevices() { onlySelectedSerials.value = null }
+  function restoreHiddenDevices() { hiddenSerials.value = []; saveHidden() }
 
   function showOnlySelected(selectedSerials: string[]) {
     if (selectedSerials.length === 0)
       return
     const selectedSet = new Set(selectedSerials)
-    hiddenSerials.value = allDevices()
-      .filter(d => !selectedSet.has(d.serial))
-      .map(d => d.serial)
-    saveHidden()
+    onlySelectedSerials.value = [...selectedSet]
   }
 
   function setDashSize(sz: DashSize) {
@@ -119,6 +121,7 @@ export function useHomePhoneView(allDevices: () => Device[]) {
 
   // 编号字典：serial -> label ('01', '02', etc.)
   const serialToNumberMap = computed(() => {
+    if (numberMap) return numberMap()
     const map = new Map<string, string>()
     for (const item of numberedDevices.value) {
       map.set(item.serial, item.label)
@@ -128,17 +131,20 @@ export function useHomePhoneView(allDevices: () => Device[]) {
 
   // 当前可见设备列表
   const visibleDevices = computed(() => {
-    return allDevices().filter(d => !hiddenSerials.value.includes(d.serial))
+    return allDevices().filter(d => !hiddenSerials.value.includes(d.serial) && (onlySelectedSerials.value === null || onlySelectedSerials.value.includes(d.serial)))
   })
 
   return {
     dashSize,
     hiddenSerials,
+    onlySelectedSerials,
+    restoreHiddenDevices,
     numberedDevices,
     serialToNumberMap,
     visibleDevices,
     isDeviceVisible,
     toggleDeviceVisibility,
+    hideDevice,
     showAllDevices,
     showOnlySelected,
     setDashSize,

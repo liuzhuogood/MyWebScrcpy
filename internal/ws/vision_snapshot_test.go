@@ -24,11 +24,11 @@ func TestVisionSnapshotIncludesDeltasToCurrentStaticImage(t *testing.T) {
 			t.Fatalf("snapshot packet %d = %+v, want %s", i, frame, want)
 		}
 	}
-	// The existing browser subscription still receives only decoder headers.
+	// The existing recorder subscription still receives only decoder headers.
 	browser, closeBrowser := (&Hub{}).subscribeShared(ms)
 	defer closeBrowser()
 	if len(browser) != 2 {
-		t.Fatal("browser bootstrap changed")
+		t.Fatal("shared recorder bootstrap changed")
 	}
 	newFrame := &scrcpy.Frame{Kind: scrcpy.FrameDelta, Payload: []byte("live")}
 	cacheAndBroadcast(ms, newFrame, encodeFrame(newFrame))

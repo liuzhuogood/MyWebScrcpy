@@ -2,16 +2,16 @@
   const invoke = (command, args) => window.__TAURI_INTERNALS__.invoke(command, args);
   const assert = (value, message) => { if (!value) throw new Error(message); };
   const channel = new BroadcastChannel('player-window-verification');
-  const ready = new Set();
+  const ready = new Map();
   const waiting = new Map();
   channel.onmessage = ({ data }) => {
-    if (data.action === 'ready') ready.add(data.serial);
+    if (data.action === 'ready') ready.set(data.serial, data.instance);
     const resolve = waiting.get(data.serial + ':' + data.action);
     if (resolve) { waiting.delete(data.serial + ':' + data.action); resolve(data); }
   };
   async function request(serial, action) {
     const response = new Promise(resolve => waiting.set(serial + ':' + action, resolve));
-    channel.postMessage({ serial, action });
+    channel.postMessage({ serial, action, instance: ready.get(serial) });
     const result = await Promise.race([response, new Promise((_, reject) => setTimeout(() => reject(new Error(action + ' timed out')), action === 'frame_controls' ? 15000 : 6000))]);
     assert(result.ok, result.error);
   }
@@ -29,8 +29,30 @@
     for (let count = 0; window.__nativeFramesResult?.id !== id && count < 60; count++) await new Promise(resolve => setTimeout(resolve, 100));
     assert(window.__nativeFramesResult?.id === id && window.__nativeFramesResult.valid === true, 'native window decorations do not match borderless state');
   }
-  const restored = player => player.opacity === 100 && !player.clickThrough && !player.borderless && player.toolbarVisible;
+  const restored = player => player.opacity === 100 && !player.clickThrough && player.borderless && player.toolbarVisible;
   try {
+    const waitFor = async (check, message) => {
+      for (let count=0; count<80; count++) { if (check()) return; await new Promise(resolve=>setTimeout(resolve,50)); }
+      throw new Error(message);
+    };
+    document.querySelector('[aria-label="系统设置"]').click();
+    await waitFor(()=>document.querySelector('[role="dialog"] [role="tab"]'), 'system settings missing');
+    const settingsDialog = document.querySelector('[role="dialog"]');
+    const controls = [...settingsDialog.querySelectorAll('[data-slot="select-trigger"]')];
+    assert(controls.length >= 4, 'player preferences were not prepared');
+    result.settingsSamples = [];
+    for (const label of ['投屏设置','通用设置','投屏设置','服务','投屏设置','依赖','服务','投屏设置']) {
+      const tab = [...settingsDialog.querySelectorAll('[role="tab"]')].find(tab=>tab.textContent.trim()===label);
+      const started = performance.now();
+      tab.click();
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      result.settingsSamples.push({tab:label,ms:Math.round(performance.now()-started)});
+      assert(controls.every(control=>control.isConnected), 'settings switch rebuilt player controls');
+    }
+    assert(!settingsDialog.querySelector('[aria-label*="无边框"]'), 'settings frame toggle remains');
+    settingsDialog.querySelector('[data-slot="dialog-close"]').click();
+    await waitFor(()=>!document.querySelector('[role="dialog"]'), 'settings failed to close');
+    result.settingsRetained = true;
     assert((await invoke('list_player_windows')).recoveryShortcut, 'recovery shortcut missing');
     let rejected = false;
     try { await invoke('set_player_opacity', { opacity: 0, expectedRevision: 0 }); } catch { rejected = true; }
@@ -42,15 +64,16 @@
     }
     result.mainProtected = true;
     for (const serial of ['verify-a', 'verify-b']) {
-      await invoke('open_device_window', { serial, width: 380, height: 700, borderless: serial === 'verify-a' });
+      await invoke('open_device_window', { serial, width: 380, height: 700,  });
     }
     for (let count = 0; ready.size < 2 && count < 100; count++) await new Promise(resolve => setTimeout(resolve, 100));
     assert(ready.size === 2, 'player frontend not mounted');
-    await checkNativeFrames({ 'player-verify_a': true, 'player-verify_b': false });
+    await checkNativeFrames({ 'player-verify_a': true, 'player-verify_b': true });
     result.borderlessDefault = true;
     await request('verify-a', 'frame_controls');
-    result.borderlessControls = true;
-    result.toolbarToast = true;
+    result.controlsRemoved = true;
+    result.overlayStable = true;
+    result.aspectFit = true;
     for (const serial of ['verify-a', 'verify-b']) await request(serial, 'enable');
     let snapshot = await invoke('list_player_windows');
     assert(snapshot.windows.length === 2 && snapshot.windows.every(player => player.opacity === 0 && player.clickThrough && player.borderless && !player.toolbarVisible), 'independent window state mismatch');
@@ -106,7 +129,7 @@
     assert(snapshot.windows.length === 2 && snapshot.windows.every(restored), 'menu recovery failed');
     for (const serial of ['verify-a', 'verify-b']) await request(serial, 'restored');
     result.menuRecovery = true;
-    await checkNativeFrames({ 'player-verify_a': false, 'player-verify_b': false });
+    await checkNativeFrames({ 'player-verify_a': true, 'player-verify_b': true });
     result.toolbarRecovery = true;
     result.nativeDecorations = true;
     result.ok = true;

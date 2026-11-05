@@ -31,13 +31,23 @@ func cacheVisionSnapshot(ms *managedSession, frame *scrcpy.Frame, data []byte) {
 }
 
 func (h *Hub) subscribeVisionSnapshot(ms *managedSession) (<-chan sharedVideoFrame, func()) {
+	return h.subscribeSnapshot(ms, true)
+}
+
+// Browser reconnects need the current complete image, not just an old IDR.
+// Retain Vision's explicit non-current bootstrap fallback for its consumers.
+func (h *Hub) subscribeBrowserVideo(ms *managedSession) (<-chan sharedVideoFrame, func()) {
+	return h.subscribeSnapshot(ms, false)
+}
+
+func (h *Hub) subscribeSnapshot(ms *managedSession, allowOldBootstrap bool) (<-chan sharedVideoFrame, func()) {
 	ms.mu.Lock()
 	ch := make(chan sharedVideoFrame, sharedVideoQueueSize+len(ms.visionSnapshot)+1)
 	ms.subs[ch] = struct{}{}
 	if ms.lastConfig != nil {
 		ch <- sharedVideoFrame{data: append([]byte(nil), ms.lastConfig...), replayed: true}
 	}
-	if len(ms.visionSnapshot) == 0 && ms.lastKey != nil {
+	if allowOldBootstrap && len(ms.visionSnapshot) == 0 && ms.lastKey != nil {
 		// Preserve decoder bootstrap when no complete snapshot is available.
 		// This packet is deliberately not marked as the current image.
 		ch <- sharedVideoFrame{data: append([]byte(nil), ms.lastKey...), replayed: true}
