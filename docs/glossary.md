@@ -46,7 +46,7 @@
 | 手机卡片视图 | 手机卡片、卡片视图、甲板、3D全息 | `frontend/src/components/home/HomePhoneView.vue` (`viewMode === 'deck'`)；首页卡片与手机两种视图之一，采用手机拟物卡片展示设备遥测（温度、电量）与当前运行应用，熄屏或锁屏时展示已锁定状态，不挂载实时投屏流；卡片按序列号正序靠左紧凑排列（8px 间隙），点击卡片打开投屏小窗，支持鼠标拉框批量框选 |
 | 首页手机视图 | 手机视图、第三视图、手机样式视图、手机墙、首页多设备投屏、紧密设备墙 | `frontend/src/components/home/HomePhoneView.vue`；首页卡片与手机两种视图之一，以紧密设备墙规格挂载实时画面（同档位同宽同高，相邻横纵间距统一 8px，画面黑底 contain 等比居中黑边填充、不拉伸不裁图，黑边不发触控），设备显隐由 iOS 悬浮底栏的编号小方块控制，支持页面全屏 |
 | 手机视图统一格 | 统一格、同宽同高手机格子、紧密设备格 | `frontend/src/utils/phoneGrid.ts` 与 `frontend/src/components/home/HomePhoneView.vue`；首页手机视图在小/中/大/铺满各档位所使用的等宽等高规格与 2px 间隙体系，横屏、长屏与旋转均保持卡片尺寸恒定，视口内黑底等比 contain 居中显示 |
-| iOS 悬浮底栏 | 悬浮底栏、底栏、操作栏、Dock栏、浮动药丸栏、控制中心、操作面板、批量操作面板、批量面板、右侧面板 | `frontend/src/components/home/HomeIosDockBar.vue`；首页底部居中悬浮毛玻璃胶囊操作栏，整合操作、视图、设备（支持鼠标原生框选）与更多服务四组 iOS 浮动卡片 Sheet，支持最小化、设备编号区域紧凑展开、滚动框选；无遮罩且外部点击收起并透传，取代原右侧固定操作侧栏（ActionPanel） |
+| iOS 悬浮底栏 | 悬浮底栏、底栏、操作栏、Dock栏、浮动药丸栏、控制中心、操作面板、批量操作面板、批量面板、右侧面板 | `frontend/src/components/home/HomeIosDockBar.vue`；首页底部居中悬浮毛玻璃胶囊操作栏，整合操作、视图、设备（支持鼠标原生框选）与更多服务四组 iOS 浮动卡片 Sheet，支持最小化、设备编号区域紧凑展开、滚动框选；无遮罩、Esc 收起且外部点击收起并透传，取代原右侧固定操作侧栏（ActionPanel） |
 | 显示离线设备 | 显示离线、离线过滤开关 | `frontend/src/composables/useHomeFilter.ts`；首页控制胶囊开关，默认关闭（仅展示 `state === 'device'` 设备），开启时在搜索与编号生成前纳入离线与未授权设备，本地持久化布尔配置 |
 | 设备编号小方块选择器 | 编号小方块、编号显隐、数字网格、设备矩阵 | `frontend/src/components/home/HomeIosDockBar.vue`（【设备】浮动卡片）；按 serial 字典序稳定编号（01..N），纳管离线设备，点选可切换已选状态，支持鼠标拉框批量框选与 Ctrl/Cmd 增量选择 |
 | 设备添加与发现 | 扫码配对、范围扫描、常态扫描 | `frontend/src/components/home/AddDeviceDialog.vue` 与 `internal/device/discovery.go`；二维码按 Android 无线调试机制由电脑生成、手机扫码，IP 范围支持末段缩写和多端口，持续扫描可停止、关闭对话框或租约断开后停止；`/api/device-discovery/*` |

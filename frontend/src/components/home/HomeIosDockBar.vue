@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref } from 'vue'
-import { onClickOutside } from '@vueuse/core'
+import { onClickOutside, onKeyStroke } from '@vueuse/core'
 import {
   ArrowLeft,
   ChevronDown,
@@ -98,6 +98,13 @@ const { homePhoneScale, homeQuality, homeBitrate: bitrateValue } = settings
 const activeTab = ref<TabKey | null>(null)
 const dockRootRef = ref<HTMLElement | null>(null)
 onClickOutside(dockRootRef, closePanel)
+onKeyStroke('Escape', event => {
+  // Let input methods and nested dialogs consume Escape first.
+  queueMicrotask(() => {
+    if (event.defaultPrevented || event.isComposing || document.querySelector('[role="dialog"][data-state="open"]')) return
+    closePanel()
+  })
+})
 
 // 底部浮动栏自身是否最小化为悬浮气泡
 const isDockMinimized = ref(false)

@@ -1,9 +1,9 @@
 # v1.34.0-feature 版本摘要
 
 ## 状态
-- 阶段：正式业务代码实施与全栈门禁验证（vue-tsc / vite build / go test）已完成，纳入 v2026.11.5-1 发布
+- 阶段：正式业务代码实施与全栈门禁验证（vue-tsc / vite build / go test）已完成，纳入 v2026.11.5-2 发布
 - 分支：`feat/v1-34-0-home-ios-dock` (基线 `main`)
-- 对应例行发布版本号：对应 `v2026.11.5-1`，承接主线 `v2026.11.5`
+- 对应例行发布版本号：对应 `v2026.11.5-2`，承接主线 `v2026.11.5`
 - 原型案例：`prototypes/cases/home-ios-bottom-bar-v1/`
 
 ---
