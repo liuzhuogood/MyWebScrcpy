@@ -10,7 +10,7 @@
 
 **设备列表**
 
-![设备列表](screenshots/device-list.jpg)
+![设备列表](screenshots/device-list.jpg?v=20261106)
 
 **桌面客户端：窗口置顶、透明度与鼠标穿透（macOS，局部）**
 
@@ -20,19 +20,19 @@
 
 **投屏操控**
 
-![投屏操控](screenshots/player.jpg)
+![投屏操控](screenshots/player.jpg?v=20261106)
 
 **播放器检查器**
 
-![播放器检查器](screenshots/ui-inspector.jpg)
+![播放器检查器](screenshots/ui-inspector.jpg?v=20261106)
 
 **大屏监控（局部）**
 
-![大屏监控局部](screenshots/dashboard.jpg)
+![大屏监控局部](screenshots/dashboard.jpg?v=20261106)
 
 **文件管理**
 
-![文件管理](screenshots/file-manager.jpg)
+![文件管理](screenshots/file-manager.jpg?v=20261106)
 
 ## 特性
 
