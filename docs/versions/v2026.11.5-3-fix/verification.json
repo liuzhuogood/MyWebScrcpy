@@ -790,5 +790,18 @@
       "physical_device_exercised": false,
       "native_webview_real_video_exercised": false
     }
+  },
+  "delivery": {
+    "runtime_replaced": true,
+    "target": "workspace desktop development App",
+    "gui_pid": 48943,
+    "backend_pid": 48967,
+    "url": "http://127.0.0.1:1989",
+    "frontend_matches_final_build": true,
+    "native_window_observed": true,
+    "branch": "codex/v2026.11.5-3-fix",
+    "preserved_concurrent_commit": "4c0a6f7",
+    "tag_or_release_created": false,
+    "include_concurrent_commit_authorized": true
   }
 }
