@@ -385,6 +385,7 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
   const groupControl = useGroupControl()
   const unregisterGroupChannel = groupControl.registerChannel({
     serial,
+    isReady: () => ws?.readyState === WebSocket.OPEN,
     send: (bytes) => {
       send(bytes, true)
     },
@@ -394,9 +395,9 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
     }),
   })
 
-  function send(bytes: Uint8Array, fromGroupSync = false) {
+  function send(bytes: Uint8Array | string, fromGroupSync = false) {
     if (ws && ws.readyState === WebSocket.OPEN)
-      ws.send(bytes as Uint8Array<ArrayBuffer>)
+      ws.send(bytes as string | Uint8Array<ArrayBuffer>)
     if (!fromGroupSync) {
       groupControl.broadcastControl(serial, bytes, {
         width: packer.deviceWidth,
@@ -415,7 +416,7 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
       return
     const dw = packer.deviceWidth || 1
     const dh = packer.deviceHeight || 1
-    ws.send(JSON.stringify({
+    send(JSON.stringify({
       type: 'input.hid',
       action: kind,
       x: +(x1 / dw).toFixed(6),
@@ -590,7 +591,7 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
       return
     const dw = packer.deviceWidth || 1
     const dh = packer.deviceHeight || 1
-    ws.send(JSON.stringify({
+    send(JSON.stringify({
       type: 'input.pointer',
       action: kind,
       x: +(x1 / dw).toFixed(6),

@@ -77,6 +77,9 @@ watch(containerRef, element => {
   if (!element) return
   sortable = new Sortable(element, {
     draggable: '[data-sort-item]', handle: '[data-sort-handle]', animation: 120,
+    // WebView 的原生拖放会与卡片输入/文件拖放竞争，统一使用 Sortable 的指针拖放。
+    forceFallback: true, fallbackOnBody: true, fallbackTolerance: 4,
+    fallbackClass: 'home-device-sort-preview',
     onStart() {
       sorting.value = true
       dragSerials = props.visibleDevices.map(device => device.serial)
@@ -601,3 +604,11 @@ function getAppVisual(iconType?: string) {
     </div>
   </div>
 </template>
+
+<style>
+/* Reka 右键触发器的内联 pointer-events:auto 会让拖动镜像挡住落点。 */
+.home-device-sort-preview,
+.home-device-sort-preview * {
+  pointer-events: none !important;
+}
+</style>

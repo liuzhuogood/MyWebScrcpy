@@ -8,7 +8,7 @@
 
 export interface EventRequest {
   serial: string
-  event: 'back' | 'home' | 'app_switch'
+  event: 'back' | 'home' | 'app_switch' | 'power'
   expires_ms?: number
 }
 
@@ -28,7 +28,7 @@ export interface ApiErrorResponse {
 
 export async function sendDeviceEvent(
   serial: string,
-  event: 'back' | 'home' | 'app_switch',
+  event: EventRequest['event'],
   signal?: AbortSignal,
   timeoutMs = 15000,
 ): Promise<ActionResult> {

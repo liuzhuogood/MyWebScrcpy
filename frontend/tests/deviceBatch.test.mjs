@@ -7,14 +7,14 @@ import {
   useDeviceBatch,
 } from '../src/composables/useDeviceBatch.ts'
 
-test('dedupeSerials eliminates duplicate serials, respects max 64 limit', () => {
+test('dedupeSerials eliminates duplicate serials, respects max 1024 limit', () => {
   assert.deepEqual(dedupeSerials(['a', 'b', 'a', 'c', 'b']), ['a', 'b', 'c'])
   assert.deepEqual(dedupeSerials([]), [])
   assert.deepEqual(dedupeSerials(null), [])
 
-  const many = Array.from({ length: 80 }, (_, i) => `dev-${i}`)
+  const many = Array.from({ length: 1100 }, (_, i) => `dev-${i}`)
   const deduped = dedupeSerials(many)
-  assert.equal(deduped.length, 64)
+  assert.equal(deduped.length, 1024)
 })
 
 test('executeBatchAction bounded concurrency never exceeds 4 even if requested higher', async () => {
@@ -140,4 +140,21 @@ test('useDeviceBatch destroy and cancel cleanly reset state', async () => {
   assert.equal(batch.isRunning.value, false)
   assert.equal(batch.results.value.length, 0)
   assert.equal(batch.currentBatchId.value, '')
+})
+
+// The power button must preserve system power semantics instead of invoking sleep.
+test('batch power sends the named power event without the screen-lock command path', async () => {
+  const previousFetch = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) })
+    return new Response(JSON.stringify({ request_id: 'power-1', status: 'executed', executed: true, mode: 'sdk', elapsed_ms: 1 }), { status: 200 })
+  }
+  try {
+    const { summary } = await executeBatchAction({ batchId: 'power', generation: 1, serials: ['device'], action: 'power' })
+    assert.equal(summary.success, 1)
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].url, '/api/v1/actions/events')
+    assert.equal(calls[0].body.event, 'power')
+  } finally { globalThis.fetch = previousFetch }
 })

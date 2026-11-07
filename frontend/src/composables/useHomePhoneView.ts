@@ -65,11 +65,15 @@ export function buildStableNumberedDevices(devices: Device[]): NumberedDevice[] 
   })
 }
 
-export function useHomePhoneView(allDevices: () => Device[], numberMap?: () => Map<string, string>) {
+export function useHomePhoneView(
+  allDevices: () => Device[],
+  numberMap?: () => Map<string, string>,
+  selectedSerials: () => string[] = () => [],
+) {
   const initialDashSize = normalizeDashSize(localStorage.getItem(PHONE_DASH_SIZE_KEY))
   const dashSize = ref<DashSize>(initialDashSize)
 
-  const onlySelectedSerials = ref<string[] | null>(null)
+  const onlySelected = ref(false)
   const hiddenSerials = ref<string[]>(parseHiddenSerials(localStorage.getItem(PHONE_HIDDEN_KEY)))
 
   watch(dashSize, (newVal) => {
@@ -100,15 +104,14 @@ export function useHomePhoneView(allDevices: () => Device[], numberMap?: () => M
     saveHidden()
   }
 
-  function showAllDevices() { onlySelectedSerials.value = null }
-  function restoreHiddenDevices() { hiddenSerials.value = []; saveHidden() }
-
-  function showOnlySelected(selectedSerials: string[]) {
-    if (selectedSerials.length === 0)
-      return
-    const selectedSet = new Set(selectedSerials)
-    onlySelectedSerials.value = [...selectedSet]
+  function showDevice(serial: string) {
+    if (!hiddenSerials.value.includes(serial)) return
+    hiddenSerials.value = hiddenSerials.value.filter(s => s !== serial)
+    saveHidden()
   }
+
+  function showAllDevices() { onlySelected.value = false }
+  function restoreHiddenDevices() { hiddenSerials.value = []; saveHidden() }
 
   function setDashSize(sz: DashSize) {
     dashSize.value = normalizeDashSize(sz)
@@ -131,13 +134,14 @@ export function useHomePhoneView(allDevices: () => Device[], numberMap?: () => M
 
   // 当前可见设备列表
   const visibleDevices = computed(() => {
-    return allDevices().filter(d => !hiddenSerials.value.includes(d.serial) && (onlySelectedSerials.value === null || onlySelectedSerials.value.includes(d.serial)))
+    const selected = new Set(selectedSerials())
+    return allDevices().filter(d => d.state === 'device' && !hiddenSerials.value.includes(d.serial) && (!onlySelected.value || selected.has(d.serial)))
   })
 
   return {
     dashSize,
     hiddenSerials,
-    onlySelectedSerials,
+    onlySelected,
     restoreHiddenDevices,
     numberedDevices,
     serialToNumberMap,
@@ -145,8 +149,8 @@ export function useHomePhoneView(allDevices: () => Device[], numberMap?: () => M
     isDeviceVisible,
     toggleDeviceVisibility,
     hideDevice,
+    showDevice,
     showAllDevices,
-    showOnlySelected,
     setDashSize,
   }
 }

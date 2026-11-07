@@ -46,11 +46,11 @@
 | 手机卡片视图 | 手机卡片、卡片视图、甲板、3D全息 | `frontend/src/components/home/HomePhoneView.vue` (`viewMode === 'deck'`)；首页卡片与手机两种视图之一，采用手机拟物卡片展示设备遥测（温度、电量）与当前运行应用，熄屏或锁屏时展示已锁定状态，不挂载实时投屏流；卡片按持久化拖动顺序靠左紧凑排列（8px 间隙），默认按 serial 排序；底部仅显示真实 serial/地址，不展示连接类型标志，点击卡片打开投屏小窗，支持鼠标拉框批量框选 |
 | 首页手机视图 | 手机视图、第三视图、手机样式视图、手机墙、首页多设备投屏、紧密设备墙 | `frontend/src/components/home/HomePhoneView.vue`；首页卡片与手机两种视图之一，以紧密设备墙规格挂载实时画面（同档位同宽同高，相邻横纵间距统一 8px，画面黑底 contain 等比居中黑边填充、不拉伸不裁图；首页为实时预览，左键拖动框选、单击打开小窗，直接操控在小窗/详情页进行），设备显隐由 iOS 悬浮底栏的编号小方块控制，支持页面全屏 |
 | 手机视图统一格 | 统一格、同宽同高手机格子、紧密设备格 | `frontend/src/utils/phoneGrid.ts` 与 `frontend/src/components/home/HomePhoneView.vue`；首页手机视图在小/中/大/铺满各档位所使用的等宽等高规格与 2px 间隙体系，横屏、长屏与旋转均保持卡片尺寸恒定，视口内黑底等比 contain 居中显示 |
-| iOS 悬浮底栏 | 悬浮底栏、底栏、操作栏、Dock栏、浮动药丸栏、控制中心、操作面板、批量操作面板、批量面板、右侧面板 | `frontend/src/components/home/HomeIosDockBar.vue`；首页底部居中悬浮 Liquid Glass 胶囊操作栏，整合操作、视图、设备（支持鼠标原生框选）与更多服务四组 iOS 浮动卡片 Sheet，支持最小化、设备编号区域紧凑展开、滚动框选；无遮罩、点击外部或操作手机保持展开，关闭按钮/胶囊切换/Esc 可收起；群控作为独立模式开关，导航及锁屏作用于已选在线设备，取代原右侧固定操作侧栏（ActionPanel） |
-| 显示离线设备 | 显示离线、离线过滤开关 | `frontend/src/composables/useHomeFilter.ts`；首页控制胶囊开关，默认关闭（仅展示 `state === 'device'` 设备），开启时在搜索与编号生成前纳入离线与未授权设备，本地持久化布尔配置 |
-| 设备编号小方块选择器 | 编号小方块、编号显隐、数字网格、设备矩阵 | `frontend/src/components/home/HomeIosDockBar.vue`（【设备】浮动卡片）；与卡片共用设备 Store 的全量 serial→编号映射（含离线设备与编号空位）；拖动重排持久化后重新编号，选择身份仍为 serial；支持点选、拉框、Ctrl/Cmd 增量选择与同一右键菜单 |
+| iOS 悬浮底栏 | 悬浮底栏、底栏、操作栏、Dock栏、浮动药丸栏、控制中心、操作面板、批量操作面板、批量面板、右侧面板 | `frontend/src/components/home/HomeIosDockBar.vue`；首页底部居中悬浮 Liquid Glass 胶囊操作栏，整合操作、视图、设备（支持鼠标原生框选）与更多服务四组 iOS 浮动卡片 Sheet，支持最小化、设备编号区域紧凑展开、滚动框选；无遮罩、点击外部或操作手机保持展开，关闭按钮/胶囊切换/Esc 可收起；群控作为独立模式开关，导航及电源键作用于已选在线设备，取代原右侧固定操作侧栏（ActionPanel） |
+| 首页在线设备展示 | 显示离线设备、显示离线、离线过滤 | `frontend/src/views/HomeView.vue` 与 `HomeIosDockBar.vue`；首页卡片和编号区域均只展示 `state === 'device'` 的在线设备，离线记录保留但不提供展示开关；在线且被隐藏的设备保留编号恢复入口 |
+| 设备编号小方块选择器 | 编号小方块、编号显隐、数字网格、设备矩阵 | `frontend/src/components/home/HomeIosDockBar.vue`（【设备】浮动卡片）；与卡片共用设备 Store 的全量 serial→编号映射（全量映射保留离线编号空位，区域只列在线设备）；拖动重排持久化后重新编号，选择身份仍为 serial；支持点选、拉框、Ctrl/Cmd 增量选择、全选/取消全选；隐藏编号用灰色虚线显示并可右键“显示”恢复 |
 | 设备添加与发现 | 扫码配对、范围扫描、常态扫描 | `frontend/src/components/home/AddDeviceDialog.vue` 与 `internal/device/discovery.go`；二维码按 Android 无线调试机制由电脑生成、手机扫码，弹窗打开预生成真实会话二维码，终止/过期清空；IP 起止各四段输入，真实网卡地址与掩码给出默认范围，最多8个范围/合计1024个地址/8个端口，原单范围API保留，持续扫描可停止、关闭对话框或租约断开后停止；`/api/device-discovery/*` |
-| 设备可见性 | 只显示已选、显示全部、隐藏、显示隐藏设备 | `useHomePhoneView.ts`；只显示已选是临时 serial 集合筛选，“显示全部”仅解除此筛选；右键隐藏写入本地持久偏好，“显示隐藏设备”恢复持久隐藏；删除仅移除手动设备条目，不删除手机数据，自动发现设备不开放删除 |
+| 设备可见性 | 只显示已选、显示全部、隐藏、显示隐藏设备 | `useHomePhoneView.ts`；“只显示已选”为开关，实时跟随选择；取消选择隐藏卡片，再点编号同时选中并显示；选择范围不受卡片显隐限制，右键“隐藏/显示”写入本地持久偏好，“显示隐藏设备”恢复持久隐藏；删除仅移除手动设备条目，不删除手机数据，自动发现设备不开放删除 |
 | 设备右键菜单 | 卡片右键、编号右键 | `DeviceContextMenu.vue`；卡片与底栏编号均按 serial 执行隐藏、手动条目删除、打开小窗、进入详情；离线设备不执行投屏，Mock 不派发真机操作 |
 | 投屏音量 | 小窗声音、音量调节 | `frontend/src/components/player/AudioControl.vue` 与 `frontend/src/scrcpy/audio.ts`；调节本地播放增益并保留静音，不改变设备系统音量 |
 | 技能市场 | 技能列表、APP 自动化技能 | `frontend/src/components/ai-integration/SkillMarket.vue` |
@@ -75,7 +75,7 @@
 | 像素点取色接口 | 获取像素点、像素颜色接口、坐标取色 | 接口 `GET/POST /api/v1/vision/pixel`；支持归一化坐标(0~1)与绝对像素坐标，基于最新帧画面快速提取像素并返回详细颜色信息(RGB/RGBA/HEX) |
 | 投屏拖拽安装 | 拖拽安装、APK 拖拽安装、投屏文件投放 | 投屏详情页与小窗投屏画面支持直接拖入文件；APK 文件弹出安装确认弹窗（支持保留数据覆盖、自动授权、允许降级），其他文件弹出保存到设备 Downloads 目录（`/storage/emulated/0/Download/`）确认弹窗 |
 | 快手短视频技能 | 快手技能、快手极速版任务、观看视频模式 | `skills/kuaishou-short-video/SKILL.md`；红包守护、连续打卡白拿手机、连续签到的视频观看流程 |
-| 群控 | 群控同步、同步操作、多机同步、同屏同步 | 操作任意一台已选主控手机时，将其触控轨迹、按键与手势按分辨率比例实时广播同步至所有已勾选的受控手机；`frontend/src/composables/useGroupControl.ts` |
+| 群控 | 群控同步、同步操作、多机同步、同屏同步 | 操作任意一台手机（无需勾选为源）时，将点击、触控轨迹、按键与手势按归一化坐标同步至所有已勾选在线且可见的受控手机；首页协调页通过 BroadcastChannel 接收独立投屏页输入，每台目标只派发一次，后台 `/ws?control_only=1` 不订阅音视频；`frontend/src/composables/useGroupControl.ts` |
 
 ## 后端模块速查(`internal/`)
 

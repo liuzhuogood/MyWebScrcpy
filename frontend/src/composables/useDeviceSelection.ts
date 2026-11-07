@@ -1,6 +1,6 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import type { Device } from '../api/devices.ts'
-import { dedupeSerials, filterSelectableDevices } from './useDeviceBatch.ts'
+import { filterSelectableDevices } from './useDeviceBatch.ts'
 
 export function useDeviceSelection(
   currentScopeDevices: Ref<Device[]>,
@@ -48,7 +48,7 @@ export function useDeviceSelection(
     else {
       const isSelectable = selectableDevices.value.some(d => d.serial === serial)
       if (isSelectable) {
-        selectedSerials.value = dedupeSerials([...selectedSerials.value, serial])
+        selectedSerials.value = [...new Set([...selectedSerials.value, serial])]
       }
     }
   }

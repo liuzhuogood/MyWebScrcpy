@@ -36,7 +36,7 @@ export interface BatchExecutionOptions {
   batchId: string
   generation: number
   serials: string[]
-  action: 'back' | 'home' | 'app_switch' | 'lock'
+  action: 'back' | 'home' | 'app_switch' | 'lock' | 'power'
   concurrency?: number
   perDeviceTimeoutMs?: number
   overallTimeoutMs?: number
@@ -47,7 +47,7 @@ export interface BatchExecutionOptions {
   runner?: (serial: string, signal: AbortSignal) => Promise<unknown>
 }
 
-export const MAX_BATCH_TARGETS = 64
+export const MAX_BATCH_TARGETS = 1024
 export const MAX_BATCH_CONCURRENCY = 4
 export const DEFAULT_BATCH_CONCURRENCY = 4
 export const DEFAULT_PER_DEVICE_TIMEOUT_MS = 15000
@@ -298,7 +298,7 @@ export function useDeviceBatch(isOperableCheck?: (serial: string) => boolean) {
 
   async function runBatch(
     serials: string[],
-    action: 'back' | 'home' | 'app_switch' | 'lock',
+    action: 'back' | 'home' | 'app_switch' | 'lock' | 'power',
     deviceMap?: Record<string, string>,
     customRunner?: (serial: string, signal: AbortSignal) => Promise<unknown>,
   ) {

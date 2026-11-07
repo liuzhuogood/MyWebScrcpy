@@ -13,7 +13,7 @@ import {
   Maximize2,
   Minimize2,
   Plus,
-  Lock,
+  Power,
   Search,
   Settings,
   SlidersHorizontal,
@@ -22,13 +22,12 @@ import {
   X,
 } from 'lucide-vue-next'
 import DeviceContextMenu from './DeviceContextMenu.vue'
+import { GLASS_CARD_SURFACE } from '@/lib/surfaces'
 import { Switch } from '@/components/ui/switch'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import type { Device } from '@/api/devices'
-import type { BatchItemResult, BatchSummary } from '@/composables/useDeviceBatch'
 import type { HomeViewMode } from '@/composables/usePlayerSettings'
 import {
   HOME_PHONE_SCALE_MAX,
@@ -46,15 +45,15 @@ const props = withDefaults(
     viewMode: HomeViewMode
     devices: Device[]
     numberMap: Map<string, string>
-    hiddenCount?: number
+    hiddenSerials: string[]
+    visibleSerials: string[]
+    onlySelected: boolean
     mockEnabled?: boolean
     selectedSerials: string[]
     onlineCount: number
     isAllSelected?: boolean
     batchRunning?: boolean
     currentAction?: string
-    batchResults?: BatchItemResult[]
-    batchSummary?: BatchSummary
     isSyncActive?: boolean
     displayName?: (device: Device) => string
   }>(),
@@ -62,17 +61,6 @@ const props = withDefaults(
     isAllSelected: false,
     batchRunning: false,
     currentAction: '',
-    batchResults: () => [],
-    batchSummary: () => ({
-      batchId: '',
-      action: '',
-      total: 0,
-      success: 0,
-      failed: 0,
-      cancelled: 0,
-      unknown: 0,
-      inProgress: false,
-    }),
     isSyncActive: false,
     displayName: (d: Device) => d.alias || d.model || d.serial,
   },
@@ -85,17 +73,15 @@ const emit = defineEmits<{
   (e: 'toggleSelect', serial: string): void
   (e: 'selectAll'): void
   (e: 'clearSelection'): void
-  (e: 'triggerAction', action: 'back' | 'home' | 'app_switch' | 'lock'): void
+  (e: 'triggerAction', action: 'back' | 'home' | 'app_switch' | 'power'): void
   (e: 'toggleSync'): void
   (e: 'cancelBatch'): void
-  (e: 'clearResults'): void
   (e: 'openAdd'): void
   (e: 'openConfig'): void
   (e: 'openAi'): void
   (e: 'openShortcuts'): void
   (e: 'openDocs'): void
-  (e: 'showOnlySelected'): void
-  (e: 'showAll'): void
+  (e: 'update:onlySelected', val: boolean): void
   (e: 'restoreHidden'): void
   (e: 'deviceAction', action: string, serial: string): void
 }>()
@@ -143,7 +129,7 @@ function closePanel() {
 
 // Use the full store mapping, including offline gaps, after filtering.
 const numberedDevices = computed(() => {
-  return [...props.devices]
+  return props.devices.filter(device => device.state === 'device')
     .map((device) => {
       const label = props.numberMap.get(device.serial) ?? ''
       return { device, label, serial: device.serial }
@@ -151,6 +137,7 @@ const numberedDevices = computed(() => {
 })
 
 const selectedSet = computed(() => new Set(props.selectedSerials))
+const visibleSet = computed(() => new Set(props.visibleSerials))
 
 const cardWidth = computed(() => Math.round(270 * homePhoneScale.value / 100))
 
@@ -292,8 +279,8 @@ function handleDeviceClick(serial: string) {
     >
       <div
         v-if="activeTab"
-        :class="activeTab === 'devices' && devicesExpanded ? 'max-w-7xl p-3' : 'max-w-lg p-4'"
-        class="pointer-events-auto relative mb-2 w-full overflow-hidden rounded-3xl border border-white/80 bg-white/85 shadow-[0_20px_50px_rgba(0,0,0,0.15)] backdrop-blur-2xl transition-all dark:border-white/15 dark:bg-[#0e121d]/90 dark:shadow-[0_20px_50px_rgba(0,0,0,0.6)]"
+        :class="[GLASS_CARD_SURFACE, activeTab === 'devices' && devicesExpanded ? 'max-w-7xl p-3' : 'max-w-lg p-4']"
+        class="pointer-events-auto relative mb-2 w-full overflow-hidden transition-all"
       >
         <!-- 卡片顶部抓手横条 & 标题 -->
         <div class="flex items-center justify-between pb-3 border-b border-slate-200/60 dark:border-white/10">
@@ -307,25 +294,24 @@ function handleDeviceClick(serial: string) {
               }}
             </h3>
           </div>
-          <button
-            type="button"
-            class="flex h-6 w-6 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200/50 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white cursor-pointer"
-            aria-label="关闭"
-            @click="closePanel"
-          >
-            <X class="h-3.5 w-3.5" />
-          </button>
+          <div class="flex items-center gap-1">
+            <Button v-if="activeTab === 'devices'" variant="ghost" size="icon" class="h-6 w-6" :aria-label="devicesExpanded ? '收起设备区域' : '展开设备区域'" :title="devicesExpanded ? '收起设备区域' : '展开设备区域'" @click="devicesExpanded = !devicesExpanded">
+              <Minimize2 v-if="devicesExpanded" class="h-3.5 w-3.5" /><Maximize2 v-else class="h-3.5 w-3.5" />
+            </Button>
+            <button
+              type="button"
+              class="flex h-6 w-6 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-200/50 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-white cursor-pointer"
+              aria-label="关闭"
+              @click="closePanel"
+            >
+              <X class="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
 
         <!-- 1. 操作面板内容 -->
         <div v-if="activeTab === 'actions'" class="space-y-4 pt-3.5">
           <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-slate-500 dark:text-slate-400">已选中设备</span>
-              <Badge variant="secondary" class="font-mono text-xs font-semibold px-2">
-                {{ selectedSerials.length }} 台
-              </Badge>
-            </div>
             <div class="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -388,7 +374,7 @@ function handleDeviceClick(serial: string) {
                 <span class="text-xs">多任务</span>
               </Button>
 
-              <Button variant="secondary" size="sm" class="h-9 rounded-xl" :disabled="selectedSerials.length === 0 || batchRunning" @click="emit('triggerAction', 'lock')"><Lock class="h-4 w-4" /><span class="text-xs">锁屏</span></Button>
+              <Button variant="secondary" size="sm" class="h-9 rounded-xl" :disabled="selectedSerials.length === 0 || batchRunning" @click="emit('triggerAction', 'power')"><Power class="h-4 w-4" /><span class="text-xs">电源键</span></Button>
             </div>
           </div>
 
@@ -409,13 +395,6 @@ function handleDeviceClick(serial: string) {
             <Button variant="ghost" size="sm" class="h-6 rounded-lg px-2 text-xs text-red-600 hover:text-red-700" @click="emit('cancelBatch')">
               取消
             </Button>
-          </div>
-          <div
-            v-else-if="batchResults.length"
-            class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 bg-slate-50/60 dark:bg-white/5 p-2 rounded-xl"
-          >
-            <span>执行完成：成功 {{ batchSummary.success }} / 失败 {{ batchSummary.failed }} / 待确认 {{ batchSummary.unknown }}</span>
-            <button type="button" class="cursor-pointer hover:text-slate-900 dark:hover:text-white" @click="emit('clearResults')">清除记录</button>
           </div>
         </div>
 
@@ -548,27 +527,15 @@ function handleDeviceClick(serial: string) {
             </Button>
           </div>
 
-          <!-- 在线与已选统计 -->
-          <div class="flex items-center justify-between text-xs text-slate-500">
-            <div class="flex items-center gap-2">
-              <span class="flex items-center gap-1 font-medium">
-                <span class="h-2 w-2 rounded-full bg-emerald-500" />
-                {{ onlineCount }} 台在线
-              </span>
-              <span class="text-slate-300 dark:text-white/20">|</span>
-              <span class="flex items-center gap-1 font-medium text-blue-600 dark:text-blue-400">
-                {{ selectedSerials.length }} 台已选
-              </span>
+          <div class="flex items-center justify-between gap-2">
+            <label class="flex cursor-pointer items-center gap-2 text-xs" for="only-selected-devices">
+              <Switch id="only-selected-devices" :model-value="onlySelected" @update:model-value="emit('update:onlySelected', $event)" />
+              只显示已选
+            </label>
+            <div class="flex items-center gap-1">
+              <Button variant="outline" size="sm" class="h-7 rounded-xl text-xs" @click="emit('selectAll')">{{ isAllSelected ? '取消全选' : '全选' }}</Button>
+              <Button v-if="hiddenSerials.length" variant="ghost" size="sm" class="h-7 rounded-xl text-xs" @click="emit('restoreHidden')">显示隐藏设备</Button>
             </div>
-            <Button variant="ghost" size="icon" class="h-6 w-6" :aria-label="devicesExpanded ? '收起设备区域' : '展开设备区域'" :title="devicesExpanded ? '收起设备区域' : '展开设备区域'" @click="devicesExpanded = !devicesExpanded">
-              <Minimize2 v-if="devicesExpanded" class="h-3.5 w-3.5" /><Maximize2 v-else class="h-3.5 w-3.5" />
-            </Button>
-          </div>
-
-          <div class="flex items-center gap-2">
-            <Button variant="outline" size="sm" :disabled="!selectedSerials.length" @click="emit('showOnlySelected')">只显示已选</Button>
-            <Button variant="outline" size="sm" @click="emit('showAll')">显示全部</Button>
-            <Button v-if="hiddenCount" variant="ghost" size="sm" @click="emit('restoreHidden')">显示隐藏设备</Button>
           </div>
           <!-- 01..N 设备编号方块矩阵（支持原生拖拽拉框多选） -->
           <div
@@ -590,17 +557,19 @@ function handleDeviceClick(serial: string) {
               }"
             />
 
-            <DeviceContextMenu v-for="item in numberedDevices" :key="item.serial" :device="item.device" :mock-enabled="mockEnabled" @action="emit('deviceAction', $event, item.serial)">
+            <DeviceContextMenu v-for="item in numberedDevices" :key="item.serial" :device="item.device" :hidden="!visibleSet.has(item.serial)" :mock-enabled="mockEnabled" @action="emit('deviceAction', $event, item.serial)">
             <button
               type="button"
               :data-device-serial="item.serial"
               class="relative flex items-center justify-center border font-mono font-bold transition-all cursor-pointer select-none"
               :class="[devicesExpanded ? 'h-6 rounded-md text-[10px]' : 'h-7 rounded-lg text-[11px]', selectedSet.has(item.serial)
                 ? 'border-2 border-blue-500 bg-blue-600 text-white shadow-sm ring-2 ring-blue-500/30'
-                : item.device.state !== 'device'
+                : !visibleSet.has(item.serial)
                   ? 'border-dashed border-slate-300 bg-slate-200/50 text-slate-400 dark:border-white/10 dark:bg-white/5'
                   : 'border-slate-300/80 bg-white text-slate-800 hover:border-blue-400 dark:border-white/20 dark:bg-white/10 dark:text-slate-100']"
-              :title="`${item.label} · ${displayName(item.device)} (${item.device.state === 'device' ? '在线' : item.device.state})`"
+              :title="`${item.label} · ${displayName(item.device)} (${visibleSet.has(item.serial) ? '显示' : '已隐藏'})`"
+              :aria-label="`${item.label} · ${displayName(item.device)}`"
+              :aria-pressed="selectedSet.has(item.serial)"
               @click="handleDeviceClick(item.serial)"
             >
               {{ item.label }}

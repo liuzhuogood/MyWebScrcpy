@@ -189,9 +189,9 @@ function closeWs() {
     old.close()
 }
 
-function send(bytes: Uint8Array, fromGroupSync = false) {
+function send(bytes: Uint8Array | string, fromGroupSync = false) {
   if (ws && ws.readyState === WebSocket.OPEN)
-    ws.send(bytes as Uint8Array<ArrayBuffer>)
+    ws.send(bytes as string | Uint8Array<ArrayBuffer>)
   if (!fromGroupSync) {
     groupControl.broadcastControl(props.device.serial, bytes, {
       width: packer.deviceWidth,
@@ -437,6 +437,7 @@ let unregisterGroupChannel: (() => void) | null = null
 onMounted(() => {
   unregisterGroupChannel = groupControl.registerChannel({
     serial: props.device.serial,
+    isReady: () => ws?.readyState === WebSocket.OPEN,
     send: (bytes) => {
       send(bytes, true)
     },

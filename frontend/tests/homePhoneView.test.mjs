@@ -139,38 +139,31 @@ test('production useHomePhoneView: toggle visibility and showAllDevices recovery
   assert.deepEqual(phone.hiddenSerials.value, [])
 })
 
-test('production integration: showOnlySelected with useDeviceSelection preserves selection without recursive clearing', async () => {
+test('only-selected follows live selection, preserves number entries and supports reselect / select-all', async () => {
   storageMap.clear()
-  const rawDevices = ref([
-    { serial: 'dev-1', state: 'device' },
-    { serial: 'dev-2', state: 'device' },
-    { serial: 'dev-3', state: 'device' },
-  ])
-  const phone = useHomePhoneView(() => rawDevices.value)
-  const isMock = ref(false)
-  const selection = useDeviceSelection(phone.visibleDevices, isMock)
-
-  // 勾选 dev-2
+  const rawDevices = ref(['dev-1', 'dev-2', 'dev-3'].map(serial => ({ serial, state: 'device' })))
+  const selection = useDeviceSelection(rawDevices, ref(false))
+  const phone = useHomePhoneView(() => rawDevices.value, undefined, () => selection.selectedSerials.value)
   selection.toggleSelect('dev-2')
-  assert.deepEqual(selection.selectedSerials.value, ['dev-2'])
-
-  // 触发只显已选
-  phone.showOnlySelected(selection.selectedSerials.value)
+  phone.onlySelected.value = true
+  assert.deepEqual(phone.visibleDevices.value.map(d => d.serial), ['dev-2'])
+  selection.toggleSelect('dev-2')
   await nextTick()
-
-  // dev-1 和 dev-3 被隐藏，dev-2 仍然可见
-  assert.equal(phone.visibleDevices.value.length, 1)
-  assert.equal(phone.visibleDevices.value[0].serial, 'dev-2')
-  // 关键验证：已选 dev-2 必须完好保留，严禁发生递归清空！
-  assert.deepEqual(selection.selectedSerials.value, ['dev-2'])
-  assert.deepEqual(selection.getValidatedTargets(), ['dev-2'])
-
-  // 当无任何设备被选中时，调用 showOnlySelected 状态不受影响
-  selection.clearSelection()
-  assert.equal(selection.selectedSerials.value.length, 0)
-  const hiddenBefore = [...phone.hiddenSerials.value]
-  phone.showOnlySelected([])
-  assert.deepEqual(phone.hiddenSerials.value, hiddenBefore)
+  assert.equal(phone.visibleDevices.value.length, 0)
+  assert.equal(phone.numberedDevices.value.length, 3, 'hidden cards retain their number entries')
+  selection.toggleSelect('dev-2')
+  assert.deepEqual(phone.visibleDevices.value.map(d => d.serial), ['dev-2'])
+  selection.selectAll()
+  assert.equal(phone.visibleDevices.value.length, 3, 'select all includes cards hidden by the filter')
+  selection.selectAll()
+  assert.equal(phone.visibleDevices.value.length, 0)
+  selection.toggleSelect('dev-1')
+  phone.hideDevice('dev-1')
+  assert.equal(phone.visibleDevices.value.length, 0)
+  phone.showDevice('dev-1')
+  assert.deepEqual(phone.visibleDevices.value.map(d => d.serial), ['dev-1'])
+  phone.showAllDevices()
+  assert.equal(phone.visibleDevices.value.length, 3)
 })
 
 test('selection excludes offline devices and mock previews never become real command targets', async () => {
@@ -224,13 +217,13 @@ test('offline number gaps, reordering and temporary filters retain selected seri
  storageMap.clear()
  const raw = ref([{serial:'a',state:'device'},{serial:'b',state:'offline'},{serial:'c',state:'device'}])
  const numberMap = ref(new Map([['a','01'],['b','02'],['c','03']]))
- const phone = useHomePhoneView(()=>raw.value.filter(d=>d.state==='device'),()=>numberMap.value)
- const selection = useDeviceSelection(phone.visibleDevices, ref(false))
+ const selection = useDeviceSelection(raw, ref(false))
+ const phone = useHomePhoneView(()=>raw.value.filter(d=>d.state==='device'),()=>numberMap.value,()=>selection.selectedSerials.value)
  selection.toggleSelect('b')
  assert.deepEqual(selection.selectedSerials.value, [])
  selection.toggleSelect('c')
  assert.equal(phone.serialToNumberMap.value.get('c'),'03')
- phone.showOnlySelected(selection.selectedSerials.value)
+ phone.onlySelected.value = true
  await nextTick()
  assert.deepEqual(phone.visibleDevices.value.map(d=>d.serial),['c'])
  numberMap.value = new Map([['c','01'],['b','02'],['a','03']])

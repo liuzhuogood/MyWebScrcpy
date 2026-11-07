@@ -298,6 +298,7 @@ onMounted(() => {
             <RouterLink to="/ai-integration">
               <Bot class="h-4 w-4" />
               AI 集成
+              <Badge v-if="glass" variant="secondary" class="h-4 rounded-full px-1.5 text-[10px]">暂未实现</Badge>
             </RouterLink>
           </Button>
 
@@ -369,7 +370,7 @@ onMounted(() => {
             </DropdownMenuItem>
             <DropdownMenuSeparator v-if="updater.checkResult?.has_update" />
             <DropdownMenuItem as-child>
-              <RouterLink to="/ai-integration"><Bot class="h-4 w-4" />AI 集成</RouterLink>
+              <RouterLink to="/ai-integration"><Bot class="h-4 w-4" />AI 集成<Badge v-if="glass" variant="secondary" class="h-4 rounded-full px-1.5 text-[10px]">暂未实现</Badge></RouterLink>
             </DropdownMenuItem>
             <DropdownMenuItem as-child>
               <a href="https://github.com/liuzhuogood/MyWebScrcpy" target="_blank" rel="noopener noreferrer"><Github class="h-4 w-4" />GitHub</a>

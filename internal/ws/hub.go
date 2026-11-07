@@ -315,7 +315,11 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// video 帧 → WS 写
 	go func() {
 		defer wg.Done()
-		h.pumpSharedVideo(c, ms, done)
+		if r.URL.Query().Get("control_only") == "1" {
+			h.pumpSharedControl(c, ms, done)
+		} else {
+			h.pumpSharedVideo(c, ms, done)
+		}
 	}()
 
 	// WS 控制消息 → control socket

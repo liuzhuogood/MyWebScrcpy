@@ -18,18 +18,18 @@
 - 操作系统：Debian GNU/Linux 12 (bookworm)
 - 内核：6.1.0-35-amd64（SMP PREEMPT_DYNAMIC）
 - 架构：x86_64
-- 登录账号：`liuzhuo`（家目录 `/home/liuzhuo`），服务以 `root` 运行
+- 登录账号：`liuzhuo`（家目录 `/home/liuzhuo`），服务以 `liuzhuo` 运行
 
 ## 账号与服务
 
-- 系统账号：`liuzhuo`（SSH 免密登录），服务进程以 `root` 运行。
+- 系统账号：`liuzhuo`（SSH 免密登录），服务进程以 `liuzhuo` 运行。
 - 二进制部署：
   - 运行路径：`/opt/mywebscrcpy/mywebscrcpy-linux-amd64`
   - 启动参数：`-https`（启用内置 HTTPS 证书）
   - 工作目录：`/opt/mywebscrcpy/`
 - systemd 服务：`mywebscrcpy.service`（`loaded active running`，开机自启）
   - 进程示例：`root 82263 1 0 15:41 ? 00:00:10 /opt/mywebscrcpy/mywebscrcpy-linux-amd64 -https`
-- 数据库：暂无（项目不依赖数据库）。
+- 数据库：SQLite，当前路径 `/opt/mywebscrcpy/data/mywebscrcpy.db`（2026-11-07 现场核对）。
 - 缓存：暂无。
 - 消息队列：暂无。
 
@@ -79,3 +79,5 @@ journalctl -u mywebscrcpy.service -f
 - 2026-07-16：创建部署脚本 `scripts/deploy/deploy-prod.sh`。
 - 2026-08-20：部署 `v1.3.0`；服务因 systemd 未设置相对路径根目录首次重启失败，随后修正运行配置并恢复 `active`。HTTPS 首页和投屏链路健康检查通过。
 - 2026-08-20：部署 `v1.3.1`；修正手机共享存储路径和 Android toybox 元数据解析，服务恢复 `active`，生产文件管理冒烟验证通过。
+
+- 2026-11-07：按用户要求部署首页交互与群控修复，源码版本标识 `v2026.11.5-2`，程序 SHA-256 `a6489bc2d8afeb2c270e02a33537d7e530886999597aefcc64966730e80470e3`。服务 `active`，生产 JS 资源与本地构建一致；三台独立手机 Web 群控点击、横向滑屏及按键同步通过，关闭群控停止派发通过。SQLite 备份 `data/mywebscrcpy.db.bak.home-controls-20261107102315`，原程序备份 `mywebscrcpy-linux-amd64.bak.20261107102335`；部署时的代码尚未提交或推送。

@@ -56,14 +56,15 @@ const {
   serialToNumberMap,
   visibleDevices,
   showAllDevices,
-  showOnlySelected,
+  onlySelected,
   hideDevice,
+  showDevice,
   hiddenSerials,
   restoreHiddenDevices,
-} = useHomePhoneView(() => homeFilteredDevices.value, () => store.numberMap)
+} = useHomePhoneView(() => homeFilteredDevices.value, () => store.numberMap, () => selectedSerials.value)
 
-// 当前选择范围（三视图严格统一仅允许操作可见设备，隐藏设备不接受新动作）
-const currentScopeDevices = computed(() => visibleDevices.value)
+// 编号选择范围独立于卡片显隐，避免筛选后无法选回设备。
+const currentScopeDevices = homeFilteredDevices
 
 // 多选管理：传入 mockEnabled 响应式引用，Mock 打开时禁止选中
 const isMockEnabledRef = computed(() => !!store.mockEnabled)
@@ -71,8 +72,8 @@ const {
   selectedSerials,
   selectableDevices,
   isAllSelected,
-  toggleSelect,
-  selectAll,
+  toggleSelect: toggleSelection,
+  selectAll: toggleSelectAll,
   clearSelection,
   getValidatedTargets,
 } = useDeviceSelection(currentScopeDevices, isMockEnabledRef)
@@ -85,9 +86,21 @@ watch(
   },
 )
 
+function toggleSelect(serial: string) {
+  const selecting = !selectedSerials.value.includes(serial)
+  toggleSelection(serial)
+  if (selecting && selectedSerials.value.includes(serial)) showDevice(serial)
+}
+
+function selectAll() {
+  toggleSelectAll()
+  for (const serial of selectedSerials.value) showDevice(serial)
+}
+
 function handleUpdateSelectedSerials(serials: string[]) {
   const selectableSet = new Set(selectableDevices.value.map(d => d.serial))
   selectedSerials.value = serials.filter(s => selectableSet.has(s))
+  for (const serial of selectedSerials.value) showDevice(serial)
 }
 
 // 点击设备卡片：优先打开原生小窗（桌面端），Web 端使用内嵌浮动小窗
@@ -148,29 +161,26 @@ function handleOpenDocs() {
 function checkTargetOperable(serial: string): boolean {
   if (store.mockEnabled)
     return false
-  const target = currentScopeDevices.value.find(d => d.serial === serial)
+  const target = visibleDevices.value.find(d => d.serial === serial)
   return target?.state === 'device'
 }
 
 const {
   isRunning: batchRunning,
   currentAction,
-  results: batchResults,
-  summary: batchSummary,
   runBatch,
   cancelBatch,
-  clearResults,
   destroy: destroyBatch,
 } = useDeviceBatch(checkTargetOperable)
 
-async function handleBatchAction(action: 'back' | 'home' | 'app_switch' | 'lock') {
+async function handleBatchAction(action: 'back' | 'home' | 'app_switch' | 'power') {
   if (store.mockEnabled) {
     toast.error('当前处于 Mock 模拟状态，无法执行真机批量操作')
     return
   }
 
   // 发起前重校验目标，排除隐藏/已掉线设备
-  const validTargets = getValidatedTargets()
+  const validTargets = getValidatedTargets().filter(checkTargetOperable)
   if (validTargets.length === 0 || batchRunning.value)
     return
 
@@ -180,12 +190,13 @@ async function handleBatchAction(action: 'back' | 'home' | 'app_switch' | 'lock'
   }
 
   await runBatch(validTargets, action, deviceMap)
-  if (action === 'lock') void store.load(true)
+  if (action === 'power') void store.load(true)
 }
 
 // 群控同步操作状态
 const groupControl = useGroupControl()
 const isSyncActive = groupControl.isActive
+watch(groupControl.lastError, message => { if (message) toast.error(message) })
 
 function handleToggleSync() {
   if (store.mockEnabled) {
@@ -197,17 +208,18 @@ function handleToggleSync() {
     return
   }
   const next = !groupControl.isActive.value
+  if (!groupControl.setTargets(selectedSerials.value.filter(checkTargetOperable))) return
   groupControl.setActive(next)
-  groupControl.setTargets(selectedSerials.value)
   if (next) {
-    toast.success(`已开启群控：触控操作任意已选设备将实时同步至其余 ${Math.max(0, selectedSerials.value.length - 1)} 台设备`)
+    toast.success(`已开启群控：操作任意设备将同步到 ${selectedSerials.value.length} 台已选设备`)
   }
   else {
     toast.info('已关闭群控')
   }
 }
 
-watch(selectedSerials, (serials) => {
+watch([selectedSerials, visibleDevices], () => {
+  const serials = selectedSerials.value.filter(checkTargetOperable)
   groupControl.setTargets(serials)
   if (serials.length === 0 && groupControl.isActive.value) {
     groupControl.setActive(false)
@@ -221,7 +233,8 @@ function handleReorder(serials: string[]) {
 async function handleDeviceAction(action: string, serial: string) {
   const device = store.devices.find(d => d.serial === serial)
   if (!device) return
-  if (action === 'hide') { hideDevice(serial); return }
+  if (action === 'hide') { hideDevice(serial); selectedSerials.value = selectedSerials.value.filter(s => s !== serial); return }
+  if (action === 'show') { showDevice(serial); if (onlySelected.value && !selectedSerials.value.includes(serial)) toggleSelect(serial); return }
   if (action === 'open') { await handleOpenFloating(serial); return }
   if (action === 'detail') { if (!store.mockEnabled) router.push({path:'/player',query:{serial}}); return }
   if (action === 'delete' && device.source === 'manual' && !store.mockEnabled) {
@@ -236,6 +249,7 @@ onMounted(() => store.startPolling())
 onUnmounted(() => {
   store.stopPolling()
   destroyBatch()
+  groupControl.setActive(false)
 })
 </script>
 
@@ -357,17 +371,17 @@ onUnmounted(() => {
     <HomeIosDockBar
       :keyword="store.keyword"
       :view-mode="viewMode"
-      :devices="store.filtered"
+      :devices="homeFilteredDevices"
       :number-map="store.numberMap"
-      :hidden-count="hiddenSerials.length"
+      :hidden-serials="hiddenSerials"
+      :visible-serials="visibleDevices.map(d => d.serial)"
+      :only-selected="onlySelected"
       :mock-enabled="store.mockEnabled"
       :selected-serials="selectedSerials"
       :online-count="onlineCount"
       :is-all-selected="isAllSelected"
       :batch-running="batchRunning"
       :current-action="currentAction"
-      :batch-results="batchResults"
-      :batch-summary="batchSummary"
       :is-sync-active="isSyncActive"
       :display-name="store.displayName"
       @update:keyword="store.keyword = $event"
@@ -379,11 +393,9 @@ onUnmounted(() => {
       @trigger-action="handleBatchAction"
       @toggle-sync="handleToggleSync"
       @cancel-batch="cancelBatch"
-      @clear-results="clearResults"
       @open-add="openAddDialog"
-      @show-only-selected="showOnlySelected(selectedSerials)"
+      @update:only-selected="onlySelected = $event"
       @restore-hidden="restoreHiddenDevices"
-      @show-all="showAllDevices"
       @device-action="handleDeviceAction"
       @open-config="isConfigOpen = true"
       @open-ai="handleOpenAi"
