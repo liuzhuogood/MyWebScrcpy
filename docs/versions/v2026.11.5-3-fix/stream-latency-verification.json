@@ -1,0 +1,290 @@
+{
+  "date": "2026-11-07",
+  "version": "v2026.11.5-2",
+  "branch": "codex/home-group-control-fixes",
+  "scope": "网络投屏匹配、视频追帧与触控排队优化",
+  "tests": {
+    "go": {
+      "passed": 496,
+      "skipped_opt_in": 9,
+      "command": "go test -json ./..."
+    },
+    "go_vet": "passed",
+    "race": "internal/action、internal/scrcpy、internal/ws 定向通过（含真实控制socket/旋转/订阅/溢出）",
+    "python": {
+      "passed": 100,
+      "command": "python -m unittest discover -s packages/python-sdk/tests"
+    },
+    "node": {
+      "passed": 62
+    },
+    "cjs": {
+      "suites": 8,
+      "status": "passed"
+    },
+    "frontend_build": "passed",
+    "real_python_workers": "passed in isolated installed SDK environment",
+    "static_h264_websocket_webcodecs": {
+      "status": "passed",
+      "healthy_connections": 1,
+      "connections_after_forced_and_silent_loss": 3,
+      "final_pixel": [
+        0,
+        0,
+        255,
+        255
+      ]
+    },
+    "decoder_burst": {
+      "encoded": 10,
+      "keyFrames": 1,
+      "displayed": 1,
+      "pendingBeforePaint": 1,
+      "pixel": [
+        1,
+        0,
+        255,
+        255
+      ]
+    }
+  },
+  "synthetic_sdk_benchmark": {
+    "image_size": [
+      976,
+      2176
+    ],
+    "decode_old": {
+      "decode_packets": 60,
+      "bgr_conversions": 60,
+      "cpu_ms": 74.4,
+      "wall_ms": 41.5
+    },
+    "decode_new": {
+      "decode_packets": 60,
+      "bgr_conversions": 10,
+      "cpu_ms": 37.9,
+      "wall_ms": 32.2
+    },
+    "match_old": {
+      "match_calls": 40,
+      "cpu_ms": 5090.2,
+      "wall_ms": 4401.8
+    },
+    "match_new_identical_pixels": {
+      "match_calls": 2,
+      "cpu_ms": 275.0,
+      "wall_ms": 224.1
+    },
+    "exact_comparison_100_full_frames": {
+      "cpu_ms": 32.3,
+      "wall_ms": 32.4
+    }
+  },
+  "device": {
+    "serial": "10.0.0.30:5555",
+    "model": "Redmi M2004J7AC",
+    "mode": "sdk",
+    "bitrate": 4000000,
+    "encoded_size": {
+      "width": 976,
+      "height": 2176,
+      "codec": "h264"
+    },
+    "matching_templates_enabled": 2,
+    "recent_before_fix": [
+      {
+        "phase": "before-fix",
+        "target": "第4屏",
+        "controlWriteAckMs": 16.300000190734863,
+        "presentedSelectionMs": 365.40000009536743,
+        "maxDecodeQueue": 0,
+        "maxBuffered": 32
+      },
+      {
+        "phase": "before-fix",
+        "target": "第3屏",
+        "controlWriteAckMs": 33.19999980926514,
+        "presentedSelectionMs": 308.8999996185303,
+        "maxDecodeQueue": 0,
+        "maxBuffered": 32
+      },
+      {
+        "phase": "before-fix",
+        "target": "第4屏",
+        "controlWriteAckMs": 14.700000286102295,
+        "presentedSelectionMs": 290.5,
+        "maxDecodeQueue": 0,
+        "maxBuffered": 32
+      },
+      {
+        "phase": "before-fix",
+        "target": "第3屏",
+        "controlWriteAckMs": 24.5,
+        "presentedSelectionMs": 439.1000003814697,
+        "maxDecodeQueue": 0,
+        "maxBuffered": 32
+      }
+    ],
+    "after_fix": [
+      {
+        "phase": "after-fix",
+        "target": "第4屏",
+        "controlWriteAckMs": 69.40000009536743,
+        "presentedSelectionMs": 432.5,
+        "maxDecodeQueue": 0,
+        "maxBuffered": 32
+      },
+      {
+        "phase": "after-fix",
+        "target": "第3屏",
+        "controlWriteAckMs": 47.30000019073486,
+        "presentedSelectionMs": 440,
+        "maxDecodeQueue": 0,
+        "maxBuffered": 32
+      },
+      {
+        "phase": "after-fix",
+        "target": "第4屏",
+        "controlWriteAckMs": 27.799999713897705,
+        "presentedSelectionMs": 313.5,
+        "maxDecodeQueue": 0,
+        "maxBuffered": 32
+      },
+      {
+        "phase": "after-fix",
+        "target": "第3屏",
+        "controlWriteAckMs": 14.900000095367432,
+        "presentedSelectionMs": 283.30000019073486,
+        "maxDecodeQueue": 0,
+        "maxBuffered": 32
+      }
+    ],
+    "swipe": "实际浏览器拖动使桌面第3屏→第4屏→第3屏，动作前后page-info/XML核对",
+    "restored_selected_page": "第3屏",
+    "cpu_single_core_percent": {
+      "before_samples": [
+        {
+          "1830427": 9.7,
+          "1838675": 94.3
+        },
+        {
+          "1830427": 9.0,
+          "1838675": 103.3
+        },
+        {
+          "1830427": 9.3,
+          "1838675": 87.7
+        }
+      ],
+      "after_samples": [
+        {
+          "1854960": 10.7,
+          "1855016": 92.7
+        },
+        {
+          "1854960": 9.0,
+          "1855016": 80.3
+        },
+        {
+          "1854960": 8.7,
+          "1855016": 78.3
+        }
+      ]
+    },
+    "final_stream_stats": {
+      "device_id": "10.0.0.30:5555",
+      "session_id": "48d329f4b059fdd2d36a77ec",
+      "subscribers": 2,
+      "frames": 803,
+      "dropped_frames": 0,
+      "queue_length": 0,
+      "last_frame_unix_ms": 1794027195470
+    },
+    "slow_video_writes": [
+      {
+        "at": "2026-11-07T12:52:03.138790397+08:00",
+        "type": "browser.video_slow",
+        "device_id": "10.0.0.30:5555",
+        "session_id": "48d329f4b059fdd2d36a77ec",
+        "fields": {
+          "bytes": 60479,
+          "queued_packets": 1,
+          "source_pts_us": 24695746513,
+          "write_ms": 138
+        }
+      },
+      {
+        "at": "2026-11-07T12:50:03.037272891+08:00",
+        "type": "browser.video_slow",
+        "device_id": "10.0.0.30:5555",
+        "session_id": "48d329f4b059fdd2d36a77ec",
+        "fields": {
+          "bytes": 688191,
+          "queued_packets": 1,
+          "source_pts_us": 24575648147,
+          "write_ms": 104
+        }
+      },
+      {
+        "at": "2026-11-07T12:49:24.089114472+08:00",
+        "type": "browser.video_slow",
+        "device_id": "10.0.0.30:5555",
+        "session_id": "48d329f4b059fdd2d36a77ec",
+        "fields": {
+          "bytes": 688207,
+          "queued_packets": 1,
+          "source_pts_us": 24536682502,
+          "write_ms": 107
+        }
+      },
+      {
+        "at": "2026-11-07T12:48:38.42723759+08:00",
+        "type": "session.started",
+        "device_id": "10.0.0.30:5555",
+        "session_id": "48d329f4b059fdd2d36a77ec",
+        "fields": {
+          "codec": "h264",
+          "height": 2176,
+          "width": 976
+        }
+      }
+    ]
+  },
+  "deployment": {
+    "target": "https://10.0.0.6:8080",
+    "service": "mywebscrcpy.service",
+    "status": "active",
+    "binary_sha256": "9f0bdbff534c701c001e101558a22e9bfd04c7e6ede4a3d902a9d60e2a251aa0",
+    "sdk_wheel_sha256": "ae1ab1ef79669c2f59cddc88612e8be172f3f2a182a8a48fa215b29f5420da9b",
+    "sdk_source_sha256": {
+      "decoder.py": "923da732dc60c4b1785945b0fb955b4b49343b24a77346efe81bc405425d4100",
+      "vision.py": "5ddf8a0e24a824a5e52204ed27264f78e514a8655b98bf9626280225b3dbed1b",
+      "watch.py": "e39bff59365057f3777d2daac69c621a396efae7a17bb6333145af3e28738107"
+    },
+    "backup": "/opt/mywebscrcpy/backups/perf-20261107124333",
+    "sqlite_backup_integrity": "ok",
+    "frontend_index_matches_build": true,
+    "matching": "running; actual target matching verified",
+    "ocr": "running and ready",
+    "network_devices_reconnected": [
+      "10.0.0.30:5555",
+      "10.0.0.104:5555",
+      "10.0.0.244:5555"
+    ]
+  },
+  "cleanup": {
+    "task_space_75": "finished",
+    "temporary_proxy_5188": "stopped",
+    "static_fixture_21992": "stopped",
+    "temporary_frontend_5192": "stopped",
+    "existing_frontend_5173": "preserved"
+  },
+  "limitations": [
+    "本轮前后各4次点击，包含Android动画，不能据此宣称稳定提速比例；新版283–440ms，旧版本轮291–439ms，先前偶发秒级慢样本本轮前后都未复现。",
+    "真实设备匹配CPU仍约78–93%单核，不能把合成静态收益当作全场景收益。",
+    "写视频的三个慢样本104/107/138ms，表明网络/发送侧仍可能参与等待，尚未消除所有手机编码/ADB/TCP积压。",
+    "不任意丢弃H264依赖帧；长GOP无新key时仍须解码依赖。",
+    "未复验多物理手机群控、原生WebView和全部ADB/HID真机行为；相关路径有自动化回归。",
+    "没有打tag、发布Release或上传PyPI；本次显式安装当前源码wheel，正式版本号保持不变。"
+  ]
+}

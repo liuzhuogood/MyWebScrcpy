@@ -3,6 +3,7 @@ import { inspectorConsumesInput } from '@/inspector/guard'
 import { type OpPayload, type OpType } from '@/inspector/opLog'
 import { DeviceAudio, type AudioStatus } from './audio'
 import { ScrcpyDecoder } from './decoder'
+import { ControlSender } from './controlSender'
 import { PictureInPicture } from './pip'
 import { useClipboardSync } from './useClipboardSync'
 import { useFrameUploader } from './useFrameUploader'
@@ -168,6 +169,8 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
   }
 
   function closeWebSocket() {
+    inputSender.reset()
+    resetPointerState()
     if (!ws)
       return
     const old = ws
@@ -271,6 +274,8 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
       if (ws !== socket || currentId !== connectionId)
         return
       console.log('[ws] closed')
+      inputSender.reset()
+      resetPointerState()
       ws = null
       clearConnectTimer()
       if (connected) opts.onDisconnect?.()
@@ -395,15 +400,34 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
     }),
   })
 
+  const inputSender = new ControlSender({
+    write: ({ bytes, fromGroupSync, size }: {
+      bytes: Uint8Array | string
+      fromGroupSync: boolean
+      size: { width: number, height: number }
+    }) => {
+      if (ws?.readyState === WebSocket.OPEN)
+        ws.send(bytes as string | Uint8Array<ArrayBuffer>)
+      if (!fromGroupSync)
+        groupControl.broadcastControl(serial, bytes, size)
+    },
+    bufferedAmount: () => ws?.bufferedAmount ?? 0,
+    requestFrame: callback => requestAnimationFrame(callback),
+    cancelFrame: id => cancelAnimationFrame(id),
+    setTimer: (callback, delay) => window.setTimeout(callback, delay),
+    clearTimer: id => window.clearTimeout(id),
+    now: () => performance.now(),
+    onCongested: (reason) => {
+      console.warn('[input]', { serial, reason })
+      if (!disposed) handleStreamLoss(reason)
+    },
+  })
+
   function send(bytes: Uint8Array | string, fromGroupSync = false) {
-    if (ws && ws.readyState === WebSocket.OPEN)
-      ws.send(bytes as string | Uint8Array<ArrayBuffer>)
-    if (!fromGroupSync) {
-      groupControl.broadcastControl(serial, bytes, {
-        width: packer.deviceWidth,
-        height: packer.deviceHeight,
-      })
-    }
+    inputSender.send({
+      bytes, fromGroupSync,
+      size: { width: packer.deviceWidth, height: packer.deviceHeight },
+    })
   }
 
   /**
@@ -694,6 +718,24 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
     touchStartPos = null
     lastTouchPoint = null
     dragPath = []
+  }
+
+  function resetPointerState() {
+    mouseDown = false
+    mouseDownPos = lastMousePoint = null
+    touchActive = false
+    touchStartPos = lastTouchPoint = null
+    dragPath = []
+  }
+
+  function cancelLocalInput() {
+    inputSender.releaseLocal()
+    resetPointerState()
+  }
+
+  function onTouchCancel(e: TouchEvent) {
+    e.preventDefault()
+    cancelLocalInput()
   }
 
   function isInteractiveField(el: Element | null): boolean {
@@ -1049,6 +1091,8 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
     canvas.addEventListener('touchstart', onTouchStart, { passive: false })
     canvas.addEventListener('touchmove', onTouchMove, { passive: false })
     canvas.addEventListener('touchend', onTouchEnd)
+    canvas.addEventListener('touchcancel', onTouchCancel)
+    window.addEventListener('blur', cancelLocalInput)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     document.addEventListener('fullscreenchange', onFsChange)
@@ -1069,6 +1113,7 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
 
   onUnmounted(() => {
     disposed = true
+    closeWebSocket()
     unregisterGroupChannel()
     screenAbort?.abort()
     if (reconnectTimer !== undefined)
@@ -1077,7 +1122,6 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
       window.clearInterval(screenTimer)
     clearConnectTimer()
     clearWatchdog()
-    closeWebSocket()
     decoder?.close()
     audio?.close()
     void pip?.close().catch(() => {})
@@ -1091,6 +1135,8 @@ export function usePlayer(serial: string, opts: { embedded?: boolean, onOp?: (ty
     canvas?.removeEventListener('touchstart', onTouchStart)
     canvas?.removeEventListener('touchmove', onTouchMove)
     canvas?.removeEventListener('touchend', onTouchEnd)
+    canvas?.removeEventListener('touchcancel', onTouchCancel)
+    window.removeEventListener('blur', cancelLocalInput)
     window.removeEventListener('keydown', onKeyDown)
     window.removeEventListener('keyup', onKeyUp)
     document.removeEventListener('fullscreenchange', onFsChange)

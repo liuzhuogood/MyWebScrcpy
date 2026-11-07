@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { ControlSender } from '../scrcpy/controlSender'
 
 export type GroupControlPacket = Uint8Array | string
 
@@ -105,7 +106,7 @@ const registeredChannels = new Map<string, Set<GroupControlChannel>>()
 const instanceId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
 const MAX_TARGETS = 1024
 const MAX_CONNECTING = 4
-const MAX_BUFFER_BYTES = 128 * 1024
+const MAX_MESSAGE_BYTES = 128 * 1024
 const INPUT_TTL_MS = 500
 let isCoordinator = false
 let owner: string | null = null
@@ -118,6 +119,7 @@ interface BackgroundConnection {
   ws: WebSocket
   size: GroupControlSize | null
   deadline: ReturnType<typeof setTimeout>
+  sender: ControlSender<{ bytes: GroupControlPacket, fromGroupSync: boolean, source: string }>
 }
 const backgroundSockets = new Map<string, BackgroundConnection>()
 const retries = new Map<string, number>()
@@ -133,6 +135,7 @@ function report(serial: string, message: string) {
 function closeBackground(serial: string) {
   const record = backgroundSockets.get(serial)
   if (!record) return
+  record.sender.reset()
   backgroundSockets.delete(serial)
   clearTimeout(record.deadline)
   record.ws.close()
@@ -164,7 +167,8 @@ function releaseTarget(serial: string, sources?: Set<string>) {
     if (packet[0] === 2) packet.fill(0, 22)
     try {
       if (channel) channel.send(packet)
-      else if (background?.ws.readyState === WebSocket.OPEN) background.ws.send(packet as Uint8Array<ArrayBuffer>)
+      else if (background?.ws.readyState === WebSocket.OPEN)
+        background.sender.send({ bytes: packet, fromGroupSync: true, source: input.source })
     }
     catch (error) { report(serial, `释放输入失败：${String(error)}`) }
   }
@@ -213,6 +217,24 @@ function syncBackgroundConnections() {
     const record: BackgroundConnection = {
       ws, size: null,
       deadline: setTimeout(() => { report(serial, '群控连接超时'); ws.close() }, 10000),
+      sender: new ControlSender({
+        write: ({ bytes, source }: { bytes: GroupControlPacket, fromGroupSync: boolean, source: string }) => {
+          if (ws.readyState === WebSocket.OPEN)
+            ws.send(bytes as string | Uint8Array<ArrayBuffer>)
+          rememberInput(serial, bytes, source)
+        },
+        bufferedAmount: () => ws.bufferedAmount,
+        requestFrame: callback => requestAnimationFrame(callback),
+        cancelFrame: id => cancelAnimationFrame(id),
+        setTimer: (callback, delay) => window.setTimeout(callback, delay),
+        clearTimer: id => window.clearTimeout(id),
+        now: () => performance.now(),
+        onCongested: (reason) => {
+          report(serial, reason)
+          releaseTarget(serial)
+          closeBackground(serial)
+        },
+      }),
     }
     backgroundSockets.set(serial, record)
     ws.onmessage = (event) => {
@@ -232,6 +254,7 @@ function syncBackgroundConnections() {
     }
     ws.onclose = () => {
       if (backgroundSockets.get(serial) !== record) return
+      record.sender.reset()
       backgroundSockets.delete(serial)
       clearTimeout(record.deadline)
       if (!isCoordinator || !isActive.value || !targetSerials.value.includes(serial)) return
@@ -276,14 +299,8 @@ function dispatch(sourceSerial: string, bytes: GroupControlPacket, sourceSize?: 
       }
       const background = backgroundSockets.get(serial)
       if (!background || background.ws.readyState !== WebSocket.OPEN || !background.size) throw new Error('群控连接尚未就绪')
-      if (background.ws.bufferedAmount > MAX_BUFFER_BYTES) {
-        releaseTarget(serial)
-        closeBackground(serial)
-        throw new Error('群控通道拥塞，已关闭连接以限制积压')
-      }
       const packet = transformPacket(bytes, sourceSize, background.size)
-      background.ws.send(packet as string | Uint8Array<ArrayBuffer>)
-      rememberInput(serial, packet, sourceSerial)
+      background.sender.send({ bytes: packet, fromGroupSync: true, source: sourceSerial })
     }
     catch (error) { report(serial, error instanceof Error ? error.message : String(error)) }
   }
@@ -319,7 +336,7 @@ function ensureBus() {
     else if (data.type === 'input' && isCoordinator && data.owner === instanceId
       && typeof data.sourceSerial === 'string' && typeof data.sentAt === 'number'
       && Date.now() - data.sentAt >= 0 && Date.now() - data.sentAt <= INPUT_TTL_MS
-      && (data.bytes instanceof Uint8Array || typeof data.bytes === 'string') && data.bytes.length <= MAX_BUFFER_BYTES) {
+      && (data.bytes instanceof Uint8Array || typeof data.bytes === 'string') && data.bytes.length <= MAX_MESSAGE_BYTES) {
       dispatch(data.sourceSerial, data.bytes, data.sourceSize)
     }
   }

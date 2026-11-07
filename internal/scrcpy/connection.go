@@ -1,11 +1,13 @@
 package scrcpy
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -30,14 +32,16 @@ const (
 
 // Connection 管理到 scrcpy server 的视频、音频和控制 socket 连接。
 type Connection struct {
-	videoConn    net.Conn
-	audioConn    net.Conn
-	ctrlConn     net.Conn
-	hasControl   bool
-	width        uint32
-	height       uint32
-	codecID      uint32
-	audioCodecID uint32
+	videoConn        net.Conn
+	audioConn        net.Conn
+	ctrlConn         net.Conn
+	controlWriteOnce sync.Once
+	controlWriteGate chan struct{}
+	hasControl       bool
+	width            uint32
+	height           uint32
+	codecID          uint32
+	audioCodecID     uint32
 }
 
 // AudioPacket is an encoded packet from the audio socket. Configuration packets
@@ -328,11 +332,65 @@ func (c *Connection) ReadDeviceMessage() (*DeviceMessage, error) {
 
 // WriteControl 向 control socket 写入控制消息（已打包的字节）。
 func (c *Connection) WriteControl(b []byte) error {
+	return c.WriteControlContext(context.Background(), b)
+}
+
+// WriteControlContext bounds the socket write as well as waiting for another
+// writer. A partial control message poisons the stream and closes the session.
+func (c *Connection) WriteControlContext(ctx context.Context, b []byte) error {
 	if c.ctrlConn == nil {
 		return errors.New("control socket not available")
 	}
-	_, err := c.ctrlConn.Write(b)
-	return err
+	c.controlWriteOnce.Do(func() { c.controlWriteGate = make(chan struct{}, 1) })
+	select {
+	case c.controlWriteGate <- struct{}{}:
+		defer func() { <-c.controlWriteGate }()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	if requested, ok := ctx.Deadline(); ok && requested.Before(deadline) {
+		deadline = requested
+	}
+	if err := c.ctrlConn.SetWriteDeadline(deadline); err != nil {
+		return err
+	}
+	interrupted := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		_ = c.ctrlConn.SetWriteDeadline(time.Now())
+		close(interrupted)
+	})
+	defer func() {
+		if !stop() {
+			<-interrupted
+		}
+		_ = c.ctrlConn.SetWriteDeadline(time.Time{})
+	}()
+	written := 0
+	for written < len(b) {
+		n, err := c.ctrlConn.Write(b[written:])
+		written += n
+		if err != nil || n == 0 {
+			if written > 0 {
+				c.Close()
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if err != nil {
+				// A socket deadline can win the race with context's timer.
+				if timeout, ok := err.(net.Error); ok && timeout.Timeout() && !time.Now().Before(deadline) {
+					return context.DeadlineExceeded
+				}
+				return err
+			}
+			return io.ErrShortWrite
+		}
+	}
+	return nil
 }
 
 // Close 关闭两条连接。

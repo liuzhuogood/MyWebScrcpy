@@ -11,20 +11,21 @@ import (
 )
 
 type Request struct {
-	RequestID string  `json:"request_id"`
-	DeviceID  string  `json:"device_id"`
-	Source    string  `json:"source"`
-	Action    string  `json:"action"`
-	X         float64 `json:"x,omitempty"`
-	Y         float64 `json:"y,omitempty"`
-	X2        float64 `json:"x2,omitempty"`
-	Y2        float64 `json:"y2,omitempty"`
-	Text      string  `json:"text,omitempty"`
-	Keycode   uint32  `json:"keycode,omitempty"`
-	MetaState uint32  `json:"meta_state,omitempty"`
-	Raw       []byte  `json:"-"`
-	FrameID   uint64  `json:"frame_id,omitempty"`
-	ExpiresMS int64   `json:"expires_ms,omitempty"`
+	RequestID    string  `json:"request_id"`
+	DeviceID     string  `json:"device_id"`
+	Source       string  `json:"source"`
+	Action       string  `json:"action"`
+	X            float64 `json:"x,omitempty"`
+	Y            float64 `json:"y,omitempty"`
+	X2           float64 `json:"x2,omitempty"`
+	Y2           float64 `json:"y2,omitempty"`
+	Text         string  `json:"text,omitempty"`
+	Keycode      uint32  `json:"keycode,omitempty"`
+	MetaState    uint32  `json:"meta_state,omitempty"`
+	Raw          []byte  `json:"-"`
+	ControlOwner string  `json:"-"`
+	FrameID      uint64  `json:"frame_id,omitempty"`
+	ExpiresMS    int64   `json:"expires_ms,omitempty"`
 	// Humanize 启用拟人化触摸（默认关闭）：落点随机偏移、按压时长、
 	// 拖动走带抖动/变速的曲线路径。仅对 tap / swipe 生效。
 	Humanize   bool   `json:"humanize,omitempty"`
@@ -49,10 +50,12 @@ func ValidMode(mode string) bool {
 }
 
 type Result struct {
-	RequestID string `json:"request_id"`
-	Accepted  bool   `json:"accepted"`
-	Executed  bool   `json:"executed"`
-	ErrorCode string `json:"error_code,omitempty"`
+	RequestID     string        `json:"request_id"`
+	Accepted      bool          `json:"accepted"`
+	Executed      bool          `json:"executed"`
+	ErrorCode     string        `json:"error_code,omitempty"`
+	QueueWait     time.Duration `json:"-"`
+	ExecutionTime time.Duration `json:"-"`
 }
 
 type Executor interface {
@@ -70,9 +73,11 @@ type Queue struct {
 func (q *Queue) Len() int { return len(q.ch) }
 
 type job struct {
-	ctx  context.Context
-	req  Request
-	done chan Result
+	ctx       context.Context
+	req       Request
+	done      chan Result
+	deadline  time.Time
+	submitted time.Time
 }
 
 func New(exec Executor, size int) *Queue {
@@ -96,6 +101,11 @@ func (q *Queue) Submit(ctx context.Context, req Request) <-chan Result {
 	if req.RequestID == "" {
 		req.RequestID = fmt.Sprintf("action-%d", time.Now().UnixNano())
 	}
+	submitted := time.Now()
+	var deadline time.Time
+	if req.ExpiresMS > 0 {
+		deadline = submitted.Add(time.Duration(req.ExpiresMS) * time.Millisecond)
+	}
 	q.mu.RLock()
 	defer q.mu.RUnlock()
 	select {
@@ -105,7 +115,7 @@ func (q *Queue) Submit(ctx context.Context, req Request) <-chan Result {
 	default:
 	}
 	select {
-	case q.ch <- job{ctx: ctx, req: req, done: out}:
+	case q.ch <- job{ctx: ctx, req: req, done: out, deadline: deadline, submitted: submitted}:
 	default:
 		out <- Result{RequestID: req.RequestID, Accepted: false, ErrorCode: "queue_full"}
 	}
@@ -130,17 +140,24 @@ func (q *Queue) loop() {
 				j.done <- Result{RequestID: j.req.RequestID, Accepted: true, ErrorCode: err.Error()}
 				continue
 			}
+			started := time.Now()
 			ctx := j.ctx
 			cancel := func() {}
-			if j.req.ExpiresMS > 0 {
-				ctx, cancel = context.WithTimeout(ctx, time.Duration(j.req.ExpiresMS)*time.Millisecond)
+			if !j.deadline.IsZero() {
+				ctx, cancel = context.WithDeadline(ctx, j.deadline)
 			}
-			err := q.exec.Execute(ctx, j.req)
+			// A disconnected or expired request must not execute after waiting.
+			err := ctx.Err()
+			if err == nil {
+				err = q.exec.Execute(ctx, j.req)
+			}
 			cancel()
-			r := Result{RequestID: j.req.RequestID, Accepted: true, Executed: err == nil}
+			r := Result{RequestID: j.req.RequestID, Accepted: true, Executed: err == nil, QueueWait: started.Sub(j.submitted), ExecutionTime: time.Since(started)}
 			if err != nil {
 				if errors.Is(err, context.DeadlineExceeded) {
 					r.ErrorCode = "expired"
+				} else if errors.Is(err, context.Canceled) {
+					r.ErrorCode = "canceled"
 				} else {
 					r.ErrorCode = "execution_failed"
 				}

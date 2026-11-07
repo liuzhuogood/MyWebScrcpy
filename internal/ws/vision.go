@@ -56,20 +56,21 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 	c.SetReadLimit(1 << 20)
 	readOnly, _ := r.Context().Value(matchingReadOnlyKey{}).(bool)
 	var ms *managedSession
-	var meta *handshakeMeta
 	var cancelSession func()
 	if readOnly {
-		ms, meta, cancelSession, err = h.acquireMatchingSession(serial)
+		ms, _, cancelSession, err = h.acquireMatchingSession(serial)
 	} else {
-		ms, meta, cancelSession, err = h.acquireSession(serial)
+		ms, _, cancelSession, err = h.acquireSession(serial)
 	}
 	if err != nil {
 		_ = writeJSON(map[string]interface{}{"type": "error", "message": err.Error()})
 		return
 	}
 	defer cancelSession()
-	// Replay sessions have no scrcpy connection; dimensions come from the
-	// handshake meta in both live and replay modes.
+	// Subscribe before announcing dimensions so rotation is either reflected in
+	// this immutable metadata or present in the queue, never missed between them.
+	meta, frames, cancelFrames := h.subscribeVisionWithMeta(ms, r.URL.Query().Get("current_frame") == "true")
+	defer cancelFrames()
 	width, height := meta.Width, meta.Height
 	_ = writeJSON(map[string]interface{}{"type": "hello", "protocol_version": "1", "device_id": serial, "session_id": meta.SessionID, "format": "scrcpy-frame", "codec": meta.Codec, "width": meta.Width, "height": meta.Height})
 	actionCtx, cancelActions := context.WithCancel(r.Context())
@@ -138,14 +139,6 @@ func (h *Hub) ServeVisionWS(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}()
-	var frames <-chan sharedVideoFrame
-	var cancelFrames func()
-	if r.URL.Query().Get("current_frame") == "true" {
-		frames, cancelFrames = h.subscribeVisionSnapshot(ms)
-	} else {
-		frames, cancelFrames = h.subscribeShared(ms)
-	}
-	defer cancelFrames()
 	var frameID uint64
 	var lastSent time.Time
 	for {

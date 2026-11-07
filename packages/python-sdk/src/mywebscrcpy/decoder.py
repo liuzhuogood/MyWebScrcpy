@@ -88,5 +88,8 @@ class Decoder:
             if frame.pts not in self.metadata:
                 raise ProtocolError('解码帧无法关联来源包')
             meta = self.metadata.pop(frame.pts)
-            result.append((meta, frame.to_ndarray(format='bgr24')))
+            # Keep reference frames decoded, but materialize BGR only when a
+            # consumer requests this image. Slow matching must not convert all
+            # intervening frames on the socket receiver thread.
+            result.append((meta, frame))
         return result

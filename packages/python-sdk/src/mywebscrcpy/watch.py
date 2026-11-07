@@ -2,8 +2,10 @@
 import logging
 import math
 import time
+from dataclasses import replace
 
 from .contracts import Deadline
+from .dependencies import vision_dependencies
 from .errors import SDKError
 from .matcher import Matcher
 
@@ -25,6 +27,40 @@ class Watch:
         self.closed, self._last, self._refresh_at = False, 0., 0.
         self._templates = []
         self._matcher = Matcher()
+        self._matched_frame = None
+        self._matched_templates = ()
+        self._matches = ()
+
+    def _match(self, frame):
+        previous = self._matched_frame
+        same_templates = len(self._templates) == len(self._matched_templates) and all(
+            template == old_template and image is old_image
+            for (template, image), (old_template, old_image) in zip(self._templates, self._matched_templates)
+        )
+        same_source = previous is not None and (
+            frame.session_id, frame.connection_id, frame.generation, frame.width, frame.height
+        ) == (
+            previous.session_id, previous.connection_id, previous.generation, previous.width, previous.height
+        )
+        unchanged = same_templates and same_source and frame is previous
+        if same_templates and same_source and not unchanged:
+            _, _, np = vision_dependencies()
+            # Exact pixels only: no downsampling or approximate signatures that
+            # could miss small targets. Retain only one previous source image.
+            unchanged = np.array_equal(frame.image, previous.image)
+        if unchanged:
+            if frame is not previous:
+                # Identical pixels from a real new frame can reuse geometry.
+                # Re-publishing the same old frame keeps its original timestamp.
+                self._matches = tuple(replace(match, frame_id=frame.frame_id, session_id=frame.session_id,
+                    device_id=frame.device_id, received_at=frame.received_at, generation=frame.generation,
+                    connection_id=frame.connection_id, replayed=frame.replayed) for match in self._matches)
+        else:
+            self._matches = tuple(match for template, image in self._templates
+                                  for match in self._matcher.match_frame(frame, template, image))
+        self._matched_frame = frame
+        self._matched_templates = tuple(self._templates)
+        return list(self._matches)
 
     def __iter__(self):
         return self
@@ -44,7 +80,7 @@ class Watch:
                 self._refresh_at = time.monotonic() + 10
             session = self.device._session(deadline, video=True)
             frame = session.current_frame(deadline)
-            matches = [match for template, image in self._templates for match in self._matcher.match_frame(frame, template, image)]
+            matches = self._match(frame)
             deadline.remaining()
             if self.publish:
                 # Overlay lifetime belongs to this detection batch. Source frame
@@ -61,6 +97,7 @@ class Watch:
         if self.closed:
             return
         self.closed = True
+        self._matched_frame, self._matched_templates, self._matches = None, (), ()
         with self.device._lock:
             if self.device._watch is self:
                 self.device._watch = None

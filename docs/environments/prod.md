@@ -81,3 +81,4 @@ journalctl -u mywebscrcpy.service -f
 - 2026-08-20：部署 `v1.3.1`；修正手机共享存储路径和 Android toybox 元数据解析，服务恢复 `active`，生产文件管理冒烟验证通过。
 
 - 2026-11-07：按用户要求部署首页交互与群控修复，源码版本标识 `v2026.11.5-2`，程序 SHA-256 `a6489bc2d8afeb2c270e02a33537d7e530886999597aefcc64966730e80470e3`。服务 `active`，生产 JS 资源与本地构建一致；三台独立手机 Web 群控点击、横向滑屏及按键同步通过，关闭群控停止派发通过。SQLite 备份 `data/mywebscrcpy.db.bak.home-controls-20261107102315`，原程序备份 `mywebscrcpy-linux-amd64.bak.20261107102335`；部署时的代码尚未提交或推送。
+- 2026-11-07：部署投屏延迟优化，版本标识仍为 `v2026.11.5-2`，程序 SHA-256 `9f0bdbff534c701c001e101558a22e9bfd04c7e6ede4a3d902a9d60e2a251aa0`。匹配 SDK 由当前源码 wheel 显式重装至原隔离环境（同包版本 `2026.11.5.post2`，不代表 PyPI 已更新），三个改动模块与源码哈希一致。匹配/OCR 正常恢复，三条既有网络 ADB 连接已恢复；小米网络入口实际点击与双向滑屏通过，点击样本 283–440ms，不宣称偶发秒级延迟已完全消除。程序、SDK 和 SQLite 备份位于 `backups/perf-20261107124333/`，数据库完整性通过。详见 `docs/versions/v2026.11.5-3-fix/stream-latency-verification.json`。

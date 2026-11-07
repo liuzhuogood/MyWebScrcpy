@@ -31,9 +31,11 @@ type managedSession struct {
 	refs            int
 	matchingRefs    int
 	subs            map[chan sharedVideoFrame]struct{}
+	browserSubs     map[chan sharedVideoFrame]struct{}
 	audioSubs       map[chan sharedAudioPacket]struct{}
 	clipboardSubs   map[chan string]struct{}
 	controlMu       sync.Mutex
+	controlInputs   controlInputOwners
 	closeTimer      *time.Timer
 	lastConfig      []byte
 	lastKey         []byte
@@ -225,10 +227,14 @@ func (h *Hub) releaseSession(serial string, ms *managedSession) {
 }
 
 func (h *Hub) subscribeShared(ms *managedSession) (<-chan sharedVideoFrame, func()) {
-	// 新订阅者先接收缓存的 config/key，再接收增量帧；留出足够空间，避免
-	// 浏览器刚刷新、解码器尚未初始化时把关键帧挤出队列。
-	ch := make(chan sharedVideoFrame, sharedVideoQueueSize)
 	ms.mu.Lock()
+	defer ms.mu.Unlock()
+	return h.subscribeSharedLocked(ms)
+}
+
+// Caller holds ms.mu. Preserve the recorder/legacy Vision config/key bootstrap.
+func (h *Hub) subscribeSharedLocked(ms *managedSession) (<-chan sharedVideoFrame, func()) {
+	ch := make(chan sharedVideoFrame, sharedVideoQueueSize)
 	ms.subs[ch] = struct{}{}
 	if ms.lastConfig != nil {
 		ch <- sharedVideoFrame{data: append([]byte(nil), ms.lastConfig...), replayed: true}
@@ -236,7 +242,6 @@ func (h *Hub) subscribeShared(ms *managedSession) (<-chan sharedVideoFrame, func
 	if ms.lastKey != nil {
 		ch <- sharedVideoFrame{data: append([]byte(nil), ms.lastKey...), replayed: true}
 	}
-	ms.mu.Unlock()
 	return ch, func() {
 		ms.mu.Lock()
 		if _, ok := ms.subs[ch]; ok {
@@ -360,11 +365,7 @@ func (h *Hub) readSharedSession(serial string, ms *managedSession) {
 		buf := encodeFrame(f)
 		cacheAndBroadcast(ms, f, buf)
 		if f.Kind == scrcpy.FrameConfig || f.Kind == scrcpy.FrameKey || f.Kind == scrcpy.FrameDelta {
-			ms.mu.Lock()
-			frameID := ms.frames
-			width, height := ms.width, ms.height
-			ms.mu.Unlock()
-			h.consumeVideoFrame(VideoFrame{DeviceID: serial, SessionID: ms.meta.SessionID, FrameID: frameID, PTS: f.PTS, CapturedAt: capturedAt, Kind: f.Kind, Width: width, Height: height, Payload: append([]byte(nil), f.Payload...)})
+			h.consumeSharedVideoFrame(serial, ms, f, capturedAt)
 		}
 	}
 }
@@ -426,6 +427,9 @@ func cacheAndBroadcastAudio(ms *managedSession, packet *scrcpy.AudioPacket) {
 }
 
 func cacheAndBroadcast(ms *managedSession, f *scrcpy.Frame, buf []byte) {
+	// One immutable owned packet is shared by caches and subscribers. Isolate it
+	// from a caller reusing its encode buffer without copying for every consumer.
+	buf = append([]byte(nil), buf...)
 	ms.mu.Lock()
 	defer ms.mu.Unlock()
 	ms.frames++
@@ -439,22 +443,26 @@ func cacheAndBroadcast(ms *managedSession, f *scrcpy.Frame, buf []byte) {
 	}
 	cacheVisionSnapshot(ms, f, buf)
 	if f.Kind == scrcpy.FrameConfig {
-		ms.lastConfig = append([]byte(nil), buf...)
+		ms.lastConfig = buf
 	}
 	if f.Kind == scrcpy.FrameKey {
-		ms.lastKey = append([]byte(nil), buf...)
+		ms.lastKey = buf
 	}
 	for ch := range ms.subs {
 		select {
-		case ch <- sharedVideoFrame{data: append([]byte(nil), buf...)}:
+		case ch <- sharedVideoFrame{data: buf}:
 		default:
+			if _, browser := ms.browserSubs[ch]; browser {
+				rebuildBrowserVideoQueue(ms, ch)
+				continue
+			}
 			ms.dropped++
 			select {
 			case <-ch:
 			default:
 			}
 			select {
-			case ch <- sharedVideoFrame{data: append([]byte(nil), buf...)}:
+			case ch <- sharedVideoFrame{data: buf}:
 			default:
 			}
 		}
@@ -506,6 +514,11 @@ func encodeFrame(f *scrcpy.Frame) []byte {
 func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan struct{}) {
 	ch, cancel := h.subscribeBrowserVideo(ms)
 	defer cancel()
+	h.pumpBrowserVideo(c, ms, ch, done)
+}
+
+// ServeWS supplies the subscription created atomically with its handshake.
+func (h *Hub) pumpBrowserVideo(c *websocket.Conn, ms *managedSession, ch <-chan sharedVideoFrame, done <-chan struct{}) {
 	clipboardCh, cancelClipboard := h.subscribeClipboard(ms)
 	defer cancelClipboard()
 	var audio <-chan sharedAudioPacket
@@ -515,6 +528,8 @@ func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan
 		defer cancelAudio()
 		_ = c.WriteJSON(map[string]interface{}{"type": "audio.status", "status": "connecting", "codec": "aac"})
 	}
+	batch := make([]sharedVideoFrame, 0, cap(ch))
+	var lastSlowWrite time.Time
 	heartbeat := time.NewTicker(2 * time.Second)
 	defer heartbeat.Stop()
 	for {
@@ -535,11 +550,36 @@ func (h *Hub) pumpSharedVideo(c *websocket.Conn, ms *managedSession, done <-chan
 				_ = c.Close()
 				return
 			}
-			c.SetWriteDeadline(timeNow())
-			if err := c.WriteMessage(websocket.BinaryMessage, frame.data); err != nil {
-				_ = c.Close()
-				return
+			batch = append(batch[:0], frame)
+			// Drain only the bounded burst already queued, never chase a live
+			// producer indefinitely or drop a delta without a newer key frame.
+			for queued := len(ch); queued > 0; queued-- {
+				select {
+				case next, open := <-ch:
+					if open {
+						batch = append(batch, next)
+					}
+				default:
+				}
 			}
+			batch = newestBrowserVideoBatch(batch)
+			for index, packet := range batch {
+				select {
+				case <-done:
+					return
+				default:
+				}
+				c.SetWriteDeadline(timeNow())
+				started := time.Now()
+				err := c.WriteMessage(websocket.BinaryMessage, packet.data)
+				finished := time.Now()
+				lastSlowWrite = h.recordBrowserVideoWrite(ms, packet, finished.Sub(started), len(ch)+len(batch)-index-1, finished, lastSlowWrite)
+				if err != nil {
+					_ = c.Close()
+					return
+				}
+			}
+			clear(batch)
 		case packet, ok := <-audio:
 			if !ok {
 				audio = nil
@@ -682,7 +722,7 @@ func (e deviceActionExecutor) executeSDK(ctx context.Context, r action.Request) 
 	e.ms.controlMu.Lock()
 	defer e.ms.controlMu.Unlock()
 	if r.Action == "raw" {
-		err := e.ms.sess.conn.WriteControl(r.Raw)
+		err := e.ms.writeBrowserControl(ctx, r)
 		if err == nil {
 			// 浏览器透传的原始控制消息里解析触摸事件，用于投屏上的触摸可视化。
 			if ev, ok := parseRawTouch(r.Raw); ok {

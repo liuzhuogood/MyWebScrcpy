@@ -178,3 +178,67 @@ func TestRequestJSONSerialization(t *testing.T) {
 		t.Fatalf("unexpected decoded request: %+v", decoded)
 	}
 }
+
+type expiryRecordingExecutor struct {
+	started chan struct{}
+	release chan struct{}
+	calls   chan string
+}
+
+func (e *expiryRecordingExecutor) Execute(ctx context.Context, r Request) error {
+	e.calls <- r.RequestID
+	if r.RequestID == "hold" {
+		close(e.started)
+		select {
+		case <-e.release:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
+}
+
+func TestQueueDeadlineIncludesTimeWaiting(t *testing.T) {
+	e := &expiryRecordingExecutor{started: make(chan struct{}), release: make(chan struct{}), calls: make(chan string, 3)}
+	q := New(e, 3)
+	defer q.Close()
+	first := q.Submit(context.Background(), Request{RequestID: "hold", DeviceID: "phone", Action: "raw", Raw: []byte{1}})
+	<-e.started
+	second := q.Submit(context.Background(), Request{RequestID: "old", DeviceID: "phone", Action: "raw", Raw: []byte{1}, ExpiresMS: 10})
+	time.Sleep(25 * time.Millisecond)
+	close(e.release)
+	<-first
+	if result := <-second; !result.Accepted || result.Executed || result.ErrorCode != "expired" {
+		t.Fatalf("queued request outlived its original deadline: %+v", result)
+	}
+	if got := <-e.calls; got != "hold" {
+		t.Fatal(got)
+	}
+	select {
+	case got := <-e.calls:
+		t.Fatalf("expired input reached executor: %s", got)
+	default:
+	}
+}
+
+func TestQueueDoesNotExecuteCanceledPendingInput(t *testing.T) {
+	e := &expiryRecordingExecutor{started: make(chan struct{}), release: make(chan struct{}), calls: make(chan string, 3)}
+	q := New(e, 3)
+	defer q.Close()
+	first := q.Submit(context.Background(), Request{RequestID: "hold", DeviceID: "phone", Action: "raw", Raw: []byte{1}})
+	<-e.started
+	ctx, cancel := context.WithCancel(context.Background())
+	second := q.Submit(ctx, Request{RequestID: "disconnected", DeviceID: "phone", Action: "raw", Raw: []byte{1}})
+	cancel()
+	close(e.release)
+	<-first
+	if result := <-second; result.Executed || result.ErrorCode != "canceled" {
+		t.Fatalf("disconnected input executed later: %+v", result)
+	}
+	<-e.calls
+	select {
+	case got := <-e.calls:
+		t.Fatalf("canceled input reached executor: %s", got)
+	default:
+	}
+}

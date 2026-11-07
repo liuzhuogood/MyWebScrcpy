@@ -5,6 +5,7 @@ import ssl
 import threading
 import time
 import uuid
+from dataclasses import replace
 from urllib.parse import urlencode
 
 import websocket
@@ -15,6 +16,33 @@ from .models import ActionResult, Frame
 from .net import websocket_options
 
 logger = logging.getLogger(__name__)
+
+
+class _DecodedFrame:
+    """One retained native image, converted at most once outside the receiver lock."""
+
+    def __init__(self, frame, image):
+        self.frame, self._image = frame, image
+        self._lock = threading.Lock()
+
+    def materialize(self, deadline):
+        if not self._lock.acquire(timeout=deadline.remaining(FrameTimeout)):
+            raise FrameTimeout('图像转换等待超过调用期限')
+        try:
+            deadline.remaining(FrameTimeout)
+            if self._image is not None:
+                try:
+                    image = self._image.to_ndarray(format='bgr24')
+                except Exception as error:
+                    logger.warning('Vision image conversion failed: type=%s', type(error).__name__)
+                    raise ProtocolError('视频帧颜色转换失败') from error
+                image.setflags(write=False)
+                self.frame = replace(self.frame, image=image)
+                self._image = None
+            deadline.remaining(FrameTimeout)
+            return self.frame
+        finally:
+            self._lock.release()
 
 
 class Vision:
@@ -190,17 +218,30 @@ class Vision:
         for source, image in self._decoder.decode(kind, payload[9:], meta):
             if source['replayed'] and not source['snapshot_complete']:
                 continue  # Cached key frames initialize decoding, never satisfy fresh frame requests.
-            height, width = image.shape[:2]
+            width, height = image.width, image.height
             if (width, height) != (source['width'], source['height']):
                 raise ProtocolError('解码尺寸与来源元数据不一致')
-            image.setflags(write=False)
-            frame = Frame(source['frame_id'], self.session_id, self.serial, width, height, source['timestamp'], source['received_at'], image, self.generation, self.connection_id, source['replayed'])
+            frame = Frame(source['frame_id'], self.session_id, self.serial, width, height, source['timestamp'], source['received_at'], None, self.generation, self.connection_id, source['replayed'])
+            retained = _DecodedFrame(frame, image)
             with self._condition:
-                self._current = frame
+                if self._closed:
+                    return
+                self._current = retained
                 if not frame.replayed:
-                    self._latest = frame
+                    self._latest = retained
                     self._sequence += 1
                 self._condition.notify_all()
+
+    def _materialize(self, retained, deadline):
+        # A slow conversion cannot delay actions, heartbeats, new native frames
+        # or a rotation. Recheck ownership after the work before returning it.
+        frame = retained.materialize(deadline)
+        with self._condition:
+            self._check()
+            deadline.remaining(FrameTimeout)
+            if frame.generation == self.generation:
+                return frame
+            return None
 
     def frame(self, deadline):
         from .dependencies import vision_dependencies
@@ -210,11 +251,16 @@ class Vision:
             self._video = True
             previous = self._sequence
             after = time.monotonic()
-            while self._sequence == previous or self._latest is None or self._latest.received_at <= after:
-                self._condition.wait(deadline.remaining(FrameTimeout))
+        while True:
+            with self._condition:
                 self._check()
-            deadline.remaining(FrameTimeout)
-            return self._latest
+                while self._sequence == previous or self._latest is None or self._latest.frame.received_at <= after:
+                    self._condition.wait(deadline.remaining(FrameTimeout))
+                    self._check()
+                retained = self._latest
+            frame = self._materialize(retained, deadline)
+            if frame is not None:
+                return frame
 
     def current_frame(self, deadline):
         """Read-only matching can reuse the same image until a reset or disconnect."""
@@ -223,11 +269,16 @@ class Vision:
         with self._condition:
             self._check()
             self._video = True
-            while self._current is None:
-                self._condition.wait(deadline.remaining(FrameTimeout))
+        while True:
+            with self._condition:
                 self._check()
-            deadline.remaining(FrameTimeout)
-            return self._current
+                while self._current is None:
+                    self._condition.wait(deadline.remaining(FrameTimeout))
+                    self._check()
+                retained = self._current
+            frame = self._materialize(retained, deadline)
+            if frame is not None:
+                return frame
 
     def action(self, action, deadline, **fields):
         request_id = uuid.uuid4().hex
@@ -265,7 +316,7 @@ class Vision:
     def publish_current(self, frame, matches, *, expires_ms):
         with self._condition:
             self._check()
-            current = self._current
+            current = self._current.frame if self._current is not None else None
             if current is None or frame.generation != current.generation or frame.connection_id != current.connection_id:
                 return False
             lifetime = expires_ms

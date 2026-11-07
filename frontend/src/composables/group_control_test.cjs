@@ -7,6 +7,15 @@ const vue = require('vue');
 const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, 'useGroupControl.ts'), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
 }).outputText;
+const scrcpyModules = new Map();
+function loadScrcpy(name) {
+  if (scrcpyModules.has(name)) return scrcpyModules.get(name);
+  const module = {exports:{}};
+  vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../scrcpy',name+'.ts'),'utf8'), {
+    compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
+  }).outputText,{module,exports:module.exports,Uint8Array,DataView,require:name=>loadScrcpy(name.replace('./',''))});
+  scrcpyModules.set(name,module.exports);return module.exports;
+}
 const buses = new Set();
 class Bus {
   constructor() { buses.add(this); }
@@ -24,13 +33,17 @@ class Socket {
 function realm(browser = false, timerOverrides = {}) {
   const module = { exports: {} }; const unload=[];
   const context = {
-    module, exports:module.exports, Uint8Array, ArrayBuffer,
+    module, exports:module.exports, Uint8Array, ArrayBuffer, performance: { now: () => 0 },
     console:{warn(){},error(){}}, location:{protocol:'http:',host:'localhost'},
     setTimeout,clearTimeout,setInterval,clearInterval,
-    require(name) { if(name==='vue')return vue; throw Error(name); },
+    require(name) {
+      if(name==='vue')return vue;
+      if(name==='../scrcpy/controlSender')return loadScrcpy('controlSender');
+      throw Error(name);
+    },
   };
   Object.assign(context,timerOverrides);
-  if(browser)Object.assign(context,{window:{addEventListener(type,cb){unload.push(cb)}},BroadcastChannel:Bus,WebSocket:Socket});
+  if(browser)Object.assign(context,{window:{addEventListener(type,cb){unload.push(cb)},setTimeout:context.setTimeout,clearTimeout:context.clearTimeout},BroadcastChannel:Bus,WebSocket:Socket});
   vm.runInNewContext(code,context);
   return {...module.exports, unload(){unload.forEach(cb=>cb())}};
 }
@@ -87,9 +100,13 @@ Socket.sockets[0].ready();assert.equal(Socket.sockets.length,5,'successful metad
 const first=Socket.sockets[0];const third=Socket.sockets[2];third.ready();
 control.broadcastControl('external',input,{width:1080,height:2400});
 assert.equal(first.sent.length,1);assert.equal(third.sent.length,1,'unready peers do not block ready peers');
-first.bufferedAmount=200000;
+control.broadcastControl('external',down,{width:1080,height:2400});
+first.bufferedAmount=5000;
 control.broadcastControl('external',input,{width:1080,height:2400});
-assert.equal(first.readyState,3,'congested target closes instead of growing without bounds');
+assert.equal(first.readyState,3,'a 4KiB interactive backlog closes only the congested target');
+assert.equal(first.sent.at(-1)[1],1,'congested target attempts to release its held touch');
+assert.equal(third.readyState,1,'another ready target remains connected');
+assert.equal(third.sent.at(-1)[1],2,'healthy target continues receiving the same input');
 control.setActive(false);assert.ok(Socket.sockets.every(s=>s.readyState===3),'group shutdown closes every socket');bg.unload();
 // Independent outages restore their retry budget; consecutive failed attempts remain bounded.
 Socket.sockets=[];const timers=new Set();
@@ -108,6 +125,23 @@ const startFailures=Socket.sockets.length;
 for(let i=0;i<3;i++){Socket.sockets.at(-1).close();retryTick()}
 assert.equal(Socket.sockets.length,startFailures+2,'consecutive failures stop after three attempts');
 retryControl.setActive(false);retryRealm.unload();
+
+// A small socket backlog cannot persist indefinitely, even after input stops.
+Socket.sockets=[];let clock=0;const backlogTimers=new Set();
+const backlogRealm=realm(true,{
+  performance:{now:()=>clock},
+  setTimeout(fn,delay){const timer={fn,delay};backlogTimers.add(timer);return timer},
+  clearTimeout(timer){backlogTimers.delete(timer)},
+});
+const backlogControl=backlogRealm.useGroupControl();backlogControl.setTargets(['slow']);backlogControl.setActive(true);
+const slow=Socket.sockets.at(-1);slow.ready();slow.bufferedAmount=32;
+backlogControl.broadcastControl('external',down,{width:1080,height:2400});
+const monitor=[...backlogTimers].find(t=>t.delay===16);assert.ok(monitor,'low-volume backlog has a watchdog');
+clock=500;backlogTimers.delete(monitor);monitor.fn();
+assert.equal(slow.readyState,3,'500ms of persistent backlog recovers a stalled background connection');
+assert.equal(slow.sent.at(-1)[1],1,'watchdog releases the held touch before closing');
+const oldCount=slow.sent.length;monitor.fn();assert.equal(slow.sent.length,oldCount,'late old timer cannot resend input');
+backlogControl.setActive(false);backlogRealm.unload();
 
 const oversized=realm().useGroupControl();assert.equal(oversized.setTargets(Array.from({length:1025},(_,i)=>String(i))),false);oversized.setActive(true);assert.equal(oversized.isActive.value,false);assert.ok(oversized.lastError.value.includes('1024'),'capacity errors are not cleared or reported as successful activation');
 console.log('PASS: group control mapping, single-target, cross-window, failure isolation, bounded background connections');

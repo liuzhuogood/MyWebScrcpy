@@ -295,7 +295,7 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 		h.deviceConfigsMu.Unlock()
 	}
 
-	ms, meta, cancel, err := h.acquireSession(serial)
+	ms, _, cancel, err := h.acquireSession(serial)
 	if err != nil {
 		log.Printf("[ws] 启动 server 失败 serial=%s: %v", serial, err)
 		writeJSON(c, map[string]interface{}{"type": "error", "message": "启动 scrcpy 失败: " + err.Error()})
@@ -303,10 +303,20 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cancel()
 
+	controlOnly := r.URL.Query().Get("control_only") == "1"
+	var currentMeta handshakeMeta
+	var videoFrames <-chan sharedVideoFrame
+	if controlOnly {
+		currentMeta = currentHandshakeMeta(ms)
+	} else {
+		var cancelVideo func()
+		currentMeta, videoFrames, cancelVideo = h.subscribeBrowserVideoWithMeta(ms)
+		defer cancelVideo()
+	}
 	log.Printf("[ws] server 就绪 serial=%s codec=%s %dx%d",
-		serial, meta.Codec, meta.Width, meta.Height)
+		serial, currentMeta.Codec, currentMeta.Width, currentMeta.Height)
 
-	writeJSON(c, meta)
+	writeJSON(c, currentMeta)
 
 	done := make(chan struct{})
 	var wg sync.WaitGroup
@@ -315,10 +325,10 @@ func (h *Hub) ServeWS(w http.ResponseWriter, r *http.Request) {
 	// video 帧 → WS 写
 	go func() {
 		defer wg.Done()
-		if r.URL.Query().Get("control_only") == "1" {
+		if controlOnly {
 			h.pumpSharedControl(c, ms, done)
 		} else {
-			h.pumpSharedVideo(c, ms, done)
+			h.pumpBrowserVideo(c, ms, videoFrames, done)
 		}
 	}()
 
@@ -621,28 +631,79 @@ func (h *Hub) pumpVideo(c *websocket.Conn, sess *session, done <-chan struct{}) 
 // 二进制消息为 scrcpy 控制指令透传；JSON 消息仅支持 input.pointer /
 // input.hid 两种手动触摸提交（tap / swipe），经动作队列按注入模式执行。
 func (h *Hub) pumpControl(c *websocket.Conn, ms *managedSession) {
-	for {
-		_, data, err := c.ReadMessage()
-		if err != nil {
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) {
+	ctx, cancel := context.WithCancel(context.Background())
+	owner := fmt.Sprintf("browser-%d", browserControlSequence.Add(1))
+	type message struct {
+		data     []byte
+		received time.Time
+	}
+	messages := make(chan message, 32)
+	readerDone := make(chan struct{})
+	go func() {
+		defer close(readerDone)
+		defer cancel()
+		for {
+			_, data, err := c.ReadMessage()
+			if err != nil {
+				if !websocket.IsCloseError(err, websocket.CloseNormalClosure, websocket.CloseGoingAway) && ctx.Err() == nil {
+					log.Printf("[ws] control reader ended serial=%s: %v", ms.meta.Serial, err)
+				}
 				return
 			}
-			log.Printf("[ws] control 读取结束: %v", err)
-			return
-		}
-		if len(data) == 0 {
-			continue
-		}
-		if data[0] == '{' {
-			if handled := h.submitPointerAction(ms, data); handled {
+			if len(data) == 0 {
 				continue
 			}
-			log.Printf("[ws] 未知 JSON 控制消息，已忽略 (%d 字节)", len(data))
+			select {
+			case messages <- message{data: data, received: time.Now()}:
+			case <-ctx.Done():
+				return
+			default:
+				// Continuing to replay stale coordinates is worse than reconnecting.
+				log.Printf("[ws] control reader overloaded serial=%s; reconnect required", ms.meta.Serial)
+				_ = c.Close()
+				return
+			}
+		}
+	}()
+	defer func() {
+		cancel()
+		_ = c.Close()
+		<-readerDone
+		ms.releaseBrowserControl(owner)
+	}()
+	var lastSlowEvent time.Time
+	for {
+		var msg message
+		select {
+		case <-ctx.Done():
+			return
+		case msg = <-messages:
+		}
+		remaining := 3*time.Second - time.Since(msg.received)
+		if remaining <= 0 {
+			log.Printf("[ws] control input expired before submission serial=%s", ms.meta.Serial)
+			return
+		}
+		if msg.data[0] == '{' {
+			handled, err := h.submitPointerActionContext(ctx, ms, msg.data, remaining)
+			if err != nil {
+				return
+			}
+			if !handled {
+				log.Printf("[ws] unknown JSON control message (%d bytes)", len(msg.data))
+			}
 			continue
 		}
-		result := <-ms.actions.Submit(context.Background(), action.Request{DeviceID: ms.meta.Serial, Source: "browser", Action: "raw", Raw: append([]byte(nil), data...), ExpiresMS: 3000})
+		result := <-ms.actions.Submit(ctx, action.Request{DeviceID: ms.meta.Serial, Source: "browser", Action: "raw", Raw: msg.data, ControlOwner: owner, ExpiresMS: max(1, remaining.Milliseconds())})
+		total := time.Since(msg.received)
+		if (!result.Executed || total >= 100*time.Millisecond) && time.Since(lastSlowEvent) >= time.Second {
+			lastSlowEvent = time.Now()
+			h.recordEvent(debuglog.Event{Type: "control.slow", DeviceID: ms.meta.Serial, SessionID: ms.meta.SessionID, RequestID: result.RequestID, Fields: map[string]interface{}{
+				"total_ms": float64(total) / float64(time.Millisecond), "queue_wait_ms": float64(result.QueueWait) / float64(time.Millisecond), "execution_ms": float64(result.ExecutionTime) / float64(time.Millisecond), "error_code": result.ErrorCode,
+			}})
+		}
 		if !result.Executed && result.ErrorCode != "" {
-			log.Printf("[ws] 写 control 失败: %s", result.ErrorCode)
+			log.Printf("[ws] control write failed serial=%s: %s", ms.meta.Serial, result.ErrorCode)
 			return
 		}
 	}
@@ -661,9 +722,14 @@ type pointerAction struct {
 // submitPointerAction 处理 input.pointer（按全局/请求模式分发）与
 // input.hid（强制 HID 通道）两类消息；非这两类返回 false 由调用方忽略。
 func (h *Hub) submitPointerAction(ms *managedSession, data []byte) bool {
+	handled, _ := h.submitPointerActionContext(context.Background(), ms, data, 3*time.Second)
+	return handled
+}
+
+func (h *Hub) submitPointerActionContext(ctx context.Context, ms *managedSession, data []byte, timeout time.Duration) (bool, error) {
 	var msg pointerAction
 	if json.Unmarshal(data, &msg) != nil {
-		return false
+		return false, nil
 	}
 	var req action.Request
 	switch msg.Type {
@@ -671,20 +737,22 @@ func (h *Hub) submitPointerAction(ms *managedSession, data []byte) bool {
 		req = action.Request{DeviceID: ms.meta.Serial, Source: "browser", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, ExpiresMS: 3000}
 	case "input.hid":
 		if msg.Action != "tap" && msg.Action != "swipe" {
-			return false
+			return false, nil
 		}
 		req = action.Request{DeviceID: ms.meta.Serial, Source: "browser", Action: msg.Action, X: msg.X, Y: msg.Y, X2: msg.X2, Y2: msg.Y2, Mode: action.ModeHID, ExpiresMS: 3000}
 	default:
-		return false
+		return false, nil
 	}
 	if req.Action != "tap" && req.Action != "swipe" {
-		return false
+		return false, nil
 	}
-	result := <-ms.actions.Submit(context.Background(), req)
+	req.ExpiresMS = max(1, timeout.Milliseconds())
+	result := <-ms.actions.Submit(ctx, req)
 	if !result.Executed && result.ErrorCode != "" {
 		log.Printf("[ws] %s 执行失败: %s", msg.Type, result.ErrorCode)
+		return true, errors.New(result.ErrorCode)
 	}
-	return true
+	return true, nil
 }
 
 var _ = errors.New

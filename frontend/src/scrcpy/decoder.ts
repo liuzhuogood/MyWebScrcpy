@@ -19,6 +19,10 @@ const FrameKind = {
   Session: 3,
 } as const
 
+// RAF may be suspended in a background window. Still present the final image
+// without waiting for another encoded packet to arrive.
+const MAX_PRESENT_WAIT_MS = 50
+
 export class ScrcpyDecoder {
   onFps: ((fps: string) => void) | null = null
   onError: ((info: DecodeErrorInfo) => void) | null = null
@@ -38,6 +42,10 @@ export class ScrcpyDecoder {
   private lastFrameTime = 0
   private decodeErrorCount = 0
   private decodeErrorNotified = false
+  private pendingFrame: VideoFrame | null = null
+  private presentAnimationFrame: number | null = null
+  private presentTimeout: ReturnType<typeof setTimeout> | null = null
+  private presentationGeneration = 0
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -112,6 +120,7 @@ export class ScrcpyDecoder {
   private onConfig(payload: Uint8Array) {
     if (!this.decoder)
       return
+    this.cancelPresentation()
     // 每次 config 都重新 configure：旋转时服务端重建编码器，旧 decoder 解不了新输出
     // A repeated in-stream config starts a new encoder/replay epoch. The
     // first config after reconnect keeps the same-session presentation floor.
@@ -274,6 +283,7 @@ export class ScrcpyDecoder {
     const w = view.getUint32(0, false)
     const h = view.getUint32(4, false)
     console.log(`[decoder] 尺寸变化: ${w}x${h}`)
+    this.cancelPresentation()
     this.lastPresentedPTS = null
     this.canvas.width = w
     this.canvas.height = h
@@ -283,13 +293,46 @@ export class ScrcpyDecoder {
   private onFrame(frame: VideoFrame) {
     // Bootstrap decoding may start at an IDR several seconds before the
     // current image. Decode those dependencies without presenting them again.
-    if (this.lastPresentedPTS !== null && frame.timestamp < this.lastPresentedPTS) {
+    if ((this.lastPresentedPTS !== null && frame.timestamp < this.lastPresentedPTS)
+      || (this.pendingFrame !== null && frame.timestamp < this.pendingFrame.timestamp)) {
       frame.close()
       return
     }
+    // Decode all reference frames, but do not repaint superseded decoded
+    // images when a network/decode burst completes between display updates.
+    this.pendingFrame?.close()
+    this.pendingFrame = frame
+    if (this.presentAnimationFrame !== null) return
+    const generation = this.presentationGeneration
+    const present = () => {
+      if (generation !== this.presentationGeneration) return
+      const pending = this.pendingFrame
+      this.pendingFrame = null
+      this.cancelPresentation()
+      if (pending) this.presentFrame(pending)
+    }
+    this.presentAnimationFrame = requestAnimationFrame(present)
+    this.presentTimeout = setTimeout(present, MAX_PRESENT_WAIT_MS)
+  }
+
+  private cancelPresentation() {
+    this.presentationGeneration++
+    if (this.presentAnimationFrame !== null) cancelAnimationFrame(this.presentAnimationFrame)
+    if (this.presentTimeout !== null) clearTimeout(this.presentTimeout)
+    this.presentAnimationFrame = this.presentTimeout = null
+    this.pendingFrame?.close()
+    this.pendingFrame = null
+  }
+
+  private presentFrame(frame: VideoFrame) {
     try {
       this.ctx.drawImage(frame, 0, 0, this.canvas.width, this.canvas.height)
       this.lastPresentedPTS = frame.timestamp
+    }
+    catch (error) {
+      console.error('[decoder] presentation error', error)
+      this.notifyDecodeError(error, true)
+      return
     }
     finally { frame.close() }
     this.frameCount++
@@ -307,6 +350,7 @@ export class ScrcpyDecoder {
 
   close() {
     this.generation++
+    this.cancelPresentation()
     this.needsKeyFrame = true
     if (this.decoder) {
       if (this.decoder.state !== 'closed')
